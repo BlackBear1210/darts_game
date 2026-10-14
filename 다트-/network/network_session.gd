@@ -1,0 +1,256 @@
+class_name NetworkSession
+extends Node
+## 연결과 RPC의 경계. 이 노드는 화면 전환 중에도 같은 경로에 유지한다.
+
+signal changed
+
+const DEFAULT_PORT: int = 7000
+const HOST_ID: int = 1
+const CONNECTION_TIMEOUT: float = 8.0
+const LOADING_TIMEOUT: float = 10.0
+const MAX_NAME_LENGTH: int = 20
+
+var room := RoomState.new()
+var local_peer_id: int = 0
+var is_connecting: bool = false
+var message: String = "이름을 입력하고 방을 만들거나 참가하세요."
+
+var _peer: ENetMultiplayerPeer
+var _local_name: String = ""
+var _timeout: Timer
+
+
+func _ready() -> void:
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	multiplayer.connected_to_server.connect(_on_connected_to_server)
+	multiplayer.connection_failed.connect(_on_connection_failed)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	_timeout = Timer.new()
+	_timeout.one_shot = true
+	_timeout.timeout.connect(_on_timeout)
+	add_child(_timeout)
+
+
+func is_host() -> bool:
+	return local_peer_id == HOST_ID
+
+
+func host_room(display_name: String, port: int = DEFAULT_PORT) -> void:
+	if _peer != null or not _validate_connection(display_name, port):
+		return
+	var peer := ENetMultiplayerPeer.new()
+	var error := peer.create_server(port, RoomState.MAX_PLAYERS - 1)
+	if error != OK:
+		message = "방 생성 실패: 포트가 사용 중인지 확인하세요. (%s)" % error_string(error)
+		changed.emit()
+		return
+	_peer = peer
+	multiplayer.multiplayer_peer = peer
+	local_peer_id = HOST_ID
+	room = RoomState.new()
+	room.add_player(HOST_ID, _clean_name(display_name))
+	message = "방을 만들었습니다. 참가자를 기다리는 중입니다."
+	_publish_room()
+
+
+func join_room(display_name: String, address: String, port: int = DEFAULT_PORT) -> void:
+	if _peer != null or not _validate_connection(display_name, port):
+		return
+	if address.strip_edges().is_empty():
+		message = "접속할 방장의 IP 주소를 입력하세요."
+		changed.emit()
+		return
+	var peer := ENetMultiplayerPeer.new()
+	var error := peer.create_client(address.strip_edges(), port)
+	if error != OK:
+		message = "접속 요청 실패: %s" % error_string(error)
+		changed.emit()
+		return
+	_local_name = _clean_name(display_name)
+	_peer = peer
+	multiplayer.multiplayer_peer = peer
+	is_connecting = true
+	message = "방에 접속하는 중입니다..."
+	_timeout.start(CONNECTION_TIMEOUT)
+	changed.emit()
+
+
+func leave_room() -> void:
+	_close("방에서 나왔습니다.")
+
+
+func set_ready(value: bool) -> void:
+	if local_peer_id == 0 or is_connecting:
+		return
+	if is_host():
+		_accept_ready(HOST_ID, value)
+	else:
+		_request_ready.rpc_id(HOST_ID, value)
+
+
+func start_match() -> void:
+	if not is_host() or not room.can_start():
+		return
+	# 등록을 마치지 않은 접속까지 기다려야 시작 중인 방에 인원이 끼어들지 않는다.
+	if multiplayer.get_peers().size() != room.players.size() - 1:
+		message = "접속 중인 참가자가 있습니다. 잠시 후 다시 시작하세요."
+		changed.emit()
+		return
+	room.match_id += 1
+	room.phase = RoomState.Phase.LOADING
+	for player in room.players:
+		player.is_loaded = false
+	_peer.refuse_new_connections = true
+	_timeout.start(LOADING_TIMEOUT)
+	_publish_room()
+
+
+func confirm_loaded(match_id: int) -> void:
+	if is_host():
+		_accept_loaded(HOST_ID, match_id)
+	elif local_peer_id != 0:
+		_confirm_loaded.rpc_id(HOST_ID, match_id)
+
+
+func return_to_lobby() -> void:
+	if not is_host() or room.phase == RoomState.Phase.LOBBY:
+		return
+	_timeout.stop()
+	room.return_to_lobby()
+	_peer.refuse_new_connections = false
+	_publish_room()
+
+
+func _validate_connection(display_name: String, port: int) -> bool:
+	if _clean_name(display_name).is_empty():
+		message = "플레이어 이름을 입력하세요."
+	elif port < 1024 or port > 65535:
+		message = "포트는 1024~65535 사이로 입력하세요."
+	else:
+		return true
+	changed.emit()
+	return false
+
+
+func _clean_name(display_name: String) -> String:
+	return display_name.strip_escapes().strip_edges().left(MAX_NAME_LENGTH)
+
+
+func _on_connected_to_server() -> void:
+	local_peer_id = multiplayer.get_unique_id()
+	_register_player.rpc_id(HOST_ID, _local_name)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _register_player(display_name: String) -> void:
+	if not is_host():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	var player_name := _clean_name(display_name)
+	if not multiplayer.get_peers().has(sender) or room.find_player(sender) != null:
+		return
+	if player_name.is_empty() or not room.add_player(sender, player_name):
+		_peer.disconnect_peer(sender)
+		return
+	_publish_room()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_ready(value: bool) -> void:
+	if is_host():
+		_accept_ready(multiplayer.get_remote_sender_id(), value)
+
+
+func _accept_ready(peer_id: int, value: bool) -> void:
+	var player := room.find_player(peer_id)
+	if room.phase != RoomState.Phase.LOBBY or player == null:
+		return
+	player.is_ready = value
+	_publish_room()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _confirm_loaded(match_id: int) -> void:
+	if is_host():
+		_accept_loaded(multiplayer.get_remote_sender_id(), match_id)
+
+
+func _accept_loaded(peer_id: int, match_id: int) -> void:
+	var player := room.find_player(peer_id)
+	if room.phase != RoomState.Phase.LOADING or room.match_id != match_id or player == null:
+		return
+	player.is_loaded = true
+	if room.all_loaded():
+		_timeout.stop()
+		room.phase = RoomState.Phase.PLAYING
+	_publish_room()
+
+
+func _publish_room() -> void:
+	# 먼저 전송하고 로컬 알림을 보낸다. 화면 로딩 콜백이 재진입해도 전송 순서가 유지된다.
+	_receive_room.rpc(room.to_snapshot())
+	_update_message()
+	changed.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_room(snapshot: Dictionary) -> void:
+	room = RoomState.from_snapshot(snapshot)
+	if room.find_player(local_peer_id) != null and is_connecting:
+		is_connecting = false
+		_timeout.stop()
+	_update_message()
+	changed.emit()
+
+
+func _update_message() -> void:
+	match room.phase:
+		RoomState.Phase.LOBBY:
+			message = "전원 준비 후 방장이 시작할 수 있습니다. (%d/%d)" % [room.players.size(), RoomState.MAX_PLAYERS]
+		RoomState.Phase.LOADING:
+			message = "모든 참가자의 경기 화면을 기다리는 중입니다..."
+		RoomState.Phase.PLAYING:
+			message = "전원 입장 완료. 멀티플레이 공간이 열렸습니다."
+
+
+func _on_peer_disconnected(peer_id: int) -> void:
+	if not is_host() or room.find_player(peer_id) == null:
+		return
+	room.remove_player(peer_id)
+	if room.phase != RoomState.Phase.LOBBY:
+		_timeout.stop()
+		room.return_to_lobby()
+		_peer.refuse_new_connections = false
+	_publish_room()
+	message = "참가자가 나갔습니다. 남은 인원으로 다시 준비할 수 있습니다."
+	changed.emit()
+
+
+func _on_connection_failed() -> void:
+	_close("접속 실패: 주소·포트·방 상태를 확인하세요. 방이 가득 찼거나 시작 중일 수 있습니다.")
+
+
+func _on_server_disconnected() -> void:
+	_close("방장과 연결이 끊어졌습니다. 방을 다시 만들거나 참가하세요.")
+
+
+func _on_timeout() -> void:
+	if is_connecting:
+		_close("접속 시간이 초과되었습니다. 주소·포트와 방 상태를 확인하세요.")
+	elif is_host() and room.phase == RoomState.Phase.LOADING:
+		return_to_lobby()
+		message = "화면 로딩 시간이 초과되어 로비로 돌아왔습니다."
+		changed.emit()
+
+
+func _close(reason: String) -> void:
+	_timeout.stop()
+	if _peer != null:
+		_peer.close()
+	_peer = null
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	local_peer_id = 0
+	is_connecting = false
+	room = RoomState.new()
+	message = reason
+	changed.emit()

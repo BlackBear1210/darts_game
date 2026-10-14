@@ -1,0 +1,9 @@
+# 생성되는 Godot 캐시와 검증 결과
+.godot/
+
+# Python 검증 실행 시 생성되는 파일
+__pycache__/
+*.py[cod]
+
+# 로컬 검증용 Godot 설정
+override.cfg

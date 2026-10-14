@@ -1,0 +1,60 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="PackedScene" path="res://game/table/table.tscn" id="1_table"]
+[ext_resource type="Script" path="res://game/game.gd" id="2_game"]
+[ext_resource type="Script" path="res://game/match/match_controller.gd" id="3_match"]
+[ext_resource type="Script" path="res://game/throwing/throw_controller.gd" id="4_input"]
+[ext_resource type="PackedScene" path="res://game/dart/dart.tscn" id="5_dart"]
+
+[sub_resource type="Environment" id="Environment_game"]
+background_mode = 1
+background_color = Color(0.055, 0.065, 0.085, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.8, 0.85, 1, 1)
+ambient_light_energy = 0.7
+
+[sub_resource type="SphereMesh" id="Hand"]
+radius = 0.045
+height = 0.06
+
+[node name="Game" type="Node3D"]
+script = ExtResource("2_game")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_game")
+
+[node name="Camera" type="Camera3D" parent="."]
+position = Vector3(0, 1.35, 1.8)
+current = true
+fov = 65.0
+
+[node name="Hand" type="Node3D" parent="Camera"]
+visible = false
+position = Vector3(0.16, -0.1, -0.32)
+
+[node name="Shape" type="MeshInstance3D" parent="Camera/Hand"]
+position = Vector3(0, -0.025, 0.10)
+mesh = SubResource("Hand")
+
+[node name="HeldDart" parent="Camera/Hand" instance=ExtResource("5_dart")]
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-25, -30, 0)
+
+[node name="Table" parent="." instance=ExtResource("1_table")]
+
+[node name="MatchController" type="Node" parent="."]
+script = ExtResource("3_match")
+
+[node name="ThrowController" type="Node" parent="."]
+script = ExtResource("4_input")
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="Darts" type="Node3D" parent="."]
+
+[node name="WarmLight" type="OmniLight3D" parent="."]
+position = Vector3(0, 2.5, 0)
+light_color = Color(1, 0.78, 0.5, 1)
+light_energy = 2.0
+omni_range = 6.0

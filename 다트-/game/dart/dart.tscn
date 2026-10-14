@@ -1,0 +1,35 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://game/dart/dart.gd" id="1_dart"]
+
+[sub_resource type="StandardMaterial3D" id="Material_dart"]
+albedo_color = Color(0.7, 0.75, 0.8, 1)
+metallic = 0.7
+roughness = 0.3
+
+[sub_resource type="CylinderMesh" id="Mesh_tip"]
+material = SubResource("Material_dart")
+top_radius = 0.0
+bottom_radius = 0.003
+height = 0.02
+radial_segments = 12
+
+[sub_resource type="CylinderMesh" id="Mesh_shaft"]
+material = SubResource("Material_dart")
+top_radius = 0.003
+bottom_radius = 0.003
+height = 0.14
+radial_segments = 12
+
+[node name="Dart" type="Node3D"]
+script = ExtResource("1_dart")
+
+[node name="Tip" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.01)
+rotation_degrees = Vector3(-90, 0, 0)
+mesh = SubResource("Mesh_tip")
+
+[node name="Shaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.09)
+rotation_degrees = Vector3(-90, 0, 0)
+mesh = SubResource("Mesh_shaft")

@@ -1,0 +1,290 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://ui/game_hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://ui/board_preview.gd" id="2_preview"]
+[ext_resource type="Script" path="res://ui/emote_overlay.gd" id="3_emote"]
+[ext_resource type="Script" path="res://ui/aim_reticle.gd" id="4_reticle"]
+
+[sub_resource type="StyleBoxFlat" id="PanelStyle"]
+bg_color = Color(0.035, 0.05, 0.07, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.37, 0.42, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_left = 10
+corner_radius_bottom_right = 10
+
+[node name="GameHUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Root"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 260.0
+offset_bottom = 64.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.8, 1)
+theme_override_font_sizes/font_size = 24
+text = "DART PARTY"
+
+[node name="RosterBackground" type="ColorRect" parent="Root"]
+unique_name_in_owner = true
+offset_left = 12.0
+offset_top = 126.0
+offset_right = 244.0
+offset_bottom = 320.0
+mouse_filter = 2
+color = Color(0.03, 0.04, 0.06, 0.90)
+
+[node name="PreviewBackground" type="ColorRect" parent="Root"]
+unique_name_in_owner = true
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -240.0
+offset_top = 70.0
+offset_right = -12.0
+offset_bottom = 320.0
+mouse_filter = 2
+color = Color(0.03, 0.04, 0.06, 0.90)
+
+[node name="Status" type="Label" parent="Root"]
+unique_name_in_owner = true
+offset_left = 24.0
+offset_top = 60.0
+offset_right = 860.0
+offset_bottom = 90.0
+mouse_filter = 2
+
+[node name="Roster" type="Label" parent="Root"]
+unique_name_in_owner = true
+offset_left = 24.0
+offset_top = 132.0
+offset_right = 235.0
+offset_bottom = 500.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 2
+
+[node name="Buttons" type="HBoxContainer" parent="Root"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -60.0
+offset_right = 350.0
+offset_bottom = -24.0
+grow_vertical = 0
+theme_override_constants/separation = 12
+
+[node name="LobbyButton" type="Button" parent="Root/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "로비로 돌아가기"
+
+[node name="LeaveButton" type="Button" parent="Root/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "방 나가기"
+
+[node name="Clock" type="Label" parent="Root"]
+unique_name_in_owner = true
+offset_left = 24.0
+offset_top = 92.0
+offset_right = 300.0
+offset_bottom = 120.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.4, 1)
+
+[node name="PreviewTitle" type="Label" parent="Root"]
+unique_name_in_owner = true
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -240.0
+offset_top = 75.0
+offset_right = -24.0
+offset_bottom = 104.0
+mouse_filter = 2
+horizontal_alignment = 1
+
+[node name="PreviewPlayer" type="OptionButton" parent="Root"]
+unique_name_in_owner = true
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -224.0
+offset_top = 34.0
+offset_right = -24.0
+offset_bottom = 65.0
+
+[node name="BoardPreview" type="Control" parent="Root"]
+unique_name_in_owner = true
+clip_contents = true
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -224.0
+offset_top = 110.0
+offset_right = -24.0
+offset_bottom = 310.0
+mouse_filter = 2
+script = ExtResource("2_preview")
+
+[node name="Hint" type="Label" parent="Root"]
+unique_name_in_owner = true
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -270.0
+offset_top = -103.0
+offset_right = 270.0
+offset_bottom = -75.0
+mouse_filter = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 15
+
+[node name="Timing" type="ProgressBar" parent="Root"]
+unique_name_in_owner = true
+visible = false
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -140.0
+offset_top = -67.0
+offset_right = 140.0
+offset_bottom = -39.0
+mouse_filter = 2
+show_percentage = false
+
+[node name="Center" type="ColorRect" parent="Root/Timing"]
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -2.0
+offset_right = 2.0
+mouse_filter = 2
+color = Color(1, 0.82, 0.25, 1)
+
+[node name="EmoteButton" type="Button" parent="Root"]
+unique_name_in_owner = true
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -155.0
+offset_top = -65.0
+offset_right = -24.0
+offset_bottom = -25.0
+text = "얼굴 장난"
+
+[node name="CardsPanel" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+anchor_left = 0.25
+anchor_top = 1.0
+anchor_right = 0.85
+anchor_bottom = 1.0
+offset_top = -325.0
+offset_bottom = -80.0
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="Margin" type="MarginContainer" parent="Root/CardsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="Root/CardsPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Root/CardsPanel/Margin/Content"]
+layout_mode = 2
+text = "카드 단계 · 후보 1장 선택 (상대에게 후보는 보이지 않습니다)"
+theme_override_font_sizes/font_size = 15
+
+[node name="Candidates" type="HBoxContainer" parent="Root/CardsPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HandTitle" type="Label" parent="Root/CardsPanel/Margin/Content"]
+layout_mode = 2
+text = "보유 카드 · 사용할 카드와 대상을 고르세요"
+theme_override_font_sizes/font_size = 15
+
+[node name="Hand" type="HBoxContainer" parent="Root/CardsPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Use" type="HBoxContainer" parent="Root/CardsPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Target" type="OptionButton" parent="Root/CardsPanel/Margin/Content/Use"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(150, 0)
+
+[node name="Confirm" type="Button" parent="Root/CardsPanel/Margin/Content/Use"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "사용 예약"
+
+[node name="Skip" type="Button" parent="Root/CardsPanel/Margin/Content/Use"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "이번에는 보관"
+
+[node name="CardInfo" type="Label" parent="Root/CardsPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+theme_override_font_sizes/font_size = 14
+
+[node name="Results" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+visible = false
+anchor_left = 0.25
+anchor_top = 0.25
+anchor_right = 0.75
+anchor_bottom = 0.75
+theme_override_styles/panel = SubResource("PanelStyle")
+
+[node name="Ranking" type="Label" parent="Root/Results"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_font_sizes/font_size = 22
+
+[node name="EmoteOverlay" type="Control" parent="Root"]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("3_emote")
+
+[node name="Reticle" type="Control" parent="Root"]
+unique_name_in_owner = true
+visible = false
+offset_right = 24.0
+offset_bottom = 24.0
+mouse_filter = 2
+script = ExtResource("4_reticle")
