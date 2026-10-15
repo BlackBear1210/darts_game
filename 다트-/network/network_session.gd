@@ -3,6 +3,10 @@ extends Node
 ## 연결과 RPC의 경계. 이 노드는 화면 전환 중에도 같은 경로에 유지한다.
 
 signal changed
+signal game_action(sender: int, action: String, payload: Array)
+signal game_event(kind: String, data: Dictionary)
+signal movement_input(sender: int, match_id: int, sequence: int, controls: Dictionary)
+signal movement_snapshot(match_id: int, sequence: int, poses: Array)
 
 const DEFAULT_PORT: int = 7000
 const HOST_ID: int = 1
@@ -39,7 +43,7 @@ func host_room(display_name: String, port: int = DEFAULT_PORT) -> void:
 	if _peer != null or not _validate_connection(display_name, port):
 		return
 	var peer := ENetMultiplayerPeer.new()
-	var error := peer.create_server(port, RoomState.MAX_PLAYERS - 1)
+	var error := peer.create_server(port, 8)
 	if error != OK:
 		message = "방 생성 실패: 포트가 사용 중인지 확인하세요. (%s)" % error_string(error)
 		changed.emit()
@@ -92,15 +96,15 @@ func start_match() -> void:
 	if not is_host() or not room.can_start():
 		return
 	# 등록을 마치지 않은 접속까지 기다려야 시작 중인 방에 인원이 끼어들지 않는다.
-	if multiplayer.get_peers().size() != room.players.size() - 1:
+	if multiplayer.get_peers().size() != human_count() - 1:
 		message = "접속 중인 참가자가 있습니다. 잠시 후 다시 시작하세요."
 		changed.emit()
 		return
 	room.match_id += 1
 	room.phase = RoomState.Phase.LOADING
 	for player in room.players:
-		player.is_loaded = false
-	_peer.refuse_new_connections = true
+		player.is_loaded = player.is_bot
+	# 접속 후 등록 RPC에서 구체적인 거부 사유를 전달한다.
 	_timeout.start(LOADING_TIMEOUT)
 	_publish_room()
 
@@ -149,8 +153,16 @@ func _register_player(display_name: String) -> void:
 	var player_name := _clean_name(display_name)
 	if not multiplayer.get_peers().has(sender) or room.find_player(sender) != null:
 		return
+	if room.phase != RoomState.Phase.LOBBY:
+		_reject_join.rpc_id(sender, "경기가 진행 중이므로 참가할 수 없습니다.")
+		return
+	if room.players.size() >= RoomState.MAX_PLAYERS:
+		for bot in room.players:
+			if bot.is_bot:
+				room.remove_player(bot.peer_id)
+				break
 	if player_name.is_empty() or not room.add_player(sender, player_name):
-		_peer.disconnect_peer(sender)
+		_reject_join.rpc_id(sender, "방이 가득 찼습니다. 최대 4명까지 참가할 수 있습니다.")
 		return
 	_publish_room()
 
@@ -217,13 +229,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not is_host() or room.find_player(peer_id) == null:
 		return
 	room.remove_player(peer_id)
-	if room.phase != RoomState.Phase.LOBBY:
-		_timeout.stop()
-		room.return_to_lobby()
-		_peer.refuse_new_connections = false
+	if room.phase == RoomState.Phase.LOADING:
+		return_to_lobby()
 	_publish_room()
-	message = "참가자가 나갔습니다. 남은 인원으로 다시 준비할 수 있습니다."
-	changed.emit()
+
 
 
 func _on_connection_failed() -> void:
@@ -254,3 +263,46 @@ func _close(reason: String) -> void:
 	room = RoomState.new()
 	message = reason
 	changed.emit()
+
+
+func human_count() -> int:
+	var count: int = 0
+	for player in room.players:
+		if not player.is_bot:
+			count += 1
+	return count
+
+
+func enable_bots() -> void:
+	if is_host() and room.phase == RoomState.Phase.LOBBY:
+		room.add_bots()
+		_publish_room()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _reject_join(reason: String) -> void:
+	_close(reason)
+
+
+# 화면이 사라진 직후 도착한 패킷도 지속 노드에서 받고 구독자가 없으면 폐기한다.
+# 이 노드는 규칙을 계산하지 않고 실제 RPC 발신자와 메시지만 전달한다.
+@rpc("any_peer", "call_remote", "reliable")
+func request_game_action(action: String, payload: Array) -> void:
+	if is_host():
+		game_action.emit(multiplayer.get_remote_sender_id(), action, payload)
+
+
+@rpc("authority", "call_remote", "reliable")
+func receive_game_event(kind: String, data: Dictionary) -> void:
+	game_event.emit(kind, data)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", 1)
+func request_movement(match_id: int, sequence: int, controls: Dictionary) -> void:
+	if is_host():
+		movement_input.emit(multiplayer.get_remote_sender_id(), match_id, sequence, controls)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered", 2)
+func receive_movement(match_id: int, sequence: int, poses: Array) -> void:
+	movement_snapshot.emit(match_id, sequence, poses)

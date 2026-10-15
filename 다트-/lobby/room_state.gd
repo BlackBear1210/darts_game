@@ -49,6 +49,20 @@ func can_start() -> bool:
 	return true
 
 
+func add_bots() -> void:
+	if phase != Phase.LOBBY:
+		return
+	# 음수는 방 내부 참가자 식별자이며 RPC 수신 대상으로 사용하지 않는다.
+	for index in range(1, MAX_PLAYERS):
+		if players.size() >= MAX_PLAYERS:
+			break
+		if find_player(-index) == null and add_player(-index, "BOT %d" % index):
+			var bot := find_player(-index)
+			bot.is_bot = true
+			bot.is_ready = true
+			bot.is_loaded = true
+
+
 func all_loaded() -> bool:
 	if players.size() < MIN_PLAYERS:
 		return false
@@ -61,8 +75,8 @@ func all_loaded() -> bool:
 func return_to_lobby() -> void:
 	phase = Phase.LOBBY
 	for player in players:
-		player.is_ready = false
-		player.is_loaded = false
+		player.is_ready = player.is_bot
+		player.is_loaded = player.is_bot
 
 
 func to_snapshot() -> Dictionary:

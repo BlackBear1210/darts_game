@@ -7,7 +7,7 @@ var _options: Dictionary = {}
 var _last_command: int = 0
 var _elapsed: float = 0.0
 var _tuned_match: int = 0
-var _emote_count: int = 0
+var _test_controls: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -48,6 +48,11 @@ func _process(delta: float) -> bool:
 	_elapsed = 0.0
 	_tune_game()
 	_read_command()
+	var game := _main.get_node_or_null("Game") as GameView
+	if game != null:
+		game.send_controls(Vector2(float(_test_controls.get("x", 0)), float(_test_controls.get("y", 0))),
+			float(_test_controls.get("yaw", 0)), 0, bool(_test_controls.get("jump", false)), bool(_test_controls.get("crouch", false)))
+		_test_controls["jump"] = false
 	_write_status()
 	return false
 
@@ -85,32 +90,25 @@ func _read_command() -> void:
 		"throw":
 			var controller := (_main.get_node("Game") as GameView).controller
 			controller.submit_throw(Vector2(float(command.value[0]), float(command.value[1])), float(command.value[2]))
-		"mouse_throw":
-			var game := _main.get_node("Game") as GameView
-			var point := game.camera.unproject_position(game.table.board.global_position)
-			var motion := InputEventMouseMotion.new()
-			motion.position = point
-			game.get_viewport().push_input(motion, true)
-			var press := InputEventMouseButton.new()
-			press.button_index = MOUSE_BUTTON_LEFT
-			press.position = point
-			press.pressed = true
-			game.get_viewport().push_input(press, true)
-			await create_timer(0.4).timeout
-			var release := InputEventMouseButton.new()
-			release.button_index = MOUSE_BUTTON_LEFT
-			release.position = point
-			game.get_viewport().push_input(release, true)
 		"raw_throw":
-			var controller := (_main.get_node("Game") as GameView).controller
-			controller._request_throw.rpc_id(1, int(command.value[0]), int(command.value[1]), int(command.value[2]),
-				Vector2(float(command.value[3]), float(command.value[4])), float(command.value[5]))
-		"choose":
-			(_main.get_node("Game") as GameView).controller.choose_card(int(command.value))
-		"card":
-			(_main.get_node("Game") as GameView).controller.plan_card(int(command.value[0]), int(command.value[1]))
-		"emote":
-			(_main.get_node("Game") as GameView).controller.request_emote()
+			_session.request_game_action.rpc_id(1, "throw", [int(command.value[0]), int(command.value[1]), int(command.value[2]),
+				Vector2(float(command.value[3]), float(command.value[4])), float(command.value[5])])
+		"seat":
+			(_main.get_node("Game") as GameView).request_seat()
+		"move":
+			_test_controls = {"x": command.value[0], "y": command.value[1], "yaw": command.value[2],
+				"jump": command.value[3], "crouch": command.value[4]}
+		"stop":
+			_test_controls = {}
+		"restart":
+			(_main.get_node("Game") as GameView).controller.restart()
+		"bots":
+			_session.enable_bots()
+		"dev_skip":
+			(_main.get_node("Game") as GameView).controller.developer_skip()
+		"dev_bot":
+			(_main.get_node("Game") as GameView).controller.developer_bot_turn(int(command.value))
+
 
 
 func _refresh_manual_game() -> void:
@@ -124,32 +122,21 @@ func _refresh_manual_game() -> void:
 		game = scene.instantiate() as GameView
 		game.name = "Game"
 		_main.add_child(game)
-		game.configure(_session.room, _session.local_peer_id)
+		game.configure(_session.room, _session.local_peer_id, _session)
 
 
 func _tune_game() -> void:
 	var game := _main.get_node_or_null("Game") as GameView
 	if game == null or game.controller.state.match_id == _tuned_match: return
 	_tuned_match = game.controller.state.match_id
-	game.controller.emote_received.connect(func(_data: Dictionary) -> void: _emote_count += 1)
+	game.set_process_unhandled_input(false)
 	if _options.get("fast-match", "false") == "true" and _session.is_host():
-		var config := game.controller.config
-		config.rounds = 4
-		config.turn_seconds = 6.0
-		config.transition_seconds = 0.15
-		config.flight_seconds = 0.15
-		config.settle_seconds = 0.15
-		config.card_seconds = 2.5
-		config.emote_warning = 0.05
-		config.emote_seconds = 0.1
-		config.emote_gap = 0.05
+		game.controller.config.settle_seconds = 0.12
 	if _options.get("afk-match", "false") == "true" and _session.is_host():
-		var config := game.controller.config
-		config.rounds = 2
-		config.turn_seconds = 0.2
-		config.transition_seconds = 0.1
-		config.settle_seconds = 0.05
-		config.card_seconds = 0.25
+		game.controller.config.rounds = 1
+		game.controller.config.turn_seconds = 0.25
+		game.controller.config.settle_seconds = 0.05
+
 
 
 func _write_status() -> void:
@@ -164,12 +151,19 @@ func _write_status() -> void:
 		"markers": markers,
 		"lobby_visible": lobby.visible if lobby != null else true,
 		"command_id": _last_command,
-		"emote_count": _emote_count,
+
 	}
 	if game != null:
 		var view := game as GameView
 		status["match"] = view.controller.state.to_snapshot()
-		status["private"] = view.controller.private_cards
+		var poses: Array[Dictionary] = []
+		for actor: PlayerView in view.actors.values():
+			var motion := actor.to_motion()
+			motion["position"] = [actor.position.x, actor.position.y, actor.position.z]
+			motion["velocity"] = [actor.velocity.x, actor.velocity.y, actor.velocity.z]
+			poses.append(motion)
+		status["poses"] = poses
+		status["remaining"] = view.controller.remaining_seconds()
 		status["table_ready"] = view.table.is_ready
 	var file := FileAccess.open(_options.output + ".status.json", FileAccess.WRITE)
 	file.store_string(JSON.stringify(status))

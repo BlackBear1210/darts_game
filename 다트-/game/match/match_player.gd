@@ -6,6 +6,7 @@ var peer_id: int
 var display_name: String
 var seat: int
 var score: int = 0
+var is_bot: bool = false
 var layout := BoardLayout.new()
 var bonus: int = 0
 var multiplier: int = 1
@@ -40,7 +41,7 @@ func effects_text() -> String:
 func to_snapshot() -> Dictionary:
 	var cards: Array[Dictionary] = []
 	for card in hand: cards.append(card.to_snapshot())
-	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score,
+	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score, "bot": is_bot,
 		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": cards}
 
 
@@ -50,6 +51,7 @@ static func from_snapshot(data: Dictionary) -> MatchPlayer:
 	player.display_name = data.name
 	player.seat = data.seat
 	player.score = data.score
+	player.is_bot = data.get("bot", false)
 	player.layout.numbers.assign(data.numbers)
 	player.bonus = data.bonus
 	player.multiplier = data.multiplier

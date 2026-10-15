@@ -7,6 +7,7 @@ var display_name: String
 var seat: int
 var is_ready: bool = false
 var is_loaded: bool = false
+var is_bot: bool = false
 
 
 func _init(id: int = 0, player_name: String = "", seat_index: int = 0) -> void:
@@ -22,6 +23,7 @@ func to_snapshot() -> Dictionary:
 		"seat": seat,
 		"ready": is_ready,
 		"loaded": is_loaded,
+		"bot": is_bot,
 	}
 
 
@@ -29,4 +31,5 @@ static func from_snapshot(data: Dictionary) -> RoomPlayer:
 	var player := RoomPlayer.new(data.peer_id, data.name, data.seat)
 	player.is_ready = data.ready
 	player.is_loaded = data.loaded
+	player.is_bot = data.get("bot", false)
 	return player

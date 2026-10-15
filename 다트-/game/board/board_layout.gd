@@ -28,4 +28,4 @@ func shuffle_with(random: RandomNumberGenerator) -> void:
 static func sector_at(point: Vector2) -> int:
 	# 20 구역은 위쪽을 중심으로 하고, 각도는 시계 방향으로 증가한다.
 	var angle := fposmod(atan2(point.x, point.y) + PI / 20.0, TAU)
-	return int(floor(angle / (TAU / 20.0))) % 20
+	return int(floor((angle + 0.0000001) / (TAU / 20.0))) % 20

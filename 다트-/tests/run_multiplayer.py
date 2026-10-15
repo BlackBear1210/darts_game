@@ -121,6 +121,7 @@ def run_room(engine, folder, count):
             owned.append(extra)
             wait_for([extra], lambda states: not states[0]["connecting"]
                      and states[0]["local_id"] == 0, "fifth player rejected")
+            assert "가득" in extra.status()["message"]
             assert len(host.status()["room"]["players"]) == 4
             extra.stop()
             peers.pop()
@@ -142,6 +143,7 @@ def run_room(engine, folder, count):
             owned.append(late)
             wait_for([late], lambda states: not states[0]["connecting"]
                      and states[0]["local_id"] == 0, "late join rejected")
+            assert "진행" in late.status()["message"]
             late.stop()
             peers.pop()
 
@@ -163,7 +165,15 @@ def run_room(engine, folder, count):
         departing.command("leave")
         wait_for([departing], lambda states: states[0]["local_id"] == 0
                  and states[0]["markers"] == 0, "client leaves")
-        wait_for(peers, lambda states: lobby_count(states, count - 1), "departure returns room to lobby")
+        wait_for(peers, lambda states: all(len(state["room"]["players"]) == count - 1
+                 and state["room"]["phase"] == 2 and state["markers"] == count - 1 for state in states),
+                 "departure preserves game and removes character")
+        if count == 2:
+            wait_for(peers, lambda states: states[0]["match"]["phase"] == 6, "below two finishes match")
+        else:
+            assert peers[0].status()["match"]["phase"] != 6
+        host.command("lobby")
+        wait_for(peers, lambda states: lobby_count(states, count - 1), "host returns to lobby")
         departing.command("join")
         peers.append(departing)
         wait_for(peers, lambda states: lobby_count(states, count), "rejoin succeeds")
@@ -223,6 +233,18 @@ def run_loading_barrier(engine, folder):
             peer.stop()
 
 
+def run_connection_failure(engine, folder):
+    peer = Peer(engine, folder, 0, free_port(), "client")
+    try:
+        ss = wait_for([peer], lambda ss: ss[0]["command_id"] == 0 and not ss[0]["connecting"]
+                      and ss[0]["local_id"] == 0 and ("실패" in ss[0]["message"] or "초과" in ss[0]["message"]),
+                      "unreachable host shows failure", timeout=12)
+        assert ss[0]["lobby_visible"]
+        print("PASS: unreachable host reports connection failure and stays at menu", flush=True)
+    finally:
+        peer.stop()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--godot", type=Path, required=True)
@@ -236,6 +258,9 @@ def main():
     barrier_folder = results / "loading"
     barrier_folder.mkdir()
     run_loading_barrier(args.godot, barrier_folder)
+    failure_folder = results / "failure"
+    failure_folder.mkdir()
+    run_connection_failure(args.godot, failure_folder)
     for path in results.rglob("*.log"):
         content = path.read_text(encoding="utf-8")
         errors = [line for line in content.splitlines()

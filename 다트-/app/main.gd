@@ -7,6 +7,8 @@ const HUD_SCENE: PackedScene = preload("res://ui/game_hud.tscn")
 @onready var session: NetworkSession = $NetworkSession
 @onready var lobby: LobbyView = $Lobby
 
+@export var developer_mode: bool = true
+
 var _game: GameView
 var _hud: GameHUD
 var _loaded_match_id: int = 0
@@ -20,6 +22,18 @@ func _ready() -> void:
 	lobby.leave_requested.connect(session.leave_room)
 	session.changed.connect(_refresh_screen)
 	_refresh_screen()
+	developer_mode = developer_mode and OS.is_debug_build() and not OS.get_cmdline_user_args().has("--normal") and not OS.get_cmdline_user_args().has("--role")
+	if developer_mode:
+		_boot_developer.call_deferred()
+
+
+func _boot_developer() -> void:
+	session.host_room("PLAYER", NetworkSession.DEFAULT_PORT)
+	if not session.is_host():
+		return
+	session.enable_bots()
+	session.set_ready(true)
+	session.start_match()
 
 
 func _refresh_screen() -> void:
@@ -28,19 +42,22 @@ func _refresh_screen() -> void:
 	lobby.render(session.room, session.local_peer_id, session.is_connecting, session.message)
 	if not in_game:
 		_remove_game()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
 	if _game == null:
 		_game = GAME_SCENE.instantiate() as GameView
 		_game.name = "Game"
 		add_child(_game)
-		_game.configure(session.room, session.local_peer_id)
+		_game.developer_enabled = developer_mode
+		_game.controller.developer_enabled = developer_mode
+		_game.configure(session.room, session.local_peer_id, session)
 		_hud = HUD_SCENE.instantiate() as GameHUD
 		_hud.name = "GameHUD"
 		add_child(_hud)
 		_hud.leave_requested.connect(session.leave_room)
 		_hud.lobby_requested.connect(session.return_to_lobby)
 		_hud.configure(_game.controller, _game.throw_input)
-	_hud.render(session.room, session.local_peer_id, session.message)
+	_game.controller.sync_roster(session.room)
 	if session.room.phase == RoomState.Phase.PLAYING:
 		_game.controller.start()
 	if session.room.phase == RoomState.Phase.LOADING and _loaded_match_id != session.room.match_id:

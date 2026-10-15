@@ -1,9 +1,9 @@
 class_name MatchConfig
 extends Resource
 
-@export_range(1, 10) var rounds: int = 4
-@export_range(1, 5) var darts_per_turn: int = 2
-@export var turn_seconds: float = 12.0
+@export_range(1, 10) var rounds: int = 5
+@export_range(1, 5) var darts_per_turn: int = 3
+@export var turn_seconds: float = 20.0
 @export var card_seconds: float = 15.0
 @export var transition_seconds: float = 0.9
 @export var flight_seconds: float = 0.45
