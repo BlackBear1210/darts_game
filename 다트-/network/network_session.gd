@@ -18,13 +18,19 @@ var room := RoomState.new()
 var local_peer_id: int = 0
 var is_connecting: bool = false
 var message: String = "이름을 입력하고 방을 만들거나 참가하세요."
+var backend: BackendConnection
+var account_ids: Dictionary = {}
+var _registering: Dictionary = {}
 
 var _peer: ENetMultiplayerPeer
 var _local_name: String = ""
 var _timeout: Timer
+var _departure_pending: bool = false
 
 
 func _ready() -> void:
+	# 모든 요청은 서버를 통한다. 참가자끼리의 자동 연결 알림/패킷 중계는 필요 없다.
+	(multiplayer as SceneMultiplayer).server_relay = false
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
@@ -36,10 +42,34 @@ func _ready() -> void:
 
 
 func is_host() -> bool:
+	# 연결의 서버 권한이다. 선수 방장은 is_room_host()로 구분한다.
 	return local_peer_id == HOST_ID
 
 
+func is_room_host() -> bool:
+	return local_peer_id != 0 and local_peer_id == room.host_peer_id
+
+
+func host_dedicated(port: int = DEFAULT_PORT) -> Error:
+	if _peer != null or port < 1024 or port > 65535:
+		return ERR_INVALID_PARAMETER
+	var peer := ENetMultiplayerPeer.new()
+	var error := peer.create_server(port, 8)
+	if error != OK:
+		return error
+	_peer = peer
+	multiplayer.multiplayer_peer = peer
+	local_peer_id = HOST_ID
+	room = RoomState.new()
+	_publish_room()
+	return OK
+
+
 func host_room(display_name: String, port: int = DEFAULT_PORT) -> void:
+	if backend != null:
+		message = "계정 모드는 전용 서버에 방 참가로 접속하세요."
+		changed.emit()
+		return
 	if _peer != null or not _validate_connection(display_name, port):
 		return
 	var peer := ENetMultiplayerPeer.new()
@@ -93,10 +123,20 @@ func set_ready(value: bool) -> void:
 
 
 func start_match() -> void:
-	if not is_host() or not room.can_start():
+	if not is_room_host():
+		return
+	if is_host():
+		_start_match()
+	else:
+		_request_room_action.rpc_id(HOST_ID, "start")
+
+
+func _start_match() -> void:
+	if not room.can_start():
 		return
 	# 등록을 마치지 않은 접속까지 기다려야 시작 중인 방에 인원이 끼어들지 않는다.
-	if multiplayer.get_peers().size() != human_count() - 1:
+	var local_players: int = 1 if room.find_player(HOST_ID) != null else 0
+	if multiplayer.get_peers().size() != human_count() - local_players:
 		message = "접속 중인 참가자가 있습니다. 잠시 후 다시 시작하세요."
 		changed.emit()
 		return
@@ -117,7 +157,27 @@ func confirm_loaded(match_id: int) -> void:
 
 
 func return_to_lobby() -> void:
-	if not is_host() or room.phase == RoomState.Phase.LOBBY:
+	if not is_room_host():
+		return
+	if is_host():
+		_return_to_lobby()
+	else:
+		_request_room_action.rpc_id(HOST_ID, "lobby")
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_room_action(action: String) -> void:
+	if not is_host() or multiplayer.get_remote_sender_id() != room.host_peer_id:
+		return
+	match action:
+		"start":
+			_start_match()
+		"lobby":
+			_return_to_lobby()
+
+
+func _return_to_lobby() -> void:
+	if room.phase == RoomState.Phase.LOBBY:
 		return
 	_timeout.stop()
 	room.return_to_lobby()
@@ -142,17 +202,37 @@ func _clean_name(display_name: String) -> String:
 
 func _on_connected_to_server() -> void:
 	local_peer_id = multiplayer.get_unique_id()
-	_register_player.rpc_id(HOST_ID, _local_name)
+	_register_player.rpc_id(HOST_ID, _local_name, backend.token if backend != null else "")
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _register_player(display_name: String) -> void:
+func _register_player(display_name: String, session_token: String = "") -> void:
 	if not is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
 	var player_name := _clean_name(display_name)
 	if not multiplayer.get_peers().has(sender) or room.find_player(sender) != null:
 		return
+	var account_id: String = ""
+	if backend != null:
+		if _registering.has(sender):
+			return
+		_registering[sender] = true
+		var connection := _peer
+		var identity := await backend.verify_session(session_token)
+		if _peer != connection:
+			return
+		_registering.erase(sender)
+		if not multiplayer.get_peers().has(sender):
+			return
+		if identity.is_empty():
+			_reject_join.rpc_id(sender, "로그인 인증 실패: 개발 계정에 다시 로그인하세요.")
+			return
+		account_id = str(identity.account_id)
+		if account_ids.values().has(account_id):
+			_reject_join.rpc_id(sender, "같은 계정이 이미 방에 접속해 있습니다.")
+			return
+		player_name = _clean_name(str(identity.name))
 	if room.phase != RoomState.Phase.LOBBY:
 		_reject_join.rpc_id(sender, "경기가 진행 중이므로 참가할 수 없습니다.")
 		return
@@ -164,6 +244,8 @@ func _register_player(display_name: String) -> void:
 	if player_name.is_empty() or not room.add_player(sender, player_name):
 		_reject_join.rpc_id(sender, "방이 가득 찼습니다. 최대 4명까지 참가할 수 있습니다.")
 		return
+	if not account_id.is_empty():
+		account_ids[sender] = account_id
 	_publish_room()
 
 
@@ -229,9 +311,21 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not is_host() or room.find_player(peer_id) == null:
 		return
 	room.remove_player(peer_id)
-	if room.phase == RoomState.Phase.LOADING:
-		return_to_lobby()
-	_publish_room()
+	account_ids.erase(peer_id)
+	# 같은 poll에서 여러 연결이 닫힐 수 있으므로 ENet 이탈 처리가 끝난 뒤 전송한다.
+	if not _departure_pending:
+		_departure_pending = true
+		_refresh_after_departures.call_deferred()
+
+
+func _refresh_after_departures() -> void:
+	_departure_pending = false
+	if not is_host():
+		return
+	if room.phase == RoomState.Phase.LOADING or human_count() == 0:
+		_return_to_lobby()
+	else:
+		_publish_room()
 
 
 
@@ -247,7 +341,7 @@ func _on_timeout() -> void:
 	if is_connecting:
 		_close("접속 시간이 초과되었습니다. 주소·포트와 방 상태를 확인하세요.")
 	elif is_host() and room.phase == RoomState.Phase.LOADING:
-		return_to_lobby()
+		_return_to_lobby()
 		message = "화면 로딩 시간이 초과되어 로비로 돌아왔습니다."
 		changed.emit()
 
@@ -261,6 +355,8 @@ func _close(reason: String) -> void:
 	local_peer_id = 0
 	is_connecting = false
 	room = RoomState.new()
+	account_ids.clear()
+	_registering.clear()
 	message = reason
 	changed.emit()
 

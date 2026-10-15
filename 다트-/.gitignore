@@ -1,3 +1,7 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# 내보낸 실행 파일과 PCK (기존 PDF는 별도 유지)
+/output/builds/
+/backend/data/

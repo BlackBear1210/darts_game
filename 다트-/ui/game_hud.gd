@@ -175,8 +175,8 @@ func _process(_delta: float) -> void:
 	var finished: bool = state.phase == MatchState.Phase.FINISHED
 	_cross.visible = not finished
 	_buttons.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED or finished
-	_restart.visible = finished and controller.local_peer_id == 1 and state.players.size() >= 2
-	_lobby.visible = controller.local_peer_id == 1
+	_restart.visible = finished and controller.session.is_room_host() and state.players.size() >= 2
+	_lobby.visible = controller.session.is_room_host()
 	if finished:
 		_result.text = "경기 종료\n" + ranking_text()
 	_update_bot_view()

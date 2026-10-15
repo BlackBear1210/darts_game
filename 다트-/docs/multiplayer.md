@@ -1,6 +1,7 @@
 # 멀티플레이 통신
 
 현재 실행 방법은 [README](../README.md)의 실제 4인 접속 시험을 따른다.
+전용 서버와 선수 방장 분리는 [DEDICATED_SERVER.md](DEDICATED_SERVER.md), 로컬 개발 계정·토큰 검증·전적 저장은 [BACKEND_DEV.md](BACKEND_DEV.md)를 따른다. 아래 호스트 종료 설명은 선수 겸 서버인 일반 방 만들기 모드 기준이다.
 ENet/UDP, IP 직접 접속, 방장 포함 2~4인이다. 기본 포트는 7000이다.
 프로젝트는 Godot 4.6.3을 사용하고 `NetworkSession`을 `/root/Main/NetworkSession`에 유지한다.
 

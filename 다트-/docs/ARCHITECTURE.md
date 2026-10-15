@@ -24,6 +24,32 @@ RPC는 이 지속 노드에서만 수신하고, Game/MatchController는 로컬 s
 화면을 없앤 직후 도착한 이동 패킷도 삭제된 Scene 경로를 조회하지 않는다.
 `NetworkSession`은 점수·물리·턴 규칙을 계산하지 않는다.
 
+## 전용 서버
+
+`Main`은 `dedicated_server` feature 또는 `-- --server`로 전용 서버를 시작한다. 같은 Game/MatchController로 물리·턴·투척·채점을 처리하며 서버에는 로컬 선수와 HUD를 생성하지 않는다.
+
+ENet 서버 ID 1과 선수 방장은 별개다. `NetworkSession.is_host()`는 서버 권한, `is_room_host()`는 `RoomState.host_peer_id`와 일치하는 선수 권한이다. 전용 서버의 첫 접속자가 방장을 맡고 이탈하면 남은 첫 사람에게 이전한다. 일반 방 만들기와 기존 개발 모드는 ID 1이 선수 겸 서버인 방식을 유지한다.
+
+방장 클라이언트의 시작·로비 복귀·재경기 요청도 지속 NetworkSession을 거치며 서버가 실제 RPC 발신자를 검증한다. 로딩 장벽은 선수들에게만 적용한다. 전원 이탈하면 서버는 빈 로비로 돌아가 다음 접속을 받는다. 하나의 서버 프로세스가 하나의 방을 소유한다. 익명 모드는 영구 저장하지 않고 계정 모드는 아래의 로컬 백엔드와 연결한다.
+
+모든 요청은 서버로 보내므로 `SceneMultiplayer.server_relay`를 끈다. 참가자 목록은 RoomState 스냅샷으로 전달하며 참가자끼리 직접 RPC를 보내지 않는다. 여러 연결이 같은 poll에서 종료될 때는 이탈 처리 후 방 상태를 한 번 갱신한다.
+
+`export_presets.cfg`는 Windows 서버·플레이어 Release와 검증 전용 Debug 빌드를 정의한다. 검증 preset만 `verification` 시작 Scene override와 테스트 스크립트를 포함한다. 결과물은 `output/builds/`에 생성하고 Git에서 제외한다.
+
+기본 자동 파일 로그는 끄고 콘솔 출력을 유지한다. 4.6.3 엔진의 로그 파일 열기 실패 시 접근 위반을 피하기 위해서다. 파일 저장이 필요하면 쓰기 가능한 경로를 `--log-file`로 명시한다. 서버 시험은 별도 로그 경로로 기본 시작 문제를 우회하지 않는다.
+
+## 로컬 계정과 경기 저장
+
+`backend/server.py`는 loopback HTTP API와 SQLite 계정/전적 저장을 담당한다. `backend/run_local.ps1`이 개발 API·경기 서버·계정 모드 플레이어를 각각 실행한다. 서비스는 `--dev`와 서버 환경 키가 있어야 시작하며 외부 주소로 바인딩하지 않는다.
+
+Main이 `--backend-url`을 받으면 자식 `BackendConnection`을 생성한다. 해당 Node는 HTTPRequest로 로그인·프로필·서버 토큰 검증을 수행하고, 서버의 완료 경기 결과를 디스크 대기 파일과 함께 전송한다. 새로운 Autoload는 없다. API를 지정하지 않으면 기존 익명/개발자 봇 모드를 유지한다.
+
+NetworkSession은 인증 모드에서 실제 발신자의 토큰을 API로 검증한 뒤 계정 ID를 서버 전용 account_ids에 연결한다. 표시 이름은 API에서 확인된 값을 사용한다. 토큰·서버 키·계정 ID 매핑을 공개 로비 스냅샷에 넣지 않는다.
+
+BackendConnection은 MatchController의 변경을 관찰하며 정상 완주 결과만 전송한다. 물리/점수는 계속 MatchController가 확정한다. 재경기마다 새 결과 ID를 만들고, 서버/API 재시작 시에도 같은 대기 결과 ID를 재사용한다. 백엔드는 동일 ID의 중복을 트랜잭션으로 방지하며 프로필 통계를 저장된 결과에서 집계한다.
+
+실행/데이터 경로·완주/승수 정책·남은 범위는 docs/BACKEND_DEV.md를 따른다. Steam 인증과 운영 배포는 아직 없다.
+
 ## 사람과 봇
 
 `RoomPlayer.is_bot`, `MatchPlayer.is_bot`으로 구분한다. 양수 ID는 실제 ENet 피어이고 음수 ID는 방 내부의 봇 참가자 식별자다.

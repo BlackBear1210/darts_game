@@ -1,3 +1,79 @@
+# 최신 인수인계 — 로컬 개발 로그인·프로필·전적 (2026-10-16)
+
+## 현재 구현과 실행
+
+- 사용자 확인: 아직 Steam App ID가 없어 로컬 개발 로그인부터 연결했다. Steam 인증을 구현/검증한 것으로 취급하지 않는다.
+- docs/BACKEND_DEV.md를 읽는다. backend/run_local.ps1의 api → server → player를 별도 PowerShell 창에서 실행한다. API/서버 키 파일은 최초 실행 시 backend/data/server_key.txt에 생성하고 콘솔에 출력하지 않는다. Python 3.10+ 필요, pip 의존성 없음. 실행 스크립트는 문법 검사만 수행했고 사람의 직접 실행은 미검증이다.
+- API는 127.0.0.1:8080의 개발 전용 HTTP/SQLite 서비스다. --dev와 DART_SERVER_KEY(ASCII 32자 이상)가 없으면 시작하지 않는다. DB/키는 backend/data/, 결과 대기 파일은 output/builds/server/data/results/이며 Git 제외다. backend/*는 모든 export preset에서 제외했다.
+- Main --backend-url 지정 시 자식 BackendConnection을 생성한다. 로그인/프로필, 서버 토큰 검증, 정상 완주 결과 디스크 대기/전송을 담당하며 게임 물리·점수는 기존 MatchController가 소유한다. API 미지정이면 기존 익명/봇 모드를 유지한다. 계정 모드에서는 전용 서버에 참가한다.
+- NetworkSession은 토큰 검증 응답의 계정 ID·이름을 실제 RPC 발신자에 묶는다. 계정 ID 매핑은 서버 전용이고 공개 스냅샷에 키/토큰을 넣지 않는다. 같은 계정 중복 입장은 거부한다. 비밀번호는 salt+PBKDF2-SHA256, 토큰은 SHA256 해시/24시간 만료로 저장한다.
+- 전적 정책: 현재 5라운드·턴당 3발의 정상 완주/사람 경기만 집계한다. 중도 이탈/봇/다른 규칙은 제외한다. 최고 점수 공동 승리다. 미구현 목표 점수 근접 모드의 출시 규칙을 확정한 것은 아니다.
+- 결과 ID는 경기/재경기마다 새 무작위 128bit다. 파일을 먼저 기록하고 저장 ACK 후 삭제한다. API 장애는 5초 재시도, 서버 재시작 후도 복구한다. 백엔드는 같은 ID·같은 결과를 1회만 반영하며 내용 충돌은 409다. Godot JSON 재로드의 정수→실수 차이를 정규화했다.
+
+## 실제 확인
+
+- tests/test_backend.py: 실제 HTTP/SQLite 로그인 재사용/비밀번호/토큰 해시·만료/서버 권한/점수 경계/동시 중복·충돌·롤백 PASS (.godot/backend_unit.log).
+- tests/run_backend_game.py: 내보낸 서버+2개 실제 클라이언트의 로그인→익명·동일 계정 거부→5라운드 각 15발/750점→API 중단→서버/API 재시작→대기 JSON 복구/삭제→동일 계정/중복 없는 전적→Godot 프로필 갱신 PASS. 최종: .godot/backend_tests/1792079791521200600/.
+- 기존 실제 2·3·4인 로비/연결·로딩 장벽 PASS: .godot/network_tests/1792079489041638500/. 기본 EXE/콘솔/D3D12 플레이어 시작과 명시적 로그 PASS: .godot/startup_tests/1792079973260617600/.
+- tests/render_accounts.gd: 실제 로그인 UI·마스킹/비밀번호 삭제·프로필, 1920×1080와 960×540 PASS. .godot/accounts_render/01_account_profile.png, 02_account_small.png를 열어 확인했다. 작은 창 포트 입력 최소 폭 160 보정.
+- GDScript parse/runtime 오류 없음, Git diff self-review·diff --check 완료. 인증서/셰이더 캐시/editor_settings 저장 환경 오류는 남는다. API 장애 시험의 HTTP 0 재시도 로그는 의도한 실패다.
+
+## 이후 범위
+
+- Steam 티켓/보유권 검증, 외부 HTTPS·운영 DB·서버 배정/다중 방·부하 시험은 아직 없다. 현재 계정 API는 localhost 전용이며 개발 계정을 Steam 계정으로 간주하지 않는다.
+- 사람이 직접 실행 스크립트/마우스로 조작한 수동 시험, 다른 PC/LAN/외부 인터넷은 미검증이다.
+- 기존 기본 파일 로그 비활성화 설정을 유지한다. 새로운 데이터·키를 Git에 추가하거나 이전 인증서/엔진 로그 오류를 게임 코드 오류로 혼동하지 않는다. Git 반영은 사용자의 후속 요청에 따라 dev_1에서 진행한다.
+
+---
+
+아래는 이전 작업 기록이다. 계정/DB/저장 관련 상태는 위 최신 인수인계를 우선한다.
+
+# 최신 수정 — Windows 기본 실행 접근 위반 (2026-10-16)
+
+- 사용자 화면의 메모리 접근 위반과 같은 0xC0000005를 재현했다. 기본 user 로그 파일 열기 실패 뒤 Godot 4.6.3의 RotatedFileLogger가 null FileAccess를 사용한다. 게임 코드 진입 전 문제다. 이전 --log-file 시험으로는 기본 실행을 검증할 수 없었다.
+- project.godot에서 자동 파일 로그(기본/PC)를 끄고 콘솔 출력을 유지했다. 서버·플레이어·검증 빌드를 같은 output/builds/ 경로로 다시 내보냈다. AGENTS.md 및 게임/네트워크 코드는 이번 수정에서 바꾸지 않았다.
+- 서버 EXE와 console EXE 기본 실행, 실제 D3D12 플레이어 기본 실행, 쓰기 가능한 --log-file 저장 PASS: .godot/startup_tests/1792078467088929800/. 회귀 실행기: tests/check_export_startup.py.
+- tests/run_dedicated.py는 이제 서버에 --log-file/--headless를 추가하지 않는다. 콘솔 출력을 server.log에 수집한다. 실제 2인 5라운드·각 15발/750점·재경기·이전·재사용 PASS: .godot/dedicated_tests/1792078394644677000/. 실제 4인 접속/권한/참가 거부/이탈/재접속 PASS: .godot/dedicated_tests/1792078398802200100/.
+- GDScript parse/runtime 오류 없음. Git diff self-review 및 diff --check 완료. Windows 인증서와 셰이더 캐시 저장 환경 오류는 남는다. 셰이더 캐시 오류는 정확히 _save_to_cache(shader_rd.cpp) 출처만 환경 항목으로 따로 보고한다.
+- 파일 로그가 필요하면 docs/DEDICATED_SERVER.md의 쓰기 가능한 경로 예제를 따른다. --log-file로 쓰기 불가능한 경로를 강제할 때의 엔진 자체 버그는 고치지 않았다.
+- 사람이 직접 Explorer에서 더블클릭하는 조작, 다른 PC/LAN/외부 인터넷은 미검증이다. 동일 기본 인자의 별도 프로세스 실행은 검증했다. 다음 Steam/DB 구현은 이 문제 해결 후 별도 단계다.
+
+---
+
+아래는 이전 기록이다. 자동 파일 로그와 기본 실행 검증은 위 최신 수정 내용을 우선한다.
+
+# 최신 인수인계 — 전용 서버 첫 번째 목표 (2026-10-16)
+
+## 구현과 실행
+
+- Godot 루트는 `다트-/`다. 기존 AGENTS.md는 수정하지 않았다. 현재 서버 실행 방법은 `docs/DEDICATED_SERVER.md`를 읽는다.
+- `output/builds/server/DartPartyServer.console.exe` 실행, 플레이어는 `output/builds/client/DartParty.exe` 실행 후 서버 IP·UDP 7000으로 **방 참가**. EXE와 같은 이름의 PCK를 함께 둔다.
+- `dedicated_server` feature 또는 `-- --server`로 Main이 서버를 부팅한다. 서버는 선수/HUD를 생성하지 않는다. 서버 빌드는 자동 headless다. 소스에서 실행할 때는 `--headless`도 전달한다.
+- `NetworkSession.is_host()`는 서버 ID 1 권한, `is_room_host()`는 `RoomState.host_peer_id`와 일치하는 선수 방장 권한이다. 처음 접속한 사람이 방장이고 이탈하면 남은 첫 사람으로 이전한다.
+- 서버는 기존 Game/MatchController로 물리·자유 이동·투척·채점·턴을 소유한다. 시작/로비/재경기 요청도 실제 RPC 발신자로 검증한다. 로딩 장벽에 서버 자신을 포함하지 않는다. 전원 이탈하면 빈 로비로 돌아간다.
+- 모든 메시지는 서버를 통하므로 SceneMultiplayer.server_relay=false다. 참가자끼리의 직접 RPC나 자동 peer 목록을 사용하지 않고 RoomState 스냅샷을 사용한다. 다중 이탈은 ENet poll 이후 방 상태를 한 번 갱신한다.
+- Windows Client/Server는 Release, Windows Verification은 별도 Debug preset이다. 검증 preset만 verification feature로 network_probe.tscn에서 시작한다. 배포본에서는 tests/를 제외한다. export template의 CLI script/Scene override는 지원되지 않으므로 사용하지 않는다.
+- tests/network_peer.gd는 에디터 CLI 래퍼다. 실제 공통 검증 로직은 tests/network_probe.gd로 이동했다. tests/run_dedicated.py는 내보낸 실행 파일만 사용하며 --players, --lifecycle-only로 범위를 좁힐 수 있다.
+
+## 실제 검증 결과
+
+- 최종 내보낸 서버 + 실제 2·3·4개 클라이언트: 자기 턴 이동, 턴당 3발, 5라운드 각자 15발·750점·동일 착탄, 비방장 RPC 거부, 재경기, 방장 이전, 전원 이탈·재접속 PASS. 4인 최대 인원·중도 접속 거부 PASS.
+- 최종 로그: `.godot/dedicated_tests/1792077521511862500/`. 중간 실행의 닫힌 ENet 채널 오류는 수정 전 로그다. 현재 결과는 이 최종 폴더 기준이다.
+- 4인 동시 이탈·재접속 3회 연속 PASS: `.godot/dedicated_lifecycle_stress_final.log`. 고정 0.4초 대기 대신 실제 정지 명령 처리와 전원 위치 수렴을 기다린다.
+- 기존 로비 회귀 PASS: `.godot/network_tests/1792077542322216400/`. 기존 실제 2·3·4인 게임 완주 PASS: `.godot/prototype_tests/1792077017663105500/`.
+- 규칙·투척·개발 모드 통합·실제 D3D12 1920×1080 렌더링 PASS. `.godot/dedicated_{rules,throwing,prototype,render}.log`. 렌더 이미지를 직접 열어 확인했다. 플레이어 Release 시작과 잘못된 포트의 종료 코드 1도 확인했다.
+- GDScript parse/runtime 오류 없음. Git diff self-review와 diff --check 완료. Windows 인증서 저장소 및 에디터 설정 저장 권한 환경 오류는 남는다. 기본 user 로그 경로에서는 저장 오류/엔진 크래시가 발생한 적이 있어 검증 명령에는 작업 영역 안의 --log-file 절대 경로를 지정한다.
+
+## 다음 작업과 범위
+
+- 다른 PC LAN·외부 인터넷·사람의 수동 조작감은 미검증이다. 이번 결과는 로컬 loopback의 실제 별도 프로세스 자동 검증이다.
+- Steam 인증·초대·중계·서버 검색, 프로필 API/DB, 다중 방 할당·자동 확장은 아직 구현하지 않았다. 지금은 서버 프로세스 1개 = 방 1개다.
+- 빌드는 output/builds/에서 관리하며 Git 제외다. 기존 output/ PDF는 유지했다. 이 작업에서 commit/push하지 않았다.
+
+---
+
+아래는 이전 작업 기록이다. 서버 권한/실행 방식은 위 최신 인수인계를 우선한다.
+
 # 작업 인계 — 이동·착석 DART PARTY
 
 ## 최신 변경: 자유 이동 투척·턴당 3발

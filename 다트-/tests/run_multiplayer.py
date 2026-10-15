@@ -18,19 +18,22 @@ def free_port():
 
 
 class Peer:
-    def __init__(self, engine, folder, index, port, role, manual_loading=False, fast_match=False, afk_match=False):
+    def __init__(self, engine, folder, index, port, role, manual_loading=False, fast_match=False, afk_match=False, exported=False, backend_url=""):
         self.output = folder / f"peer_{index}"
         self.command_id = 0
+        self._last_status = None
         self.log = self.output.with_suffix(".log").open("w", encoding="utf-8")
         self.process = subprocess.Popen(
-            [str(engine), "--headless", "--path", str(PROJECT),
+            [str(engine), "--headless", *([] if exported else ["--path", str(PROJECT)]),
              "--log-file", self.output.as_posix() + ".engine.log",
-             "--script", "res://tests/network_peer.gd", "--",
+             *([] if exported else ["--script", "res://tests/network_peer.gd"]), "--",
              "--role", role, "--port", str(port), "--name", f"Player{index}",
              "--manual-loading", str(manual_loading).lower(),
              "--fast-match", str(fast_match).lower(), "--afk-match", str(afk_match).lower(),
+             *(["--backend-url", backend_url] if backend_url else []),
              "--output", self.output.as_posix()],
             stdout=self.log, stderr=subprocess.STDOUT,
+            cwd=engine.parent if exported else PROJECT,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
@@ -38,9 +41,10 @@ class Peer:
         if self.process.poll() is not None:
             raise AssertionError(f"Peer exited: {self.output}; inspect its log")
         try:
-            return json.loads(Path(str(self.output) + ".status.json").read_text(encoding="utf-8"))
+            self._last_status = json.loads(Path(str(self.output) + ".status.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return None
+            pass
+        return self._last_status
 
     def command(self, action, value=None):
         self.command_id += 1

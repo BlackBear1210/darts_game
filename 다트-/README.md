@@ -20,6 +20,12 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 
 기획 PDF는 상위 폴더에 그대로 둔다.
 
+## 에디터 없는 전용 서버 / 플레이어 실행
+
+개발 계정 로그인과 프로필·경기 결과 저장을 시험하려면 [docs/BACKEND_DEV.md](docs/BACKEND_DEV.md)의 로컬 실행 방법을 따른다. Steam App ID 없이 실행하며 데이터는 `backend/data/`에 저장한다.
+
+첫 번째 서버 목표의 실행 파일·접속·내보내기·자동 검증 방법은 [docs/DEDICATED_SERVER.md](docs/DEDICATED_SERVER.md)에 정리한다. 결과물은 `output/builds/server/`, `output/builds/client/`에 있다. 서버를 먼저 실행한 뒤 플레이어 2~4명이 **방 참가**로 접속한다.
+
 ## F5: 혼자 시험
 
 `app/main.tscn`의 Main 노드 Inspector에서 **Developer Mode** 기본값은 켜짐이다.

@@ -60,6 +60,8 @@ func submit_throw(aim: Vector2, charge: float) -> void:
 
 
 func _receive_action(sender: int, action: String, payload: Array) -> void:
+	if action == "restart" and payload.is_empty() and sender == session.room.host_peer_id:
+		restart()
 	if action == "throw" and payload.size() == 5:
 		if payload[0] is int and payload[1] is int and payload[2] is int and payload[3] is Vector2 and (payload[4] is float or payload[4] is int):
 			_accept_throw(sender, payload[0], payload[1], payload[2], payload[3], payload[4])
@@ -217,6 +219,10 @@ func developer_bot_turn(bot_id: int) -> void:
 
 
 func restart() -> void:
+	if not multiplayer.is_server():
+		if session != null and session.is_room_host():
+			session.request_game_action.rpc_id(1, "restart", [])
+		return
 	if not multiplayer.is_server() or state.phase != MatchState.Phase.FINISHED or state.players.size() < 2:
 		return
 	for player in state.players:
