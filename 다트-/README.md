@@ -4,6 +4,22 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 실제 프로젝트는 이 폴더다. `project.godot`을 연다.
 개발 규칙은 이 폴더의 `AGENTS.md` 한 파일에서 관리한다. 기본 화면은 1920×1080, 16:9이며 창 크기를 바꿔도 비율을 유지한다.
 
+## 문서 위치
+
+아래 경로는 모두 `다트-/` 기준이다.
+
+| 경로 | 역할 |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | 공통 개발 규칙 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 현재 구조와 책임 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | 설계 결정과 이유 |
+| `docs/` | 기능 안내·기획 문서 |
+| [작업기록/CURRENT_TASK.md](작업기록/CURRENT_TASK.md) | 현재 작업 상태 |
+| [작업기록/HANDOFF.md](작업기록/HANDOFF.md) | 인수인계 |
+| [작업기록/README.md](작업기록/README.md) | 작업 기록 작성 방법 |
+
+기획 PDF는 상위 폴더에 그대로 둔다.
+
 ## F5: 혼자 시험
 
 `app/main.tscn`의 Main 노드 Inspector에서 **Developer Mode** 기본값은 켜짐이다.
@@ -86,4 +102,4 @@ python tests/run_first_idea.py --godot $godot
 개발자 시험 두 개(`test_prototype`, `render_first_idea`)는 기본 포트 7000을 쓰므로 순서대로 실행한다.
 네트워크 실행기는 별도의 빈 UDP 포트를 골라 실제 프로세스 2·3·4개를 띄운다.
 봇 시야 검증은 실제 다중 프로세스 네트워크 검증을 대신하지 않는다.
-실제 검증 결과와 남은 수동 재현은 `.ai/HANDOFF.md`에 기록한다.
+실제 검증 결과와 남은 수동 재현은 `작업기록/HANDOFF.md`에 기록한다.
