@@ -6,6 +6,8 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 
 ## 문서 위치
 
+흐름도 기반의 간단한 진행 청사진은 `game/flow_preview/flow_preview.tscn`을 열고 **F6**으로 실행한다. 버튼으로 방 입장부터 카드·3발 투척·라운드 반복·순위를 확인하는 로컬 시연이다. [구현 범위와 팀원 연결 안내](docs/GAME_FLOW_BLUEPRINT.md)를 참고한다.
+
 아래 경로는 모두 `다트-/` 기준이다.
 
 | 경로 | 역할 |

@@ -100,7 +100,11 @@ HUD의 SubViewport는 Game.get_world_3d()를 공유하고 Camera3D만 추가한�
 TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_disable_input을 켠다.
 숨길 때는 렌더 갱신도 끈다.
 
-## 유지한 기존 파일
+## 흐름도 시연 (2026-10-16)
+
+`game/flow_preview/flow_preview.tscn`은 F6으로 실행하는 독립적인 로컬 청사진이다. `game_flow.gd`가 단계·분기·임시 카드 수량·목표 근접 순위를 소유하고 `flow_preview.gd`가 버튼 UI를 제공한다. 실제 경기·NetworkSession·백엔드에는 연결하지 않는다. 전체 순서와 팀원의 후속 연결 위치는 [GAME_FLOW_BLUEPRINT.md](GAME_FLOW_BLUEPRINT.md)를 따른다.
+
+## 유지한 기존 파일 (실제 경기)
 
 카드/얼굴 효과와 TrajectoryPreview 등 이전 계획의 파일은 남아 있지만 현재 경기에서 활성화하지 않는다.
 새 확장 시스템, 외부 에셋, 전역 매니저를 추가하지 않았다.

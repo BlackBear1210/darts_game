@@ -1,12 +1,12 @@
 # 현재 작업
 
-- 작업: 로컬 개발 계정 로그인·프로필·경기 결과 영구 저장 연결.
-- 상태: 구현·빌드·자동 검증 완료. 사용자 확인: Steam App ID 없음, 로컬 개발 로그인부터 진행.
-- 실행: 프로젝트 루트에서 backend/run_local.ps1 -Role api → 별도 창에서 -Role server → -Role player. 상세: docs/BACKEND_DEV.md.
-- 구현: loopback Python 표준 라이브러리 API + SQLite. Main 소유 BackendConnection/HTTPRequest. 서버가 실제 발신자의 사용자 토큰을 API로 검증하고 확인된 계정/이름으로 등록. 익명·같은 계정 중복 입장 거부. 기존 API 미지정 익명/봇 모드는 유지.
-- 저장: backend/data/accounts.sqlite3와 server_key.txt (Git/PCK 제외). 정상 5라운드·3발·사람 경기만 집계하고 공동 최고점은 공동 승리. 결과 ID별 트랜잭션/중복 검사. 서버 결과 대기 JSON은 output/builds/server/data/results/에 먼저 기록하고 성공 후 삭제, 재시작 후 복구.
-- 검증: tests/test_backend.py의 실제 HTTP/SQLite 비밀번호·만료·권한·점수 경계·동시 중복·충돌·롤백 PASS. tests/run_backend_game.py의 내보낸 서버 + 실제 2인 로그인/익명·중복 계정 거부/5라운드 각 15발 750점/API 중단/서버·API 재시작/디스크 결과 복구/동일 계정/전적 1회/Godot 프로필 갱신 PASS.
-- UI: 실제 D3D12 로그인 입력·마스킹/비밀번호 삭제·프로필, 1920×1080/960×540 렌더링 PASS. 저장 이미지를 직접 열어 확인. 작은 화면의 포트 입력 폭 보정.
-- 회귀: 기존 실제 2·3·4인 로비/연결·로딩 장벽 PASS. 서버/콘솔/플레이어 기본 실행 및 명시적 로그 저장 PASS. GDScript parse/runtime 오류 없음. Git diff self-review·diff --check 완료.
-- 로그: .godot/backend_tests/1792079791521200600/, .godot/backend_unit.log, .godot/network_tests/1792079489041638500/, .godot/startup_tests/1792079973260617600/, .godot/accounts_render.log 및 accounts_render/.
-- 남은 범위: 실제 Steam 티켓 인증, HTTPS/외부 배포·운영 DB·여러 방 배정·부하 검증은 아직 없음. API는 의도적으로 localhost 전용. 사람 수동 실행/타 PC/LAN/인터넷은 미검증. 인증서·셰이더 캐시·editor_settings 저장 환경 로그는 남는다.
+- 작업: 게임진행흐름도.png 기반의 실행 가능한 게임 진행 청사진.
+- 상태: 구현·검증 완료. 로컬 흐름/렌더와 기존 경기 회귀 검증 PASS.
+- 범위: 독립적인 F6 시연 씬. 가상 2~4인, 방/설정/집합/카드/순서/3발/라운드 반복/목표 근접 순위.
+- 실행: game/flow_preview/flow_preview.tscn을 열고 F6. F5는 기존 3D 경기다.
+- 구조: game_flow.gd가 UI 독립 단계 모델, flow_preview.gd가 버튼 UI. 실제 네트워크·물리·백엔드에는 연결하지 않는다.
+- 미정: 카드 지급/효과, 순서 결정, 교환 횟수, 종료/동점 규칙은 시연값으로 표시. docs/GAME_FLOW_BLUEPRINT.md에 팀원 후속 연결 위치 정리.
+- 검증: tests/test_game_flow.gd의 2·3·4인 완주/분기/수량/순위/초기화 PASS. 실제 D3D12 시작/4인 조준/결과 및 작은 창 렌더 PASS. tests/test_rules.gd PASS.
+- 회귀: tests/run_first_idea.py 실제 2·3·4인 5라운드/동일 점수/중복·잘못된 요청 거부/재경기/20초 시간 초과/봇 교체 PASS. 로그 .godot/prototype_tests/1792112100698013800/. Git diff 자체 검토와 diff --check 완료.
+- 화면: .godot/flow_preview_render/. 사람의 물리 마우스 조작·실제 경기 연결은 미검증. 알려진 Windows 인증서 저장소/에디터 설정 저장 환경 오류는 남는다.
+- 이전 로그인·프로필·전적 구현과 실행 안내: docs/BACKEND_DEV.md, 작업기록/HANDOFF.md의 이전 기록을 참고한다.
