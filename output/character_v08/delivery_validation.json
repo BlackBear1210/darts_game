@@ -1,0 +1,23 @@
+{
+  "character_reference_hair.blend": {
+    "packed_reference": true,
+    "head_geometry_sha256": "3731a9ae2fe3d4bed6c52745a094fd65ba05f909bc1a8346287a76a1fa79c020",
+    "hair_hidden": false,
+    "active_camera": "Camera_Front",
+    "bytes": 3564576
+  },
+  "character_bald.blend": {
+    "packed_reference": true,
+    "head_geometry_sha256": "3731a9ae2fe3d4bed6c52745a094fd65ba05f909bc1a8346287a76a1fa79c020",
+    "hair_hidden": true,
+    "active_camera": "Camera_Front",
+    "bytes": 3564591
+  },
+  "turnaround_scene.blend": {
+    "packed_reference": true,
+    "head_geometry_sha256": "3731a9ae2fe3d4bed6c52745a094fd65ba05f909bc1a8346287a76a1fa79c020",
+    "hair_hidden": true,
+    "active_camera": "Camera_Turnaround",
+    "bytes": 3617496
+  }
+}

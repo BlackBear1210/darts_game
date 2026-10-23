@@ -7,3 +7,9 @@ __pycache__/
 
 # 로컬 검증용 Godot 설정
 override.cfg
+
+# V08 원본·미리보기는 공유하고 중복 압축본·자동 백업·작업 로그는 제외
+/output/character_v08/*.blend1
+/output/character_v08/*.blend2
+/output/character_v08/*.zip
+/output/character_v08/*.log

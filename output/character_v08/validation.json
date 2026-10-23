@@ -1,0 +1,37 @@
+{
+  "head": {
+    "vertices": 224,
+    "faces": 210,
+    "components": 1,
+    "nonmanifold_edges": 0
+  },
+  "hair": {
+    "vertices": 112,
+    "faces": 159,
+    "components": 1,
+    "nonmanifold_edges": 0
+  },
+  "hands": {
+    "L": {
+      "vertices": 269,
+      "faces": 193,
+      "components": 1,
+      "nonmanifold_edges": 0
+    },
+    "R": {
+      "vertices": 268,
+      "faces": 193,
+      "components": 1,
+      "nonmanifold_edges": 0
+    }
+  },
+  "rigged": false,
+  "views": [
+    "FRONT",
+    "LEFT SIDE",
+    "BACK",
+    "3/4"
+  ],
+  "reference": "User-supplied turnaround drawing",
+  "pixel_identical": false
+}
