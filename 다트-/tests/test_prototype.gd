@@ -1,6 +1,8 @@
 extends SceneTree
 ## 실제 F5 시작 씬, 개발자 키, 서버 물리와 채점/비행 연계를 검증한다.
 
+const BotDriver = preload("res://game/player/bot_driver.gd")
+
 var _main: Node
 var _game: GameView
 var _hud: GameHUD
@@ -24,6 +26,15 @@ func _drive(axis: Vector2, duration: float, crouch: bool = false, jump: bool = f
 		assert((_game.actors[1] as PlayerView).crouched)
 	_game.send_controls(Vector2.ZERO, 0, 0, false, false)
 	await physics_frame
+
+## condition 이 참이 될 때까지 실제 물리 프레임을 기다린다. 제한시간을 넘기면 실패다.
+func _wait_until(condition: Callable, seconds: float, label: String) -> void:
+	var end: float = Time.get_ticks_msec() / 1000.0 + seconds
+	while Time.get_ticks_msec() / 1000.0 < end:
+		if condition.call():
+			return
+		await physics_frame
+	assert(false, label)
 
 func _run() -> void:
 	_main = (load("res://app/main.tscn") as PackedScene).instantiate()
@@ -53,13 +64,35 @@ func _run() -> void:
 	_key(KEY_F4)
 	assert(_game.controller.state.active_player().display_name == "봇 2")
 	assert(_game.controller.remaining_seconds() > 19.8)
-	# 봇의 기본 20초도 단축하지 않고 실제로 기다린다.
+	# 봇은 자리에서 일어나 투척선까지 걸어가 3발을 던지고, 끝나면 자리로 돌아가 앉는다.
+	var bot_two: PlayerView = null
+	for bot in bots:
+		if bot.identity.display_name == "봇 2":
+			bot_two = bot
+	assert(bot_two != null and _game.controller.state.active_player().peer_id == bot_two.identity.peer_id)
+	var thrown: Array[Dictionary] = []
+	_game.controller.dart_thrown.connect(func(data: Dictionary) -> void: thrown.append(data))
 	var bot_turn: int = _game.controller.state.turn_id
-	await create_timer(20.15).timeout
-	assert(_game.controller.state.turn_id == bot_turn)
-	assert(_game.controller.state.phase == MatchState.Phase.SETTLING)
-	assert(_game.controller.state.last_hit.peer_id == -2 and _game.controller.state.last_hit.points == 0)
-	await create_timer(1.0).timeout
+	var turn_started: float = Time.get_ticks_msec() / 1000.0
+	var spot: Vector3 = BotDriver.throw_spot()
+	assert(spot.z > TableView.THROW_LINE_Z and spot.z < TableView.SEATS[bot_two.identity.seat].z)
+	await _wait_until(func() -> bool: return not bot_two.seated, 2.0, "봇이 자리에서 일어나지 않았습니다.")
+	await _wait_until(func() -> bool: return BotDriver.arrived(bot_two.position, spot), 8.0, "봇이 투척선까지 걸어오지 않았습니다.")
+	await physics_frame
+	# 투척선을 넘지 않고 과녁을 보고 선다.
+	assert(bot_two.position.z > TableView.NO_ENTRY_Z and not bot_two.seated)
+	assert(absf(angle_difference(bot_two.rotation.y, BotDriver.facing_board(bot_two.position))) < 0.05)
+	await _wait_until(func() -> bool: return _game.controller.state.turn_id != bot_turn, 18.0, "봇의 차례가 끝나지 않았습니다.")
+	# 3발을 모두 던졌고, 20초 시간 초과를 기다리지 않았다.
+	assert(Time.get_ticks_msec() / 1000.0 - turn_started < _game.controller.config.turn_seconds)
+	assert(thrown.size() == _game.controller.config.darts_per_turn)
+	assert(_game.controller.state.last_hit.peer_id == bot_two.identity.peer_id)
+	for data: Dictionary in thrown:
+		# 판정 원점이 자리가 아니라 투척선이다.
+		assert(BotDriver.arrived(Vector3(data.start.x, 0, data.start.z), spot))
+	await _wait_until(func() -> bool: return bot_two.seated, 8.0, "봇이 자리로 돌아오지 않았습니다.")
+	assert(bot_two.position == TableView.SEATS[bot_two.identity.seat])
+	await _wait_until(func() -> bool: return _game.controller.state.phase == MatchState.Phase.AIMING, 10.0, "다음 차례가 시작되지 않았습니다.")
 	_key(KEY_F4)
 	var local := _game.actors[1] as PlayerView
 	await _drive(Vector2(-1, 0), 0.25, true, true)
@@ -81,6 +114,10 @@ func _run() -> void:
 	assert(local.position.x <= 5.56)
 	await _drive(Vector2(0, 1), 4.0)
 	assert(local.position.z <= 6.56)
+	# 봇은 자기 차례에만 자리를 뜬다. 사람 차례로 되돌리고 모두 앉을 때까지 기다린다.
+	_game.controller.state.turn_index = 0
+	_game.controller._begin_turn()
+	await _wait_until(func() -> bool: return bots.all(func(bot: PlayerView) -> bool: return bot.seated), 8.0, "봇이 모두 자리로 돌아오지 않았습니다.")
 	for bot in bots:
 		assert(bot.position == TableView.SEATS[bot.identity.seat])
 	# 캐릭터가 경로에 있어도 레이 마스크 1은 캐릭터 레이어 2를 무시한다.
@@ -210,7 +247,7 @@ func _run() -> void:
 	_main.get_node("NetworkSession").leave_room()
 	await process_frame
 	assert(_main.get_node("Lobby").visible and _main.get_node_or_null("Game") == null)
-	print("PASS: F5 human+3 stationary bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, actual bot 20s timeout, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
+	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, bot walks to the oche and throws three darts then returns to its seat, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
 	_main.queue_free()
 	await process_frame
 	quit()

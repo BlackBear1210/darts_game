@@ -12,6 +12,7 @@
 | `lobby/room_state.gd`, `room_player.gd` | 최대 4인 자리/준비/로딩, 사람·봇 공개 신원 |
 | `game/game.tscn`, `game.gd` | 로컬 1인칭 시점·이동 입력, 방장 이동 처리 연결, 착석 요청, 다트 환경 레이와 과녁 교차, 확정 비행 표현 |
 | `game/player/player.tscn`, `player.gd` | CharacterBody3D 이동·점프·숙이기, 캡슐/방향 표시, 참가자별 렌더 레이어 |
+| `game/player/bot_driver.gd` | 봇의 차례 행동 계산(방장 전용): 투척선까지의 조향, 조준 방향, 조준점·충전. 상태를 두지 않는다 |
 | `game/table/table.tscn`, `table.gd` | 방·테이블·4개 자리·과녁 위치 상수와 충돌 상자(환경 레이어 1·제한 벽 레이어 4). 보이는 방은 자식 `Pub`(`art/pub/pub_game.tscn`) |
 | `game/board/` | 공유 표준 섹터/링 데이터, 순수 채점과 기본 도형 표현 |
 | `game/throwing/dart_throw_controller.gd` | 마우스 누르기/충전 상한/놓기/입력 취소와 화면 중앙 조준 |
@@ -57,7 +58,15 @@ BackendConnection은 MatchController의 변경을 관찰하며 정상 완주 결
 
 `RoomPlayer.is_bot`, `MatchPlayer.is_bot`으로 구분한다. 양수 ID는 실제 ENet 피어이고 음수 ID는 방 내부의 봇 참가자 식별자다.
 봇 ID로 `rpc_id`를 호출하거나 가짜 네트워크 연결을 만들지 않는다.
-같은 CharacterBody3D 표현·자리·점수·턴 배열을 사용한다. 호스트만 사람의 입력을 시뮬레이션하며 봇은 입력 없이 정지한다.
+같은 CharacterBody3D 표현·자리·점수·턴 배열을 사용한다. 호스트만 사람의 입력을 시뮬레이션한다.
+
+봇의 차례 행동도 호스트만 돌린다(`GameView._drive_bot`). 자기 차례(AIMING/FLIGHT/SETTLING)면 자리에서 일어나
+`BotDriver.throw_spot()`(투척선 바로 뒤, 레인 한가운데)까지 걸어가고, 도착해 과녁을 보고 서면 `AIM_SECONDS` 간격으로
+`MatchController.bot_throw()`를 부른다. 차례가 아니면 자기 자리로 걸어가 앉고, 앉아 있는 봇은 건드리지 않는다.
+조작값은 사람이 보내는 것과 같은 모양이라 `PlayerView.simulate`의 같은 이동·충돌·속도 규칙을 지나며,
+결과 위치는 기존 이동 스냅샷으로 전달된다. 봇 전용 네트워크 메시지나 가짜 피어는 없다.
+`BotDriver`는 테이블에 막히는 길이면 옆으로 비껴 선 지점을 보고 돌아간다(기억하는 경로 없이 매 프레임 다시 계산).
+`bot_throw`는 네트워크 발신자가 없으므로 차례·발수·시간·값 범위만 확인하고, 사람 요청과 같은 `_launch`로 비행을 확정한다.
 대기실에서 실제 사람이 등록하면 봇 하나를 제거하고 빈 자리를 재사용한다. 진행 중 등록은 거부한다.
 
 ## 권한과 통신
@@ -138,7 +147,8 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 `tests/run_first_idea.py`: 실제 이동·입력 소유권·착석·5라운드·동일 채점·중복·재경기·20초 시간 초과·봇 교체.
 `tests/test_rules.gd`: 표준 과녁의 정확한 경계·실패·상태 왕복.
 `tests/test_throwing.gd`: 충전 포화·입력 취소·운동식·Dart Scene 종점.
-`tests/test_prototype.gd`: 실제 자동 입장과 봇/카메라, 개발자 키, 서버 물리/제한 구역, 충돌/실패·시한 경쟁·순위.
+`tests/test_prototype.gd`: 실제 자동 입장과 봇/카메라, 개발자 키, 서버 물리/제한 구역, 충돌/실패·시한 경쟁·순위,
+봇의 기립→투척선 도착→3발 투척(판정 원점이 투척선)→자리 복귀.
 `tests/render_first_idea.gd`: 실제 D3D12 렌더링과 입력 이벤트, 봇 화면 변화·비행·결과·노트북 크기 저장.
 `tests/test_game_flow.gd`: 흐름도 시연의 2·3·4인 완주, 손패 7장 보충·카드 사용·방해·합동 라운드.
 `tests/test_art_showcase.gd`: 아트 쇼케이스의 투척·채점·카메라·HUD 입력, `-- --render`로 네 시점 렌더.

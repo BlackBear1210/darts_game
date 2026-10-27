@@ -7,6 +7,8 @@ const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
 ## 1인칭 손 모양(디자인 담당 생성 코드). class_name 이 없는 도구라 preload 로 부른다.
 const CharacterFactory = preload("res://art/characters/character_factory.gd")
+## 봇의 차례 행동 계산(방장 전용). class_name 이 없는 도구라 preload 로 부른다.
+const BotDriver = preload("res://game/player/bot_driver.gd")
 ## 칠판 점수판에 쓰는 이름 최대 글자 수(칠판 폭 약 0.95m에 맞춘 값).
 const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
@@ -34,6 +36,8 @@ var _jump: bool = false
 var _shown_turn: int = -1
 var _was_finished: bool = false
 var _last_seat_request: Dictionary = {}
+## 지금 차례인 봇이 다음 발을 던질 수 있는 시각. 투척선에 선 뒤부터 센다.
+var _bot_ready_at: float = 0.0
 
 
 func _ready() -> void:
@@ -133,12 +137,53 @@ func _physics_process(delta: float) -> void:
 				session.receive_movement.rpc(controller.state.match_id, _motion_sequence, poses)
 	if multiplayer.is_server():
 		for id: int in actors:
+			var actor := actors[id] as PlayerView
+			if actor.identity.is_bot:
+				_drive_bot(actor, delta)
+				continue
 			var controls: Dictionary = _controls.get(id, {})
 			if controller._now() - float(controls.get("at", 0)) > INPUT_TIMEOUT:
 				controls = {}
-			(actors[id] as PlayerView).simulate(delta, controls)
+			actor.simulate(delta, controls)
 			if _controls.has(id):
 				_controls[id]["jump"] = false
+
+
+## 봇의 차례 행동(방장만). 자리에서 일어나 투척선까지 걸어가 던지고, 차례가 끝나면 자리로 돌아가 앉는다.
+## 사람과 같은 PlayerView.simulate 를 거치므로 이동·충돌·속도 규칙이 같다.
+func _drive_bot(actor: PlayerView, delta: float) -> void:
+	var state := controller.state
+	var active := state.active_player()
+	var mine: bool = active != null and active.peer_id == actor.identity.peer_id
+	var playing: bool = mine and state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]
+	if not playing:
+		_walk_bot_home(actor, delta)
+		return
+	if actor.seated:
+		actor.seated = false
+		actor.update_posture()
+	var spot: Vector3 = BotDriver.throw_spot()
+	if not BotDriver.arrived(actor.position, spot):
+		# 걸어가는 동안에는 조준 시간을 계속 미룬다 — 선에 선 뒤부터 센다.
+		actor.simulate(delta, BotDriver.walk_controls(actor.position, spot))
+		_bot_ready_at = controller._now() + BotDriver.AIM_SECONDS
+		return
+	actor.simulate(delta, BotDriver.aim_controls(actor.position))
+	if state.phase == MatchState.Phase.AIMING and controller._now() >= _bot_ready_at:
+		controller.bot_throw(BotDriver.random_aim(), BotDriver.random_charge())
+		_bot_ready_at = controller._now() + BotDriver.AIM_SECONDS
+
+
+## 차례가 아닌 봇은 자기 자리로 걸어가 앉는다. 이미 앉아 있으면 건드리지 않는다.
+func _walk_bot_home(actor: PlayerView, delta: float) -> void:
+	if actor.seated:
+		return
+	var seat: Vector3 = TableView.SEATS[actor.identity.seat]
+	if BotDriver.arrived(actor.position, seat):
+		_sit(actor)
+		actor.rotation.y = BotDriver.facing_board(actor.position)
+		return
+	actor.simulate(delta, BotDriver.walk_controls(actor.position, seat))
 
 
 func send_controls(axis: Vector2, yaw: float, pitch: float, jump: bool, crouch: bool) -> void:
@@ -246,7 +291,9 @@ func _process(_delta: float) -> void:
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
 	for actor: PlayerView in actors.values():
-		actor.aiming = active != null and actor.identity.peer_id == active.peer_id and state.phase == MatchState.Phase.AIMING
+		var turn: bool = active != null and actor.identity.peer_id == active.peer_id and state.phase == MatchState.Phase.AIMING
+		# 봇은 투척선까지 걸어가는 동안에는 아직 팔을 들지 않는다.
+		actor.aiming = turn and (not actor.identity.is_bot or BotDriver.arrived(actor.position, BotDriver.throw_spot()))
 	if throw_input.enabled:
 		throw_input.aim = throw_input.aim_at(get_viewport().get_visible_rect().size * 0.5)
 	if state.phase == MatchState.Phase.FINISHED and not _was_finished:

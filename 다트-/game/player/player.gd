@@ -108,9 +108,8 @@ func eye_position() -> Vector3:
 	return global_position + Vector3.UP * (0.95 if crouched or seated else EYE_HEIGHT)
 
 
+## 조작은 방장만 넣는다. 사람은 자기 입력(GameView._accept_controls), 봇은 GameView._drive_bot 이 만든 값이다.
 func simulate(delta: float, controls: Dictionary) -> void:
-	if identity.is_bot:
-		return
 	rotation.y = float(controls.get("yaw", rotation.y))
 	pitch = float(controls.get("pitch", pitch))
 	crouched = bool(controls.get("crouch", false)) and not seated

@@ -91,12 +91,33 @@ func _accept_throw(sender: int, match_id: int, turn_id: int, request_id: int, ai
 	if charge < 0 or charge > 1 or request_id <= int(_last_requests.get(sender, 0)):
 		return
 	_last_requests[sender] = request_id
-	var data: Dictionary = solve_throw.call(aim, charge, sender)
+	_launch(sender, aim, charge, request_id)
+
+
+## 봇의 투척. 방장이 봇을 투척선까지 몰고 간 뒤 부른다(GameView._drive_bot).
+## 네트워크 발신자가 없으므로 차례·발수·시간·값 범위만 확인하고 사람과 같은 비행 경로로 보낸다.
+func bot_throw(aim: Vector2, charge: float) -> void:
+	if not multiplayer.is_server() or state.phase != MatchState.Phase.AIMING:
+		return
+	var active := state.active_player()
+	if active == null or not active.is_bot:
+		return
+	if state.darts_left <= 0 or _now() >= _turn_end:
+		return
+	if not aim.is_finite() or not is_finite(charge) or charge < 0 or charge > 1:
+		return
+	_request_number += 1
+	_launch(active.peer_id, aim, charge, _request_number)
+
+
+## 확정된 한 발을 비행으로 보낸다. 사람과 봇이 같은 경로를 쓴다.
+func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void:
+	var data: Dictionary = solve_throw.call(aim, charge, peer_id)
 	_pending_hit = data.duplicate()
-	_pending_hit.merge({"peer_id": sender, "request_id": request_id})
+	_pending_hit.merge({"peer_id": peer_id, "request_id": request_id})
 	state.darts_left -= 1
 	_set_phase(MatchState.Phase.FLIGHT, float(data.duration))
-	data.merge({"match_id": state.match_id, "turn_id": state.turn_id, "peer_id": sender})
+	data.merge({"match_id": state.match_id, "turn_id": state.turn_id, "peer_id": peer_id})
 	if session != null:
 		session.receive_game_event.rpc("dart", data)
 	_play_throw(data)
