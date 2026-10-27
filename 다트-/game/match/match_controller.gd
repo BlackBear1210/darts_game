@@ -1,6 +1,7 @@
 class_name MatchController
 extends Node
 ## 턴의 유일한 확정 경로. 비행 중에는 시간 초과/추가 요청/개발자 종료를 받지 않는다.
+## 라운드 사이에는 테이블 집합(TABLE)이 있다: 제한시간 안에 자기 자리에 앉지 않은 사람은 자동 착석 + 다음 라운드 슬로우.
 
 signal changed
 signal dart_thrown(data: Dictionary)
@@ -11,6 +12,9 @@ var session: NetworkSession
 var state := MatchState.new()
 var local_peer_id: int = 0
 var solve_throw: Callable
+## 테이블 집합 판정용 GameView 함수. check_seated(peer_id) -> bool, force_seat(peer_id). 없으면 집합을 바로 끝낸다.
+var check_seated: Callable
+var force_seat: Callable
 var developer_enabled: bool = false
 var notice: String = ""
 var _turn_end: float = 0.0
@@ -116,6 +120,9 @@ func _process(_delta: float) -> void:
 		MatchState.Phase.SETTLING:
 			if _now() >= _phase_end:
 				_advance_turn()
+		MatchState.Phase.TABLE:
+			if _everyone_seated() or _now() >= _phase_end:
+				_close_table()
 
 
 func _begin_turn() -> void:
@@ -156,6 +163,42 @@ func _advance_turn() -> void:
 			_set_phase(MatchState.Phase.FINISHED, 0)
 			return
 		state.round_number += 1
+		_begin_table()
+		return
+	_begin_turn()
+
+
+## 라운드 사이 테이블 집합. 지난 라운드의 슬로우는 여기서 풀어, 자리로 걸어올 때는 정상 속도다.
+func _begin_table() -> void:
+	_pending_hit.clear()
+	for player in state.players:
+		player.speed_scale = 1.0
+	_set_phase(MatchState.Phase.TABLE, config.table_seconds)
+
+
+func _everyone_seated() -> bool:
+	if not check_seated.is_valid():
+		return true
+	for player in state.players:
+		if not player.is_bot and not check_seated.call(player.peer_id):
+			return false
+	return true
+
+
+## 전원 착석 또는 제한시간 종료. 서 있는 사람은 자기 자리로 옮기고 다음 라운드 동안 슬로우를 건다.
+func _close_table() -> void:
+	if state.phase != MatchState.Phase.TABLE:
+		return
+	var late := PackedStringArray()
+	for player in state.players:
+		if player.is_bot or not check_seated.is_valid() or check_seated.call(player.peer_id):
+			continue
+		if force_seat.is_valid():
+			force_seat.call(player.peer_id)
+		player.speed_scale = config.slow_speed_scale
+		late.append(player.display_name)
+	if not late.is_empty():
+		notice = "지각: %s — 자동 착석, 이번 라운드 이동 속도 %d%%" % [", ".join(late), roundi(config.slow_speed_scale * 100)]
 	_begin_turn()
 
 
@@ -183,6 +226,11 @@ func sync_roster(room: RoomState) -> void:
 		state.turn_index = mini(state.turn_index, state.players.size() - 1)
 		_publish()
 		return
+	if state.phase == MatchState.Phase.TABLE:
+		# 집합 중에는 다음 라운드 첫 차례(0번)가 이미 정해져 있다. 남은 사람으로 집합을 계속한다.
+		state.turn_index = 0
+		_publish()
+		return
 	if removed_active:
 		if was_last:
 			state.turn_index = 0
@@ -191,6 +239,8 @@ func sync_roster(room: RoomState) -> void:
 				_set_phase(MatchState.Phase.FINISHED, 0)
 				return
 			state.round_number += 1
+			_begin_table()
+			return
 		# 지워진 자리 다음 순서로 진행하며 비행 중 이탈한 투척은 취소한다.
 		state.turn_index = mini(state.turn_index, state.players.size() - 1)
 		_begin_turn()
@@ -227,6 +277,7 @@ func restart() -> void:
 		return
 	for player in state.players:
 		player.score = 0
+		player.speed_scale = 1.0
 	state.round_number = 1
 	state.turn_index = 0
 	state.last_hit = {}

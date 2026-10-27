@@ -6,16 +6,23 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 
 ## 문서 위치
 
-흐름도 기반의 간단한 진행 청사진은 `game/flow_preview/flow_preview.tscn`을 열고 **F6**으로 실행한다. 버튼으로 방 입장부터 카드·3발 투척·라운드 반복·순위를 확인하는 로컬 시연이다. [구현 범위와 팀원 연결 안내](docs/GAME_FLOW_BLUEPRINT.md)를 참고한다.
+흐름도 기반의 간단한 진행 청사진은 `game/flow_preview/flow_preview.tscn`을 열고 **F6**으로 실행한다. 버튼으로 방 입장부터 손패 7장·카드 4종·방해·합동 라운드·3발 투척·라운드 반복·순위를 확인하는 로컬 시연이다. [구현 범위와 팀원 연결 안내](docs/GAME_FLOW_BLUEPRINT.md)를 참고한다.
+
+디자인 예시(펍·캐릭터 4종·실제 규격 다트판)는 `art/showcase/showcase.tscn`을 열고 **F6**. 실제 경기와 별개다. 투척 시점(2번)은 마우스 1인칭 시선 · A/D 좌우 이동 · 왼쪽 버튼 꾹 충전/놓기 투척 · 오른쪽 버튼 취소다. [art/README.md](art/README.md)를 참고한다.
+
+Godot 프로젝트 관리자에 이 프로젝트가 안 보이면 **가져오기(Import)** 로 이 폴더의 `project.godot`을 고른다. 아스트라 폴더 안의 별도 Godot(`.tools/godot`)이 아니라 팀이 쓰는 Godot 4.6.3을 연다.
+
+에디터 없이 보려면 저장소 최상위의 `실행_게임.cmd`(F5와 같음), `실행_흐름도시연.cmd`, `실행_디자인예시.cmd`, `에디터_열기.cmd`를 더블클릭한다. Godot 4.6.3 exe를 바탕화면·다운로드에서 찾고, 못 찾으면 위치를 안내한다. 다른 위치면 환경 변수 `GODOT`에 exe 경로를 넣는다.
 
 아래 경로는 모두 `다트-/` 기준이다.
 
 | 경로 | 역할 |
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | 공통 개발 규칙 |
+| [docs/COLLABORATION.md](docs/COLLABORATION.md) | 3인 협업: 폴더 담당·파일 이름·Git 충돌 규칙 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 현재 구조와 책임 |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | 설계 결정과 이유 |
-| `docs/` | 기능 안내·기획 문서 |
+| `docs/` | 기능 안내·기획 문서 (아트: [ART_DIRECTION](docs/ART_DIRECTION.md), [ASSET_REGISTER](docs/ASSET_REGISTER.md)) |
 | [작업기록/CURRENT_TASK.md](작업기록/CURRENT_TASK.md) | 현재 작업 상태 |
 | [작업기록/HANDOFF.md](작업기록/HANDOFF.md) | 인수인계 |
 | [작업기록/README.md](작업기록/README.md) | 작업 기록 작성 방법 |
@@ -31,14 +38,15 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 ## F5: 혼자 시험
 
 `app/main.tscn`의 Main 노드 Inspector에서 **Developer Mode** 기본값은 켜짐이다.
-개발 빌드에서 F5를 누르면 UDP 7000 로컬 호스트를 만들고 PLAYER + BOT 1~3으로 바로 시작한다.
+개발 빌드에서 F5를 누르면 UDP 7000 로컬 호스트를 만들고 플레이어 + 봇 1~3으로 바로 시작한다.
 봇은 정지하며 자기 자리에서 과녁만 바라본다. 인터넷이나 외부 서버는 필요 없다.
 7000 포트를 이미 쓰고 있다면 시작 화면에 방 생성 실패가 표시된다. 먼저 실행한 시험을 종료하거나 일반 모드로 다른 포트를 사용한다.
 
 - WASD: 이동. 마우스: 시점/조준. Space: 점프. Ctrl 유지: 숙이기.
 - E: 자기 색 자리 1m 이내에서 착석 / 앉아 있으면 일어서기. 숙이기와 별개다.
 - 자기 차례에도 WASD/점프/숙이기와 마우스 조준을 자유롭게 사용한다. 시점과 발사 위치는 캐릭터를 따라가며, E 착석은 선택 사항이다.
-- 왼쪽 버튼 유지: 최대 0.8초 충전(100%에서 유지). 놓기: 한 발 투척.
+- 왼쪽 버튼 유지: 최대 0.8초 충전(100%에서 유지). 놓기: 한 발 투척. 충전 중 오른쪽 버튼: 이번 충전 취소(다트는 손에 남고, 그 뒤 왼쪽을 놓아도 발사하지 않는다).
+- 충전·조준 중에도 서 있으면 WASD로 움직일 수 있다(A/D 좌우). 앉아 있으면 E로 일어선 뒤 움직인다.
 - 투척 가능할 때 오른쪽 아래에 다트가 보인다. 버튼을 놓으면 주황색 꼬리 날개가 달린 다트가 손 위치에서 과녁으로 날아간다. 하단 안내에 착석/차례/마우스 복귀/충전/발사 상태를 표시한다.
 - 충전이 낮으면 속도가 작아져 더 아래로 떨어진다. 100%에서 중앙 조준은 불을 맞힌다.
 - Esc: 마우스 해제/다시 잡기. 다른 창에서 돌아오면 게임 화면을 한 번 클릭해도 다시 잡는다. 복귀 클릭은 투척하지 않는다. 해제하면 하단의 대기실·시작 화면 버튼을 사용할 수 있다.
@@ -78,6 +86,8 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 비활성 턴에도 착석·일어서기와 이동이 가능하다. 투척 후 짧은 정산을 거쳐 다음 턴으로 간다.
 봇도 기본 규칙에서 20초 후 0점이다. 동점자는 공동 순위다(1, 1, 3 방식).
 
+**라운드 사이 테이블 집합**: 한 라운드가 끝나면(마지막 라운드 제외) 다음 라운드 전에 10초 동안 테이블 집합 단계가 있다. 이 안에 자기 색 자리에서 E로 앉아야 한다. 사람 전원이 앉으면 바로 다음 라운드를 시작한다. 시간 안에 못 앉은 사람은 자기 자리에 자동 착석되고, **다음 라운드 동안 이동 속도 50%(슬로우)** 페널티를 받는다(점수판·머리 위 이름에 `슬로우` 표시). 슬로우는 다음 집합이 시작될 때 풀린다. 봇은 늘 앉아 있어 페널티가 없다. 값은 `default_match.tres`의 `table_seconds`, `slow_speed_scale`.
+
 표준 20섹터 배치, 싱글·더블·트리플·25/50 불을 적용한다.
 반지름 경계는 불 또는 특수 링에 포함한다. 원주 반지름 1은 더블, 1 밖은 실패다.
 섹터 각도 경계는 시계 방향 다음 섹터에 속한다. float32 좌표의 반올림 허용 오차는 정규화 1e-7이다.
@@ -105,9 +115,14 @@ python tests/run_first_idea.py --godot $godot
 & $godot --headless --path . --script res://tests/test_throwing.gd
 & $godot --headless --path . --script res://tests/test_prototype.gd
 & $godot --path . --script res://tests/render_first_idea.gd
+& $godot --headless --path . --script res://tests/test_game_flow.gd
+& $godot --headless --path . --script res://tests/test_art_showcase.gd
+& $godot --headless --path . --script res://tests/test_game_look.gd
+& $godot --path . --script res://tests/render_game_look.gd
 ```
 
-개발자 시험 두 개(`test_prototype`, `render_first_idea`)는 기본 포트 7000을 쓰므로 순서대로 실행한다.
+개발자 시험 세 개(`test_prototype`, `render_first_idea`, `render_game_look`)는 기본 포트 7000을 쓰므로 순서대로 실행한다.
+`render_game_look`은 약 20초 동안 전체 화면으로 실제 F5 장면을 찍어 저장소 최상위 `output/game_look/`에 둔다(디자인 피드백용).
 네트워크 실행기는 별도의 빈 UDP 포트를 골라 실제 프로세스 2·3·4개를 띄운다.
 봇 시야 검증은 실제 다중 프로세스 네트워크 검증을 대신하지 않는다.
 실제 검증 결과와 남은 수동 재현은 `작업기록/HANDOFF.md`에 기록한다.

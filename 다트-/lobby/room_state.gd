@@ -65,7 +65,7 @@ func add_bots() -> void:
 	for index in range(1, MAX_PLAYERS):
 		if players.size() >= MAX_PLAYERS:
 			break
-		if find_player(-index) == null and add_player(-index, "BOT %d" % index):
+		if find_player(-index) == null and add_player(-index, "봇 %d" % index):
 			var bot := find_player(-index)
 			bot.is_bot = true
 			bot.is_ready = true

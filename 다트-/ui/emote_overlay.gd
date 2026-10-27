@@ -1,5 +1,6 @@
 class_name EmoteOverlay
 extends Control
+## 이전 계획의 얼굴 방해(이모트) 연출. 현재 경기 경로에서는 활성화하지 않는다.
 
 var _age: float = 0.0
 var _warning: float = 0.3

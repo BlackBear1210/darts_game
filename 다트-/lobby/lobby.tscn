@@ -40,7 +40,7 @@ theme_override_constants/separation = 12
 [node name="Title" type="Label" parent="Margin/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
-text = "DART PARTY · 2~4인 로비"
+text = "다트 파티 · 2~4인 로비"
 
 [node name="NameInput" type="LineEdit" parent="Margin/Content"]
 unique_name_in_owner = true

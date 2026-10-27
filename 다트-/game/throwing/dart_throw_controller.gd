@@ -1,7 +1,10 @@
 class_name DartThrowController
 extends Node
+## 로컬 투척 입력: 왼쪽 버튼 누르기(충전 시작) → 최대 충전 유지 → 놓기(throw_requested).
+## 충전 중 오른쪽 버튼·포커스 이탈·비활성은 충전을 취소한다(왼쪽을 놓아도 발사하지 않는다).
 
 signal throw_requested(aim: Vector2, timing: float)
+signal charge_cancelled
 
 var config: DartConfig = preload("res://game/dart/default_dart.tres")
 
@@ -31,7 +34,15 @@ func _notification(what: int) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not enabled or not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT:
+	if not enabled or not event is InputEventMouseButton:
+		return
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed and charging:
+			_cancel_charge()
+			charge_cancelled.emit()
+			get_viewport().set_input_as_handled()
+		return
+	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
 	# 시점 조작 중에는 중앙 HUD에 가로막히지 않고 누름·해제를 한 번씩 처리한다.
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

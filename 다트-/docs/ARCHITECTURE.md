@@ -12,12 +12,15 @@
 | `lobby/room_state.gd`, `room_player.gd` | 최대 4인 자리/준비/로딩, 사람·봇 공개 신원 |
 | `game/game.tscn`, `game.gd` | 로컬 1인칭 시점·이동 입력, 방장 이동 처리 연결, 착석 요청, 다트 환경 레이와 과녁 교차, 확정 비행 표현 |
 | `game/player/player.tscn`, `player.gd` | CharacterBody3D 이동·점프·숙이기, 캡슐/방향 표시, 참가자별 렌더 레이어 |
-| `game/table/table.tscn`, `table.gd` | 네모난 방·테이블·4개 자리·고정 과녁·환경과 제한 구역 충돌 |
+| `game/table/table.tscn`, `table.gd` | 방·테이블·4개 자리·과녁 위치 상수와 충돌 상자(환경 레이어 1·제한 벽 레이어 4). 보이는 방은 자식 `Pub`(`art/pub/pub_game.tscn`) |
 | `game/board/` | 공유 표준 섹터/링 데이터, 순수 채점과 기본 도형 표현 |
 | `game/throwing/dart_throw_controller.gd` | 마우스 누르기/충전 상한/놓기/입력 취소와 화면 중앙 조준 |
 | `game/dart/` | 설정 Resource, 공통 운동식, 확정된 포물선 재생 |
 | `game/match/` | 방장 턴·시계·투척 요청 검증·점수·이탈·경기 종료·재경기 |
 | `ui/game_hud.gd` | 점수·차례·상태·조작·공동 순위, 같은 월드를 보는 봇 SubViewport와 F1~F4 |
+| `game/cards/card_hand_rules.gd` | 손패 7장 채우기·카드 4종(연산/다트/과녁/물리) 순수 규칙. 현재 흐름도 시연에서만 사용 |
+| `art/` | 디자인 담당의 펍·캐릭터·다트판 그림·몸짓과 F6 아트 쇼케이스. 2026-10-26부터 F5 경기의 외형을 그린다(충돌·채점은 안 함) |
+| `ui/pub_theme.gd` | HUD·대기실 공용 색·테두리(PubTheme) |
 
 Autoload는 없다. `/root/Main/NetworkSession`은 화면 전환 중 유지한다.
 RPC는 이 지속 노드에서만 수신하고, Game/MatchController는 로컬 signal 구독으로 자기 책임의 메시지를 받는다.
@@ -68,6 +71,10 @@ BackendConnection은 MatchController의 변경을 관찰하며 정상 완주 결
 - 수락 즉시 AIMING → FLIGHT로 전환하므로 같은 프레임의 중복 투척/시간 초과/F3/F4가 다시 점수를 만들 수 없다.
 - 방장이 확정한 비행 시간이 끝날 때 1회 채점한다. 턴당 3발이며 남은 발수와 시간이 있으면 같은 턴의 AIMING으로 돌아간다. 모두 던지거나 시간이 끝나면 SETTLING → 다음 차례로 간다.
 - 이탈: 활성 투척자의 미완료 비행은 취소하고 다음 차례로 간다. 마지막 차례 이탈은 라운드를 넘긴다. 종료 상태의 이탈은 경기를 재개하지 않는다.
+- 테이블 집합(TABLE): 라운드가 넘어갈 때(마지막 라운드 제외) MatchController가 `TABLE` 단계를 `table_seconds`(기본 10초) 동안 연다. 집합이 시작되면 모든 `MatchPlayer.speed_scale`을 1.0으로 되돌린다. 사람 전원이 앉으면 즉시, 아니면 시간이 끝날 때 닫는다. 못 앉은 사람은 `force_seat`로 자기 자리에 앉히고 `speed_scale = slow_speed_scale`(기본 0.5)을 걸어 다음 라운드 동안 이동이 느려진다. 봇은 검사하지 않는다.
+- MatchController는 씬을 모른다. 착석 확인·강제 착석은 GameView가 주입하는 Callable(`check_seated` = `GameView.is_seated`, `force_seat` = `GameView.force_seat`)로 한다(`solve_throw`와 같은 방식). 주입이 없으면 전원 착석으로 보고 바로 다음 라운드로 간다.
+- `speed_scale`은 MatchState 스냅샷에 실려 모든 화면이 같은 값을 본다. 이동 시뮬레이션은 방장만 하므로 실제 속도 적용은 방장 쪽 `PlayerView.simulate`(SPEED × 숙이기 × speed_scale)다.
+- `MatchState.Phase.TABLE`은 enum 맨 뒤(7)에 추가했다. 기존 값(2=AIMING, 6=FINISHED)을 쓰는 시험·외부 도구가 바뀌지 않게 하려는 것이다.
 
 ## 좌표와 적중
 
@@ -104,6 +111,22 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 
 `game/flow_preview/flow_preview.tscn`은 F6으로 실행하는 독립적인 로컬 청사진이다. `game_flow.gd`가 단계·분기·임시 카드 수량·목표 근접 순위를 소유하고 `flow_preview.gd`가 버튼 UI를 제공한다. 실제 경기·NetworkSession·백엔드에는 연결하지 않는다. 전체 순서와 팀원의 후속 연결 위치는 [GAME_FLOW_BLUEPRINT.md](GAME_FLOW_BLUEPRINT.md)를 따른다.
 
+2026-10-25부터 카드는 `CardHandRules`가 손패를 계산한다. 라운드 시작 전 7장까지 채우고, 쓴 만큼만 받는다. 흐름에 특수 합동 라운드(`JOINT_ROUND`)와 조준 중 다른 참가자의 방해(`jam_<번호>`) 분기가 있다. 카드 효과 수치는 아직 적용하지 않는다.
+
+## 아트 폴더 (2026-10-25)
+
+`art/`는 디자인 담당이 소유한다. `art/pub/pub_builder.gd`가 `mesh_kit.gd`, `board_spec.gd`, `characters/character_factory.gd`로 `art/pub/pub.tscn`과 `art/characters/chr_*.tscn`을 생성한다. 생성물은 직접 편집하지 않는다.
+`art/showcase/showcase.tscn`은 펍을 인스턴스로 불러 카메라·조준·3발·연산 카드 예시를 보여 주는 F6 데모다. 점수는 `BoardScorer.score(BoardSpec.to_board_point(오프셋), BoardLayout)`로 팀 채점을 그대로 쓴다. 별도 채점 규칙은 없다.
+아트 다트판은 실제 규격(반지름 0.17m, 중심 높이 1.73m, 투척 거리 2.37m)이고 실제 경기 과녁(2.5배, 높이 2.9m)과 다르다. 캐릭터 정면은 +Z다. 상세: `art/README.md`, `docs/ART_DIRECTION.md`.
+
+## 실제 경기 외형 연결 (2026-10-26)
+
+- **방**: `TableView`(`game/table/table.gd`)는 충돌 상자만 만든다(바닥·벽·천장·제한 벽·테이블·바·주크박스·스툴 3개 = StaticBody3D 13개, 메시 없음). 보이는 펍은 `pub_builder.gd` → `art/pub/game_room_builder.gd`가 TableView 상수를 읽어 만든 `art/pub/pub_game.tscn`이고 `table.tscn`의 자식 `Pub`으로 붙는다. 방 루트의 `layout_signature` 메타가 `TableView.layout_signature()`와 다르면 시작 때 경고, `test_game_look` 실패. 화면이 있을 때만 `StaticBatch`로 정적 메시를 묶는다.
+- **과녁**: `BoardView`가 `BoardArt.build(Face, layout.numbers, BoardLayout.RADIUS, …)`로 그린다. 카드로 숫자 배치가 바뀌면 `show_layout()`이 다시 그린다. 채점은 그대로 `BoardScorer`.
+- **캐릭터**: `PlayerView._dress()`가 `PlayerLook.character(seat)`를 `Model`로 붙이고 180° 돌린다(캐릭터 +Z 정면). `CharacterRig`가 피벗(LegL/LegR/Body/ArmL/ArmR/Neck)을 돌려 서기·걷기·숙이기·앉기·점프·조준·던지기를 만든다. 몸짓은 각 화면에서 위치·자세·속도로 계산하며 네트워크로 보내지 않는다. 충돌 캡슐·눈높이·속도는 바뀌지 않았다.
+- **다트·손**: 비행 다트 깃은 던진 사람 색(`Dart.paint`), 꽂힌 뒤 `Visual`만 2.2배(과녁 2.5배와 맞춤, 채점 무관). 1인칭 손은 `CharacterFactory.create_hand(자리 색)`.
+- **칠판·HUD**: `GameView._chalk_text()` → `TableView.set_chalk_scores()`가 과녁 왼쪽 칠판에 점수를 쓴다. HUD·대기실은 `PubTheme.build()`를 쓴다.
+
 ## 유지한 기존 파일 (실제 경기)
 
 카드/얼굴 효과와 TrajectoryPreview 등 이전 계획의 파일은 남아 있지만 현재 경기에서 활성화하지 않는다.
@@ -117,3 +140,7 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 `tests/test_throwing.gd`: 충전 포화·입력 취소·운동식·Dart Scene 종점.
 `tests/test_prototype.gd`: 실제 자동 입장과 봇/카메라, 개발자 키, 서버 물리/제한 구역, 충돌/실패·시한 경쟁·순위.
 `tests/render_first_idea.gd`: 실제 D3D12 렌더링과 입력 이벤트, 봇 화면 변화·비행·결과·노트북 크기 저장.
+`tests/test_game_flow.gd`: 흐름도 시연의 2·3·4인 완주, 손패 7장 보충·카드 사용·방해·합동 라운드.
+`tests/test_art_showcase.gd`: 아트 쇼케이스의 투척·채점·카메라·HUD 입력, `-- --render`로 네 시점 렌더.
+`tests/test_game_look.gd`: F5 외형 연결 — 방 서명·충돌 없는 방·칠판·관절 몸짓·렌더 레이어·과녁 숫자 재배치·다트 색/크기.
+`tests/render_game_look.gd`: 실제 F5 장면 10장 + 던지기 낱장 30장(`output/game_look/`).

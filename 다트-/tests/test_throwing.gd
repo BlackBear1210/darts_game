@@ -77,6 +77,19 @@ func _run() -> void:
 	input._input(release)
 	input._unhandled_input(release)
 	assert(_requests == 2 and not input.charging)
+	# 충전 중 오른쪽 버튼은 이번 투척을 취소한다. 그 뒤 왼쪽을 놓아도 발사하지 않는다.
+	var cancels: Array[int] = [0]
+	input.charge_cancelled.connect(func() -> void: cancels[0] += 1)
+	var right: InputEventMouseButton = press.duplicate() as InputEventMouseButton
+	right.button_index = MOUSE_BUTTON_RIGHT
+	input._unhandled_input(press)
+	input._process(config.charge_seconds * 0.5)
+	input._input(right)
+	assert(not input.charging and input.timing == 0.0 and cancels[0] == 1)
+	input._unhandled_input(release)
+	assert(_requests == 2)
+	input._input(right)
+	assert(cancels[0] == 1)
 	game.camera.look_at(game.camera.global_position + Vector3.UP, Vector3.FORWARD)
 	assert(not input.aim_at(root.get_visible_rect().size * 0.5).is_finite())
 	game.camera.look_at(game.table.board.global_position)
@@ -109,5 +122,5 @@ func _run() -> void:
 	assert(not is_instance_valid(dart))
 	game.queue_free()
 	await process_frame
-	print("PASS: ballistic endpoints/arc, timing boundaries, mouse release, disable/focus cancellation, standalone preview endpoints, hit stop and miss cleanup")
+	print("PASS: ballistic endpoints/arc, timing boundaries, mouse release, disable/focus/right-click cancellation, standalone preview endpoints, hit stop and miss cleanup")
 	quit()

@@ -9,6 +9,8 @@ var game: GameView
 var controller: MatchController
 var throw_input: DartThrowController
 var _root: Control
+## 점수·차례 글자 뒤 반투명 판넬(펍 테마). 글자 크기에 맞춰 매 프레임 크기를 맞춘다.
+var _score_panel: Panel
 var _score: Label
 var _turn: Label
 var _help: Label
@@ -26,13 +28,21 @@ var _selected_bot: int = 0
 var _preview_enabled: bool = true
 var _notice_text: String = ""
 var _notice_at: float = 0
+## 마지막으로 오른쪽 버튼으로 충전을 취소한 시각(잠깐 "충전 취소" 표시).
+var _cancelled_at: float = -10.0
 
 
 func _ready() -> void:
 	_root = Control.new()
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 펍 색 테마(ui/pub_theme.gd): 글자 크림색, 충전 막대 놋쇠색, 버튼 초록+놋쇠 테두리.
+	_root.theme = PubTheme.build()
 	add_child(_root)
+	_score_panel = Panel.new()
+	_score_panel.position = Vector2(8, 8)
+	_score_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_score_panel)
 	_score = _label(Vector2(18, 16), 19)
 	_turn = _label(Vector2(18, 175), 22)
 	_help = _label(Vector2(18, -122), 16)
@@ -82,6 +92,7 @@ func _ready() -> void:
 func configure(match_controller: MatchController, input: DartThrowController) -> void:
 	controller = match_controller
 	throw_input = input
+	throw_input.charge_cancelled.connect(func() -> void: _cancelled_at = controller._now())
 	game = controller.get_parent() as GameView
 	_viewport.world_3d = game.get_world_3d()
 
@@ -136,19 +147,32 @@ func _process(_delta: float) -> void:
 	_help.position = Vector2(18, _root.size.y - (140 if game.developer_enabled else 116))
 	_buttons.position = Vector2(18, _root.size.y - 38)
 	var state := controller.state
-	var lines := PackedStringArray(["DART PARTY  /  최고 누적 점수"])
+	var lines := PackedStringArray(["다트 파티  /  최고 누적 점수"])
 	for player in state.players:
-		lines.append("%s%s  %d점" % ["▶ " if player == state.active_player() else "   ", player.display_name, player.score])
+		# 자리 표식(●▲■◆)을 붙여 3D 이름표·발밑 매트·칠판과 같은 기호로 맞춘다.
+		lines.append("%s%s  %d점%s" % ["▶ " if player == state.active_player() else "   ", PlayerLook.tag(player.seat, player.display_name), player.score,
+			"  [슬로우]" if player.speed_scale < 1.0 else ""])
 	_score.text = "\n".join(lines)
 	var active_name: String = state.active_player().display_name if state.active_player() != null else "대기"
-	_turn.text = "라운드 %d / %d · %s\n남은 시간 %.1f초 · 다트 %d / %d발" % [state.round_number, controller.config.rounds, active_name, controller.remaining_seconds(), state.darts_left, controller.config.darts_per_turn]
+	var gathering: bool = state.phase == MatchState.Phase.TABLE
+	if gathering:
+		_turn.text = "라운드 %d 준비 · 테이블 집합!\n남은 시간 %.1f초 · 자기 색 자리에서 E로 앉기" % [state.round_number, controller.remaining_seconds()]
+	else:
+		_turn.text = "라운드 %d / %d · %s\n남은 시간 %.1f초 · 다트 %d / %d발" % [state.round_number, controller.config.rounds, active_name, controller.remaining_seconds(), state.darts_left, controller.config.darts_per_turn]
 	var id: int = controller.local_peer_id
+	var me := state.find_player(id)
+	if me != null and me.speed_scale < 1.0:
+		_turn.text += "\n슬로우 페널티: 이번 라운드 이동 속도 %d%%" % roundi(me.speed_scale * 100)
 	var seated: bool = game.is_seated(id)
 	var seat_text: String = "E: 일어서기" if seated else ("E: 착석 가능 (선택)" if game.can_sit(id) else "서 있는 상태로도 투척 가능")
+	if gathering and not seated:
+		seat_text = "E: 지금 앉으세요!" if game.can_sit(id) else "자기 색 자리로 이동하세요 (늦으면 자동 착석 + 슬로우)"
 	var can_throw: bool = state.phase == MatchState.Phase.AIMING and state.active_player() != null and state.active_player().peer_id == id
 	var throw_status: String = "투척 가능: 왼쪽 버튼을 누르고 놓으세요"
 	if state.phase == MatchState.Phase.FINISHED:
 		throw_status = "경기 종료"
+	elif gathering:
+		throw_status = "테이블 집합 중"
 	elif state.active_player() == null or state.active_player().peer_id != id:
 		throw_status = "다른 플레이어 차례입니다"
 	elif state.phase == MatchState.Phase.FLIGHT:
@@ -158,10 +182,12 @@ func _process(_delta: float) -> void:
 	elif Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		throw_status = "게임 화면 클릭: 마우스 복귀"
 	elif throw_input.charging:
-		throw_status = "충전 중: 버튼을 놓으면 발사"
+		throw_status = "충전 중: 놓으면 발사 · 오른쪽 버튼 취소"
+	elif controller._now() - _cancelled_at < 1.2:
+		throw_status = "충전 취소"
 	_charge.value = throw_input.timing * 100
 	_charge.visible = can_throw
-	_help.text = "%s · %s\nWASD 이동 · 마우스 시점 · Space 점프 · Ctrl 숙이기\n왼쪽 버튼 유지: 충전 / 놓기: 투척 · Esc: 마우스 해제/복귀" % [seat_text, throw_status]
+	_help.text = "%s · %s\nWASD 이동 · 마우스 시점 · Space 점프 · Ctrl 숙이기\n왼쪽 버튼 유지: 충전 / 놓기: 투척 / 오른쪽 버튼: 취소 · Esc: 마우스 해제/복귀" % [seat_text, throw_status]
 	if game.developer_enabled:
 		_help.text += "\n개발: F1 봇 화면 · F2 다음 봇 · F3 턴 종료 · F4 선택 봇 차례"
 	_result.text = ""
@@ -179,6 +205,9 @@ func _process(_delta: float) -> void:
 	_lobby.visible = controller.session.is_room_host()
 	if finished:
 		_result.text = "경기 종료\n" + ranking_text()
+	# 점수 판넬: 점수 글자 위부터 차례 글자 아래까지 감싼다(글자 수가 바뀌면 같이 커진다).
+	var text_width := maxf(_score.get_combined_minimum_size().x, _turn.get_combined_minimum_size().x)
+	_score_panel.size = Vector2(text_width + 22, _turn.position.y + _turn.get_combined_minimum_size().y + 6 - _score_panel.position.y)
 	_update_bot_view()
 
 

@@ -28,6 +28,9 @@ var _accounts_enabled: bool = false
 
 
 func _ready() -> void:
+	# 펍 색 테마(ui/pub_theme.gd, 디자인 담당). 배치는 그대로 두고 색·테두리만 바꾼다.
+	theme = PubTheme.build()
+	$Background.color = PubTheme.BACKGROUND
 	_host_button.pressed.connect(_request_host)
 	_join_button.pressed.connect(_request_join)
 	_ready_button.toggled.connect(ready_requested.emit)

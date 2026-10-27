@@ -1,5 +1,6 @@
 class_name BoardScorer
 extends RefCounted
+## 과녁 점수 계산(순수 함수). 입력은 과녁 중심 기준 정규화 좌표(반지름 1 = 더블 링 바깥). 아트 쇼케이스도 이 함수를 쓴다.
 
 const BOUNDARY_EPSILON: float = 0.0000001
 

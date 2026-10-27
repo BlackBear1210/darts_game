@@ -11,6 +11,8 @@ var layout := BoardLayout.new()
 var bonus: int = 0
 var multiplier: int = 1
 var hand: Array[CardDefinition] = []
+## 이동 속도 배율. 테이블 집합에 늦으면 다음 라운드 동안 MatchConfig.slow_speed_scale 이 된다.
+var speed_scale: float = 1.0
 
 
 func score_hit(base_score: int) -> int:
@@ -42,7 +44,8 @@ func to_snapshot() -> Dictionary:
 	var cards: Array[Dictionary] = []
 	for card in hand: cards.append(card.to_snapshot())
 	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score, "bot": is_bot,
-		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": cards}
+		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": cards,
+		"speed_scale": speed_scale}
 
 
 static func from_snapshot(data: Dictionary) -> MatchPlayer:
@@ -55,5 +58,6 @@ static func from_snapshot(data: Dictionary) -> MatchPlayer:
 	player.layout.numbers.assign(data.numbers)
 	player.bonus = data.bonus
 	player.multiplier = data.multiplier
+	player.speed_scale = data.get("speed_scale", 1.0)
 	for card: Dictionary in data.hand: player.hand.append(CardDefinition.from_snapshot(card))
 	return player

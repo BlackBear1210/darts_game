@@ -1,5 +1,6 @@
 class_name CardDefinition
 extends RefCounted
+## 이전 고정 좌석 계획의 카드 3종(+10·×2·점수 섞기). 현재 경기에서는 쓰지 않는다. 새 손패 규칙은 card_hand_rules.gd.
 
 enum Kind { BONUS, DOUBLE, SHUFFLE }
 

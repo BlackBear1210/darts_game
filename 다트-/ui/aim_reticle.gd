@@ -1,4 +1,5 @@
 extends Control
+## 실제 경기(F5) 화면 중앙 조준점. 이미지 없이 그린다.
 
 
 func _draw() -> void:

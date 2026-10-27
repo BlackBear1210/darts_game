@@ -100,6 +100,14 @@ def run_match(engine, folder, count):
         # 5라운드 턴마다 3발, 모든 PC의 점수와 최종 적중 좌표가 같아야 한다.
         for turn in range(count * 5):
             ss = wait_for(peers, lambda ss: all(s.get("match", {}).get("phase") == 2 and s["match"]["turn_id"] == turn + 1 for s in ss), "next turn")
+            if turn == count:
+                # 1라운드 뒤 테이블 집합: 서 있던 사람만 자동 착석 + 슬로우, 앉아 있던 사람은 그대로.
+                # 자세는 20Hz 이동 채널로 오므로 경기 스냅샷(AIMING)보다 조금 늦게 도착할 수 있다.
+                ss = wait_for(peers, lambda ss: all(all(p["seated"] for p in s["poses"]) for s in ss), "late players auto-seated")
+                assert all(all(p["speed_scale"] == (1.0 if p["peer_id"] in seated_ids else 0.5) for p in s["match"]["players"]) for s in ss)
+            if turn == count * 2:
+                # 다음 집합에서 슬로우가 풀리고, 전원 앉아 있으면 새 지각자가 없다.
+                assert all(all(p["speed_scale"] == 1.0 for p in s["match"]["players"]) for s in ss)
             active = ss[0]["match"]["players"][ss[0]["match"]["turn_index"]]["peer_id"]
             peer = peers[ids.index(active)]
             for dart_index in range(3):
@@ -119,7 +127,7 @@ def run_match(engine, folder, count):
         assert states(peers)[0]["match"]["phase"] == 6
         peers[0].command("restart")
         wait_for(peers, lambda ss: all(s["match"]["phase"] == 2 and s["match"]["round"] == 1 and not s["match"]["last_hit"] and all(p["score"] == 0 for p in s["match"]["players"]) for s in ss), "rematch reset")
-        print(f"PASS: {count} real peers, standing/seated throws, movement/jump/crouch, ownership, invalid requests, 5 rounds, identical impact/score, duplicate throw, rematch", flush=True)
+        print(f"PASS: {count} real peers, standing/seated throws, movement/jump/crouch, ownership, invalid requests, table gathering auto-seat/slow, 5 rounds, identical impact/score, duplicate throw, rematch", flush=True)
     finally:
         for p in peers:
             p.stop()

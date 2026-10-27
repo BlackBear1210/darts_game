@@ -1,9 +1,14 @@
 class_name GameView
 extends Node3D
 ## 공간, 로컬 시점, 방장 이동 시뮬레이션과 경기 기능을 조립한다.
+## 조명·배경색은 Table/Pub(art/pub/pub_game.tscn)이 가진다. 여기서는 카메라·손·다트·칠판 점수만 연결한다.
 
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
+## 1인칭 손 모양(디자인 담당 생성 코드). class_name 이 없는 도구라 preload 로 부른다.
+const CharacterFactory = preload("res://art/characters/character_factory.gd")
+## 칠판 점수판에 쓰는 이름 최대 글자 수(칠판 폭 약 0.95m에 맞춘 값).
+const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
 const INPUT_TIMEOUT: float = 0.35
 const MOUSE_SENSITIVITY: float = 0.0025
@@ -49,6 +54,8 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		session.movement_snapshot.connect(_receive_motion)
 		session.game_action.connect(_receive_action)
 	controller.solve_throw = solve_dart
+	controller.check_seated = is_seated
+	controller.force_seat = force_seat
 	for player in controller.state.players:
 		var view := PLAYER_SCENE.instantiate() as PlayerView
 		view.name = "Player_%d" % player.peer_id
@@ -57,9 +64,21 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		actors[player.peer_id] = view
 		if player.peer_id == local_peer_id:
 			camera.cull_mask = 0xfffff & ~(1 << (player.seat + 1))
+			_equip_hand(player.seat)
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_state()
+
+
+## 1인칭 손을 자기 자리 색 소매로 바꾸고, 손에 든 다트 깃도 자리 색으로 칠한다.
+func _equip_hand(seat: int) -> void:
+	var hand := $Camera/Hand as Node3D
+	var old := hand.get_node_or_null("FirstPersonHand")
+	if old != null:
+		hand.remove_child(old)
+		old.queue_free()
+	hand.add_child(CharacterFactory.create_hand(seat))
+	($Camera/Hand/HeldDart as DartView).paint(PlayerLook.COLORS[seat])
 
 
 func _exit_tree() -> void:
@@ -182,11 +201,23 @@ func _accept_seat(sender: int) -> void:
 	if actor.seated:
 		actor.seated = false
 		actor.position += Vector3(0, 0.05, 0.7)
+		actor.update_posture()
 	elif can_sit(sender):
-		actor.seated = true
-		actor.crouched = false
-		actor.position = TableView.SEATS[actor.identity.seat]
-		actor.velocity = Vector3.ZERO
+		_sit(actor)
+
+
+## 테이블 집합 제한시간이 끝났을 때 방장이 거리와 관계없이 자리로 옮긴다(MatchController._close_table).
+func force_seat(id: int) -> void:
+	var actor := actors.get(id) as PlayerView
+	if actor != null and not actor.seated:
+		_sit(actor)
+
+
+func _sit(actor: PlayerView) -> void:
+	actor.seated = true
+	actor.crouched = false
+	actor.position = TableView.SEATS[actor.identity.seat]
+	actor.velocity = Vector3.ZERO
 	actor.update_posture()
 
 
@@ -212,6 +243,10 @@ func _process(_delta: float) -> void:
 	camera.rotation = Vector3(_pitch, _yaw, 0)
 	throw_input.enabled = own_turn and state.phase == MatchState.Phase.AIMING and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	$Camera/Hand.visible = throw_input.enabled
+	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
+	var active := state.active_player()
+	for actor: PlayerView in actors.values():
+		actor.aiming = active != null and actor.identity.peer_id == active.peer_id and state.phase == MatchState.Phase.AIMING
 	if throw_input.enabled:
 		throw_input.aim = throw_input.aim_at(get_viewport().get_visible_rect().size * 0.5)
 	if state.phase == MatchState.Phase.FINISHED and not _was_finished:
@@ -230,6 +265,7 @@ func _apply_state() -> void:
 			_controls.erase(id)
 		else:
 			(actors[id] as PlayerView).show_state(player)
+	table.set_chalk_scores(_chalk_text())
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id
 		_clear_darts()
@@ -240,6 +276,21 @@ func _show_throw(data: Dictionary) -> void:
 	_darts.add_child(dart)
 	# 모든 화면은 방장의 시작점/종점/시간으로 같은 포물선을 재현한다.
 	dart.fly(data.start, data.target, data.duration, true, $Camera/Hand.position)
+	# 깃 = 던진 사람 자리 색, 그 캐릭터는 던지기 몸짓을 한다.
+	var thrower := actors.get(int(data.get("peer_id", 0))) as PlayerView
+	if thrower != null:
+		dart.paint(thrower.color)
+		thrower.play_throw()
+
+
+## 과녁 왼쪽 칠판 글자: 자리 순서대로 "● 이름  점수".
+func _chalk_text() -> String:
+	var lines := PackedStringArray(["점 수", ""])
+	var players := controller.state.players.duplicate()
+	players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
+	for player: MatchPlayer in players:
+		lines.append("%s  %d" % [PlayerLook.tag(player.seat, player.display_name.left(CHALK_NAME_LENGTH)), player.score])
+	return "\n".join(lines)
 
 
 func _clear_darts() -> void:

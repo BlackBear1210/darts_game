@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://game/dart/dart.gd" id="1_dart"]
 
@@ -7,6 +7,15 @@ albedo_color = Color(0.7, 0.75, 0.8, 1)
 metallic = 0.7
 roughness = 0.3
 
+[sub_resource type="StandardMaterial3D" id="Material_barrel"]
+albedo_color = Color(0.768627, 0.647059, 0.4, 1)
+metallic = 0.65
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="Material_shaft"]
+albedo_color = Color(0.0901961, 0.145098, 0.137255, 1)
+roughness = 0.6
+
 [sub_resource type="CylinderMesh" id="Mesh_tip"]
 material = SubResource("Material_dart")
 top_radius = 0.0
@@ -14,12 +23,19 @@ bottom_radius = 0.003
 height = 0.02
 radial_segments = 12
 
+[sub_resource type="CylinderMesh" id="Mesh_barrel"]
+material = SubResource("Material_barrel")
+top_radius = 0.0045
+bottom_radius = 0.0058
+height = 0.05
+radial_segments = 8
+
 [sub_resource type="CylinderMesh" id="Mesh_shaft"]
-material = SubResource("Material_dart")
+material = SubResource("Material_shaft")
 top_radius = 0.003
 bottom_radius = 0.003
-height = 0.14
-radial_segments = 12
+height = 0.07
+radial_segments = 8
 
 [sub_resource type="StandardMaterial3D" id="Material_flight"]
 shading_mode = 0
@@ -27,7 +43,7 @@ albedo_color = Color(1, 0.35, 0.06, 1)
 
 [sub_resource type="BoxMesh" id="Mesh_flight"]
 material = SubResource("Material_flight")
-size = Vector3(0.07, 0.006, 0.065)
+size = Vector3(0.075, 0.006, 0.07)
 
 [node name="Dart" type="Node3D"]
 script = ExtResource("1_dart")
@@ -39,8 +55,13 @@ position = Vector3(0, 0, 0.01)
 rotation_degrees = Vector3(-90, 0, 0)
 mesh = SubResource("Mesh_tip")
 
+[node name="Barrel" type="MeshInstance3D" parent="Visual"]
+position = Vector3(0, 0, 0.045)
+rotation_degrees = Vector3(-90, 0, 0)
+mesh = SubResource("Mesh_barrel")
+
 [node name="Shaft" type="MeshInstance3D" parent="Visual"]
-position = Vector3(0, 0, 0.09)
+position = Vector3(0, 0, 0.105)
 rotation_degrees = Vector3(-90, 0, 0)
 mesh = SubResource("Mesh_shaft")
 

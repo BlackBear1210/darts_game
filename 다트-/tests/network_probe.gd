@@ -142,6 +142,7 @@ func _tune_game() -> void:
 	game.set_process_unhandled_input(false)
 	if _options.get("fast-match", "false") == "true" and _session.is_host():
 		game.controller.config.settle_seconds = 0.12
+		game.controller.config.table_seconds = 1.0
 	if _options.get("afk-match", "false") == "true" and _session.is_host():
 		game.controller.config.rounds = 1
 		game.controller.config.turn_seconds = 0.25

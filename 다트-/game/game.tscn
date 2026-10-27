@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="PackedScene" path="res://game/table/table.tscn" id="1_table"]
 [ext_resource type="Script" path="res://game/game.gd" id="2_game"]
@@ -7,22 +7,8 @@
 [ext_resource type="PackedScene" path="res://game/dart/dart.tscn" id="5_dart"]
 [ext_resource type="Script" path="res://game/throwing/trajectory_preview.gd" id="6_preview"]
 
-[sub_resource type="Environment" id="Environment_game"]
-background_mode = 1
-background_color = Color(0.055, 0.065, 0.085, 1)
-ambient_light_source = 2
-ambient_light_color = Color(0.8, 0.85, 1, 1)
-ambient_light_energy = 0.7
-
-[sub_resource type="SphereMesh" id="Hand"]
-radius = 0.045
-height = 0.06
-
 [node name="Game" type="Node3D"]
 script = ExtResource("2_game")
-
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("Environment_game")
 
 [node name="Camera" type="Camera3D" parent="."]
 position = Vector3(0, 1.6, 4.3)
@@ -33,14 +19,8 @@ fov = 65.0
 visible = false
 position = Vector3(0.2, -0.14, -0.55)
 
-[node name="Shape" type="MeshInstance3D" parent="Camera/Hand"]
-position = Vector3(0, -0.025, 0.10)
-mesh = SubResource("Hand")
-
 [node name="HeldDart" parent="Camera/Hand" instance=ExtResource("5_dart")]
-
-[node name="KeyLight" type="DirectionalLight3D" parent="."]
-rotation_degrees = Vector3(-25, -30, 0)
+rotation_degrees = Vector3(6, 32, 0)
 
 [node name="Table" parent="." instance=ExtResource("1_table")]
 
@@ -56,9 +36,3 @@ script = ExtResource("4_input")
 
 [node name="TrajectoryPreview" type="MeshInstance3D" parent="."]
 script = ExtResource("6_preview")
-
-[node name="WarmLight" type="OmniLight3D" parent="."]
-position = Vector3(0, 2.5, 0)
-light_color = Color(1, 0.78, 0.5, 1)
-light_energy = 2.0
-omni_range = 6.0

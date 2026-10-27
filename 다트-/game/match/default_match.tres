@@ -8,3 +8,5 @@ rounds = 5
 darts_per_turn = 3
 turn_seconds = 20.0
 card_seconds = 15.0
+table_seconds = 10.0
+slow_speed_scale = 0.5

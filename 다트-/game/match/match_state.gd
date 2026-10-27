@@ -1,7 +1,9 @@
 class_name MatchState
 extends RefCounted
+## 방장이 확정해 모든 화면에 보내는 경기 상태 스냅샷(단계·라운드·차례·남은 발수·참가자).
 
-enum Phase { WAITING, PREPARING, AIMING, FLIGHT, SETTLING, CARDS, FINISHED }
+## TABLE(라운드 사이 테이블 집합)은 기존 숫자 값이 바뀌지 않게 맨 뒤에 둔다. 시험과 저장 결과가 2=AIMING, 6=FINISHED 를 쓴다.
+enum Phase { WAITING, PREPARING, AIMING, FLIGHT, SETTLING, CARDS, FINISHED, TABLE }
 
 var match_id: int = 0
 var revision: int = 0

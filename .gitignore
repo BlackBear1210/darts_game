@@ -13,3 +13,6 @@ override.cfg
 /output/character_v08/*.blend2
 /output/character_v08/*.zip
 /output/character_v08/*.log
+
+# render_game_look 던지기 장면 낱장(GIF 만드는 중간 파일). 팀 공유는 11_throw.gif 만
+/output/game_look/throw_frames/

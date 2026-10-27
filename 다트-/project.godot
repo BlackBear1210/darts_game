@@ -12,16 +12,13 @@ config_version=5
 
 config/name="다트"
 run/main_scene="res://app/main.tscn"
-run/main_scene.verification="res://tests/network_probe.tscn"
-run/flush_stdout_on_print=true
 config/features=PackedStringArray("4.6", "Forward Plus")
+run/flush_stdout_on_print=true
 config/icon="res://icon.svg"
+run/main_scene.verification="res://tests/network_probe.tscn"
 
 [debug]
 
-; 기본 로그 파일을 열 수 없을 때 발생하는 4.6.3 엔진 충돌을 피한다.
-; 파일 저장이 필요하면 쓰기 가능한 경로를 --log-file로 명시한다.
-file_logging/enable_file_logging=false
 file_logging/enable_file_logging.pc=false
 
 [display]

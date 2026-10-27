@@ -116,10 +116,10 @@ func _run() -> void:
 	_key(KEY_F1)
 	_key(KEY_F2)
 	await create_timer(0.1).timeout
-	assert(_hud._bot_label.text.begins_with("BOT 2"))
+	assert(_hud._bot_label.text.begins_with("봇 2"))
 	await _capture("06_f2_next_bot")
 	_key(KEY_F4)
-	assert(_game.controller.state.active_player().display_name == "BOT 2")
+	assert(_game.controller.state.active_player().display_name == "봇 2")
 	await _capture("07_f4_bot_turn")
 	# E 입력으로 자기 자리에 앉고 실제 마우스 입력을 눌렀다가 놓는다.
 	local.position = TableView.SEATS[0] + Vector3(0, 0.01, 0.6)

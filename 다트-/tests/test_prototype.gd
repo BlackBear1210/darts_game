@@ -49,9 +49,9 @@ func _run() -> void:
 	_key(KEY_F1)
 	_key(KEY_F2)
 	await create_timer(0.05).timeout
-	assert(_hud._bot_label.text.begins_with("BOT 2"))
+	assert(_hud._bot_label.text.begins_with("봇 2"))
 	_key(KEY_F4)
-	assert(_game.controller.state.active_player().display_name == "BOT 2")
+	assert(_game.controller.state.active_player().display_name == "봇 2")
 	assert(_game.controller.remaining_seconds() > 19.8)
 	# 봇의 기본 20초도 단축하지 않고 실제로 기다린다.
 	var bot_turn: int = _game.controller.state.turn_id
@@ -64,7 +64,7 @@ func _run() -> void:
 	var local := _game.actors[1] as PlayerView
 	await _drive(Vector2(-1, 0), 0.25, true, true)
 	assert(local.position.y > 0.1)
-	assert(_game.controller.state.active_player().display_name == "BOT 2")
+	assert(_game.controller.state.active_player().display_name == "봇 2")
 	_key(KEY_F3)
 	assert(_game.controller.state.phase == MatchState.Phase.SETTLING)
 	assert(_game.controller.state.last_hit.points == 0)
@@ -148,6 +148,40 @@ func _run() -> void:
 	assert(_game.controller.state.phase == MatchState.Phase.FLIGHT)
 	await create_timer(1.2).timeout
 	assert(_game.controller.state.find_player(1).score == 200)
+	# 라운드 사이 테이블 집합: 제한시간 안에 앉지 않으면 자동 착석 + 다음 라운드 슬로우. 봇은 늘 앉아 있다.
+	var controller := _game.controller
+	controller.config.table_seconds = 0.3
+	controller.state.turn_index = 3
+	controller.state.round_number = 1
+	controller._begin_turn()
+	controller._timeout_turn()
+	controller._advance_turn()
+	assert(controller.state.phase == MatchState.Phase.TABLE and controller.state.round_number == 2)
+	assert(controller.state.turn_index == 0 and not local.seated)
+	await create_timer(0.5).timeout
+	assert(controller.state.phase == MatchState.Phase.AIMING and local.seated)
+	assert(local.position == TableView.SEATS[local.identity.seat])
+	assert(controller.state.find_player(1).speed_scale == controller.config.slow_speed_scale)
+	for bot in bots:
+		assert(bot.identity.speed_scale == 1.0)
+	assert("지각" in controller.notice and "[슬로우]" in _hud._score.text)
+	# 슬로우는 방장의 실제 이동 속도에 적용된다.
+	_game.request_seat()
+	assert(not local.seated)
+	_game.send_controls(Vector2(1, 0), 0, 0, false, false)
+	await physics_frame
+	await physics_frame
+	assert(is_equal_approx(Vector2(local.velocity.x, local.velocity.z).length(), PlayerView.SPEED * controller.config.slow_speed_scale))
+	_game.send_controls(Vector2.ZERO, 0, 0, false, false)
+	# 다음 집합이 시작되면 슬로우가 풀리고, 전원 앉아 있으면 기다리지 않고 바로 다음 라운드다.
+	_game.force_seat(1)
+	controller.state.turn_index = 3
+	controller._begin_turn()
+	controller._timeout_turn()
+	controller._advance_turn()
+	assert(controller.state.find_player(1).speed_scale == 1.0)
+	controller._process(0)
+	assert(controller.state.phase == MatchState.Phase.AIMING and controller.state.round_number == 3)
 	# 마지막 차례 이탈은 다음 라운드 첫 차례가 되고, 종료 후 이탈은 경기를 재개하지 않는다.
 	var room: RoomState = _main.get_node("NetworkSession").room
 	_game.controller.state.turn_index = 3
@@ -164,7 +198,7 @@ func _run() -> void:
 	for id: int in [-2, -3]:
 		var player := MatchPlayer.new()
 		player.peer_id = id
-		player.display_name = "BOT %d" % -id
+		player.display_name = "봇 %d" % -id
 		_game.controller.state.players.append(player)
 	# 동점은 공동 순위, 다음 순위는 인원 수만큼 건너뛴다.
 	_game.controller.state.players[0].score = 50
@@ -176,7 +210,7 @@ func _run() -> void:
 	_main.get_node("NetworkSession").leave_room()
 	await process_frame
 	assert(_main.get_node("Lobby").visible and _main.get_node_or_null("Game") == null)
-	print("PASS: F5 human+3 stationary bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, actual bot 20s timeout, deadline race, active/finished departure, duplicate/flight lock, joint ranking, menu return")
+	print("PASS: F5 human+3 stationary bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, actual bot 20s timeout, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
 	_main.queue_free()
 	await process_frame
 	quit()

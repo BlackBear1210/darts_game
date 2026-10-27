@@ -1,3 +1,35 @@
+# 최신 인수인계 — 디자인 외형 F5 연결 · 팀 피드백 빌드 (2026-10-26 저녁)
+
+- 상세 기록: `작업기록/2026-10-26_게임통합_디자인.md`. 결정: `docs/DECISIONS.md` 2026-10-26 "디자인 외형을 F5 실제 경기에 연결". 파일 지도: `art/README.md` 첫 표.
+- F5에 펍 방(`art/pub/pub_game.tscn`, `table.tscn`의 자식 `Pub`)·다트판 그림(`BoardArt`)·자리 캐릭터 + 코드 몸짓(`PlayerLook`, `CharacterRig`)·자리 색 다트/손·칠판 점수·HUD 테마(`PubTheme`)가 들어갔다.
+- **TableView는 이제 충돌 상자만 만든다**(메시 없음, 13개). 배치 상수를 바꾸면 `art/pub/pub_builder.gd`로 방을 다시 만들어야 한다 — 안 하면 시작 경고 + `test_game_look` 실패(`layout_signature`).
+- 채점·이동 속도·충돌 캡슐·눈높이·네트워크 메시지는 그대로다. 몸짓은 각 화면에서 계산(동기화 안 함).
+- 검증: test_rules / test_throwing / test_game_flow / test_prototype / test_art_showcase / test_game_look / render_first_idea / render_game_look / run_multiplayer.py / run_first_idea.py PASS. 사람의 직접 플레이·다른 PC·60fps 측정은 미검증.
+- 팀 확인 대기: 테이블 지름 2.1m(기획 2.4m), 관전 구역, 스툴 장애물 3개 위치, 바닥 놋쇠 `StandMarker`(z=-0.6) 의미, 바텐더·주크박스 자리, 팀원 V08 블렌더 캐릭터 채택 여부.
+
+---
+
+# 최신 인수인계 — 테이블 집합·지각 슬로우·충전 취소·한글화 (2026-10-26)
+
+- 상세 기록: `작업기록/2026-10-26_테이블집합_슬로우_한글화.md`. 결정: `docs/DECISIONS.md` 2026-10-26.
+- F5 실제 경기: 라운드가 넘어갈 때 `MatchState.Phase.TABLE`(enum 맨 뒤 = 7) 10초. 못 앉은 사람은 자동 착석 + 다음 라운드 `speed_scale` 0.5. MatchController는 `check_seated`/`force_seat` Callable만 안다. 충전 중 오른쪽 버튼 = `charge_cancelled`.
+- 쇼케이스(F6): 투척 시점 1인칭 시선·A/D·꾹 충전·오른쪽 취소, 착탄은 F5 `solve_dart`와 같은 식. 한국어 UI·3D 간판(`pub_builder.gd`로 재생성).
+- 이 PC 설정(저장소 밖): `%APPDATA%\Godot\projects.cfg`에 `다트-` 추가, GitHub Desktop에 `darts_game` 추가. 다른 팀원 PC는 Godot에서 Import로 `다트-/project.godot`을 고른다.
+- 한글은 Godot 기본 글꼴 + 시스템 대체 글꼴로 그린다. 배포 전 한글 글꼴 지정 필요. 사람의 직접 조작은 미검증.
+
+---
+
+# 최신 인수인계 — 아트 통합·카드 7장 규칙·협업 규칙 (2026-10-25)
+
+- 상세 기록: `작업기록/2026-10-25_아트통합_카드규칙.md`. 협업 규칙: `docs/COLLABORATION.md`. 아트: `art/README.md`, `docs/ART_DIRECTION.md`.
+- `art/`는 디자인 담당 폴더다. 실제 경기(F5)와 연결하지 않았고 지워도 F5·서버는 동작한다. `art/pub/pub.tscn`, `art/characters/chr_*.tscn`은 `art/pub/pub_builder.gd`로만 다시 만든다(같은 코드 → 같은 파일).
+- 쇼케이스 점수는 팀 `BoardScorer`를 쓴다. 아트 다트판은 실제 규격(0.17m, 높이 1.73m), 실제 경기 과녁은 2.5배·높이 2.9m — 바꿔 끼우기 전에 팀 결정.
+- 카드: `CardHandRules`(7장 채우기, 안 쓰면 0장, 연산/다트/과녁/물리). 흐름도 시연에 사용·방해(`jam_<번호>`)·합동 라운드(`JOINT_ROUND`) 추가, 교환 단계 제거. 실제 MatchController 연결·효과 수치는 미구현.
+- 검증: test_rules / test_throwing / test_prototype / test_game_flow(+render) / test_art_showcase(+render) / run_first_idea.py PASS. 네트워크 코드 미변경으로 run_multiplayer·전용 서버·백엔드 시험은 재실행 안 함. 사람의 직접 조작·다른 PC 실행은 미검증.
+- 저장소 최상위 `*.cmd`는 ASCII·CRLF다. 한글을 넣지 않는다.
+
+---
+
 # 최신 인수인계 — 게임 진행 청사진 (2026-10-16)
 
 - 사용자 요청: 첨부 흐름도의 단순한 내용만 큰 틀로 구현하고 상세 구현은 팀원이 진행한다.

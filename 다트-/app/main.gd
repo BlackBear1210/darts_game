@@ -54,7 +54,7 @@ func _ready() -> void:
 
 
 func _boot_developer() -> void:
-	session.host_room("PLAYER", NetworkSession.DEFAULT_PORT)
+	session.host_room("플레이어", NetworkSession.DEFAULT_PORT)
 	if not session.is_host():
 		return
 	session.enable_bots()
