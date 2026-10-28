@@ -9,6 +9,9 @@ const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
 const CharacterFactory = preload("res://art/characters/character_factory.gd")
 ## 봇의 차례 행동 계산(방장 전용). class_name 이 없는 도구라 preload 로 부른다.
 const BotDriver = preload("res://game/player/bot_driver.gd")
+## 카드 그림과 1인칭 손 부채는 카드 라운드 시연 것을 그대로 쓴다 — 카드 모양은 한 곳만 유지한다.
+const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
+const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
 ## 칠판 점수판에 쓰는 이름 최대 글자 수(칠판 폭 약 0.95m에 맞춘 값).
 const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
@@ -38,6 +41,9 @@ var _was_finished: bool = false
 var _last_seat_request: Dictionary = {}
 ## 지금 차례인 봇이 다음 발을 던질 수 있는 시각. 투척선에 선 뒤부터 센다.
 var _bot_ready_at: float = 0.0
+## 1인칭 왼손 카드 부채와 거기에 지금 올려둔 손패(같으면 다시 만들지 않는다).
+var _fan: HandFan
+var _shown_hand: Array[int] = []
 
 
 func _ready() -> void:
@@ -48,6 +54,7 @@ func _ready() -> void:
 	throw_input.board = table.board
 	$TrajectoryPreview.hide()
 	$Camera/Hand.hide()
+	_prepare_hand_fan()
 
 
 func configure(room: RoomState, local_peer_id: int, connection: NetworkSession = null) -> void:
@@ -60,6 +67,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	controller.solve_throw = solve_dart
 	controller.check_seated = is_seated
 	controller.force_seat = force_seat
+	controller.in_throw_zone = can_throw_from
 	for player in controller.state.players:
 		var view := PLAYER_SCENE.instantiate() as PlayerView
 		view.name = "Player_%d" % player.peer_id
@@ -72,6 +80,42 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_state()
+
+
+## 1인칭 왼손 카드 부채를 카메라에 붙인다. 화면이 없는 서버·검사에서는 만들지 않는다.
+func _prepare_hand_fan() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	await CardFaces.bake(self)
+	if not is_inside_tree():
+		return
+	_fan = HandFan.new()
+	_fan.name = "HandFan"
+	_fan.show_keys = true
+	_fan.card_scale = 0.75
+	_fan.radius = 0.2
+	_fan.spread_degrees = 64.0
+	_fan.cast_shadows = false
+	camera.add_child(_fan)
+	# 카드 라운드 시연의 1인칭 부채와 같은 자리(화면 왼쪽 아래).
+	_fan.transform = Transform3D(Vector3(0.995, -0.0998, 0), Vector3(0.0998, 0.995, 0), Vector3(0, 0, 1), Vector3(-0.22, -0.4, -0.42))
+	_sync_hand_fan()
+
+
+## 내 손패를 부채에 맞춘다. 스냅샷마다 부르지만 카드가 그대로면 아무것도 안 한다.
+func _sync_hand_fan() -> void:
+	if _fan == null:
+		return
+	var me := controller.state.find_player(controller.local_peer_id)
+	var hand: Array[int] = me.hand if me != null else []
+	if hand == _shown_hand:
+		return
+	_shown_hand = hand.duplicate()
+	for slot in range(CardHandRules.HAND_LIMIT):
+		if slot < hand.size():
+			_fan.set_card(slot, hand[slot])
+		else:
+			_fan.remove_card(slot)
 
 
 ## 1인칭 손을 자기 자리 색 소매로 바꾸고, 손에 든 다트 깃도 자리 색으로 칠한다.
@@ -245,7 +289,7 @@ func _accept_seat(sender: int) -> void:
 	_last_seat_request[sender] = now
 	if actor.seated:
 		actor.seated = false
-		actor.position += Vector3(0, 0.05, 0.7)
+		actor.position = TableView.clamp_floor(actor.position + Vector3(0, 0.05, 0.7))
 		actor.update_posture()
 	elif can_sit(sender):
 		_sit(actor)
@@ -278,6 +322,12 @@ func is_seated(id: int) -> bool:
 	return actor != null and actor.seated
 
 
+## 지금 서 있는 자리에서 던질 수 있는지. 라운지(테이블 쪽)에서는 못 던진다.
+func can_throw_from(id: int) -> bool:
+	var actor := actors.get(id) as PlayerView
+	return actor != null and TableView.in_throw_zone(actor.position)
+
+
 func _process(_delta: float) -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
 	if local == null:
@@ -286,7 +336,9 @@ func _process(_delta: float) -> void:
 	var own_turn: bool = state.active_player() != null and state.active_player().peer_id == controller.local_peer_id
 	camera.position = local.eye_position()
 	camera.rotation = Vector3(_pitch, _yaw, 0)
-	throw_input.enabled = own_turn and state.phase == MatchState.Phase.AIMING and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	# 다트 홀 밖(라운지)에서는 조준·충전 자체를 잠근다 — 방장도 같은 조건으로 거부한다.
+	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
+	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	$Camera/Hand.visible = throw_input.enabled
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
@@ -312,6 +364,7 @@ func _apply_state() -> void:
 			_controls.erase(id)
 		else:
 			(actors[id] as PlayerView).show_state(player)
+	_sync_hand_fan()
 	table.set_chalk_scores(_chalk_text())
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id

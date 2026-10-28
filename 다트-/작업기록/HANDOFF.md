@@ -8,6 +8,48 @@
 
 ---
 
+# 최신 인수인계 — F5 실제 경기에 카드 나눠 주기 (2026-10-28)
+
+- 상세: `작업기록/2026-10-28_F5_카드_나눠주기.md`. 결정: `docs/DECISIONS.md` 2026-10-28 "F5 실제 경기에서도 …".
+- 경기 단계가 **시작 → CARDS → AIMING**, 라운드가 넘어가면 **TABLE → CARDS → AIMING** 이 됐다(`MatchController._begin_cards`).
+- `MatchPlayer.hand` 가 옛 `CardDefinition` 배열에서 **카드 종류 번호 배열**(`Array[int]`, `game/card_round/rules/card_catalog.gd` 기준)로 바뀌었다. 스냅샷 키는 그대로 `hand` 다.
+- 카드 목록·그림·손 부채는 **카드 라운드 시연 것을 그대로 쓴다**(`card_catalog.gd`·`card_faces.gd`·`hand_fan.gd`). 카드 모양을 두 벌로 만들지 말 것.
+- 1인칭 부채는 `GameView._prepare_hand_fan()` 이 카메라에 붙인다. 화면 없는 서버·검사(`--headless`)에서는 만들지 않는다.
+- **아직 카드를 쓰지는 못한다.** 나눠 주기까지다.
+- 검증: 헤드리스 7종 PASS(`test_prototype` 에 "다트 전에 모두 7장" 검사 추가), 실제 화면으로 손 부채·HUD 확인.
+
+---
+
+# 최신 인수인계 — 카드 라운드에 카드 턴 (2026-10-28)
+
+- 상세: `작업기록/2026-10-28_카드턴_추가.md`. 결정: `docs/DECISIONS.md` 2026-10-28 "카드 라운드에 카드 턴을 둔다".
+- 라운드 순서가 **카드 단계 → 카드 턴 → 다트**가 됐다(`card_round.gd` `_run`). 카드 턴은 자리 순서대로 한 명씩 **한 장 또는 패스**(사람 Enter, 봇 자동).
+- **다트 중에는 카드를 못 쓴다**(`_dart_stage` 시작에서 `ctx.cards_open = false`).
+- 누가 낼 수 있는지는 `card_actions.can_lift()` 한 곳이다: 자기 카드 턴이면 아무 카드, 남의 턴이면 **대응 카드(무효 ×0)만**. 이 예외는 ×0 카드와 1.2초 심리전을 살리려고 넣었다 — 팀 확정 필요.
+- 봇 판단 기준이 `darts_phase` → `my_card_turn` 으로 바뀌었다(`bot_brain.decide`).
+- `flow/seat_mover.gd` 의 던지는 자리를 `TableView.THROW_LINE_Z + 1.2` 로 바꿨다(옛 맵 좌표 −1.9가 박혀 있었다). 1.2m 는 막는 사람이 앞에 설 자리이고 보호 레인에 들어가지 않는다.
+- 검증: `test_card_round.gd`(+`-- --play`) PASS — 새 검사 "카드 턴 단계가 돈다", "다트 중에는 카드를 낼 수 없다". 봇 4명 한 라운드 실행으로 단계 전환도 확인했다. 사람이 직접 낸 조작감은 미검증.
+
+---
+
+# 최신 인수인계 — 맵을 도면의 ㄱ자 방으로 (2026-10-28)
+
+- 상세 기록: `작업기록/2026-10-28_도면_맵_재작성.md`. 결정: `docs/DECISIONS.md` 2026-10-28 "방을 도면의 ㄱ자로".
+- 방이 **사각형 하나 → 사각형 둘의 합집합**이 됐다: `TableView.DART_HALL`(x −6~+6, z −7.5~0 · 과녁·투척선·럼주통)과 `TableView.LOUNGE`(x −8.4~+12.1, z 0~+7.5 · 바·플레이어 테이블·NPC 자리·당구대). 도면을 스툴 지름 0.6m 로 환산한 뒤, "좁다"는 피드백으로 **전체를 1.5배**로 넓혔다(가구 크기는 그대로).
+- **과녁 앞은 가운데 복도만 막는다**(x ±`LANE_HALF` = ±1.2, 앞·양옆 세 면). 레인 바깥 양옆은 뚫려 있어 과녁 옆까지 걸어가 구경·방해할 수 있다. 그래서 `in_throw_zone` 은 "다트 홀 안 **그리고** 투척선 뒤"다.
+- 없어진 상수: `ROOM_HALF`, `TABLE_RADIUS`(테이블이 네모 `TABLE_SIZE` 가 됨), `OBSTACLES`, `JUKEBOX_BOX`. 새 상수: `BARRELS`/`SMALL_BARRELS`, `NPC_TABLE_BOX`/`NPC_STOOLS`, `POOL_TABLE_BOX`, `FRONT_LIMIT_Z`, `BODY_MARGIN`.
+- **이동 한계는 이제 `TableView.clamp_floor()`** 다. `clampf` 두 줄로는 ㄱ자를 가둘 수 없다. 자리 생성 위치·일어설 때 밀려나는 거리도 이 함수를 통과시킨다(2번 자리가 뒷벽에 붙어 있다).
+- 과녁은 (0, 2.9, −7.2), 투척선 z = −4.05 → **투척 거리 3.15m**(원래 3.6m). 과녁 규격(2.5배·2.9m)은 팀 확정 대기라 그대로다.
+- `art/pub/game_room_builder.gd`(김도형 담당 폴더)를 같이 고쳤다(사용자 승인). 배치 상수를 바꾸면 `art/pub/pub_builder.gd` 재실행 필수.
+- **라운지에서는 못 던진다**: 방만 바꿔서는 부족했다(입구가 8m라 자리에서도 과녁이 보이고 맞았다). 그래서 투척을 다트 홀 안으로 제한했다 — `TableView.in_throw_zone()`, `MatchController.in_throw_zone`(GameView 가 주입하는 Callable, `check_seated` 와 같은 방식), 로컬 `throw_input.enabled` 잠금, HUD 안내.
+- 그래서 **시험 시나리오가 바뀌었다**: `run_first_idea.py` 는 차례마다 테이블을 피해 옆길로 투척선까지 실제로 걸어가 던지고 돌아온다. 시험 집합 시간이 1초(`fast_match`)라 **라운드의 마지막 투척자만 지각**하며, 그 사람만 자동 착석 + 슬로우를 받는지 검사한다.
+- 투척 거리가 2m로 짧아 **비행이 약 1초 → 0.3초**가 됐다. 고정 대기로 착탄을 기다리던 시험은 정산까지 끝나 버리므로 조건 대기로 바꿨고(`test_prototype`),
+  `run_first_idea.py` 의 "비행 중 중복 요청" 검사는 명령 왕복(~0.2초)이 비행보다 길어 재현이 안 되므로 `test_prototype`(같은 프로세스)에 맡겼다.
+- 검증: test_rules / test_throwing / test_game_look / test_prototype / test_game_flow / test_art_showcase / test_card_round PASS, run_multiplayer.py · run_first_idea.py 실제 다중 프로세스 10항목 PASS. 실제 화면으로 평면도·투척선 시야·라운지·자리 시야 확인.
+- 미검증: 사람이 직접 걸어 본 동선, 다른 PC·LAN, 전용 서버 재내보내기. `output/game_look/` 의 팀 공유 그림은 아직 옛 방이다(`tests/render_game_look.gd` 재실행 필요).
+
+---
+
 # 최신 인수인계 — 봇이 투척선까지 걸어가 던진다 (2026-10-27)
 
 - 상세 기록: `작업기록/2026-10-27_봇_투척선.md`. 결정: `docs/DECISIONS.md` 2026-10-27.

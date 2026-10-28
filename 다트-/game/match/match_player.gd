@@ -10,7 +10,9 @@ var is_bot: bool = false
 var layout := BoardLayout.new()
 var bonus: int = 0
 var multiplier: int = 1
-var hand: Array[CardDefinition] = []
+## 손패. 원소는 카드 종류 번호(game/card_round/rules/card_catalog.gd).
+## 2026-10-28부터 방장이 라운드 시작 전에 7장까지 채워 스냅샷으로 모두에게 보낸다(CardHandRules 규칙).
+var hand: Array[int] = []
 ## 이동 속도 배율. 테이블 집합에 늦으면 다음 라운드 동안 MatchConfig.slow_speed_scale 이 된다.
 var speed_scale: float = 1.0
 
@@ -25,13 +27,6 @@ func clear_effects() -> void:
 	multiplier = 1
 
 
-func find_card(uid: int) -> CardDefinition:
-	for card in hand:
-		if card.uid == uid:
-			return card
-	return null
-
-
 func effects_text() -> String:
 	var effects := PackedStringArray()
 	if multiplier != 1: effects.append("×%d" % multiplier)
@@ -41,10 +36,8 @@ func effects_text() -> String:
 
 
 func to_snapshot() -> Dictionary:
-	var cards: Array[Dictionary] = []
-	for card in hand: cards.append(card.to_snapshot())
 	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score, "bot": is_bot,
-		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": cards,
+		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": hand,
 		"speed_scale": speed_scale}
 
 
@@ -59,5 +52,5 @@ static func from_snapshot(data: Dictionary) -> MatchPlayer:
 	player.bonus = data.bonus
 	player.multiplier = data.multiplier
 	player.speed_scale = data.get("speed_scale", 1.0)
-	for card: Dictionary in data.hand: player.hand.append(CardDefinition.from_snapshot(card))
+	player.hand.assign(data.get("hand", []))
 	return player

@@ -7,31 +7,55 @@ extends Node3D
 ## 이 스크립트는 같은 좌표에 "보이지 않는 충돌 상자"만 만든다.
 ## 아래 상수를 바꾸면 art/pub/pub_builder.gd 를 다시 돌려야 방 모양이 따라온다.
 ## 안 돌리면 게임 시작 때 경고가 뜨고 tests/test_game_look.gd 가 실패한다(layout_signature 비교).
+##
+## [방 모양 — 2026-10-28 도면]
+## 위쪽 "다트 홀"(좁음)과 아래쪽 "라운지"(넓음)가 이어진 한 방이다. 두 사각형의 합집합이 바닥이다.
+## 도면 비율은 그대로 두고 "너무 좁다"는 사용자 요청으로 방 전체를 1.5배로 넓혔다(가구 크기는 그대로).
+## 도면의 좌우 단차 0.7m 차이는 z=0 한 줄로 정리했다.
+## Rect2 는 바닥 평면이고 (x 최소, z 최소, 가로, 세로) 순서다. 벽은 이 테두리 위에 놓여 안쪽 면이 0.15m 안으로 들어온다.
+const DART_HALL := Rect2(-6.0, -7.5, 12.0, 7.5)
+const LOUNGE := Rect2(-8.4, 0.0, 20.5, 7.5)
 
-# 투척선 앞 평지의 최대 점프 머리 높이(약 2.66m)보다 중심과 시점을 높인다.
-const BOARD_CENTER := Vector3(0, 2.9, -6.7)
+## 과녁은 다트 홀 끝 벽 가운데에 건다. 높이·크기는 바꾸지 않았다(팀 확정 대기).
+const BOARD_CENTER := Vector3(0, 2.9, -7.2)
 const BOARD_SCALE: float = 2.5
-const SEATS: Array[Vector3] = [Vector3(-2, 0, 3.5), Vector3(0, 0, 5.5), Vector3(2, 0, 3.5), Vector3(0, 0, 1.5)]
-const SEAT_DISTANCE: float = 1.0
-const RAISED_HEIGHT: float = 1.6
-## 방 크기: 벽 충돌 상자 중심까지의 반폭(x)·반길이(z), 벽 두께, 천장 아랫면 높이(m).
-const ROOM_HALF := Vector2(6, 7)
+## 투척선 위치(z)와 그 앞 보호 레인의 경계. 투척선에서 과녁 면까지 3.15m다.
+const NO_ENTRY_Z: float = -4.15
+const THROW_LINE_Z: float = -4.05
+## 보호 레인 반폭. 다트가 날아가는 이 가운데 복도만 막고, 양옆은 지나다니며 구경·방해할 수 있다.
+const LANE_HALF: float = 1.2
+## 벽 안쪽 면에서 몸 중심이 더 들어오지 못하는 거리(벽 두께 절반 + 몸 반지름).
+const BODY_MARGIN: float = 0.45
+
+## 방 크기: 벽 두께와 천장 아랫면 높이(m).
 const WALL_THICKNESS: float = 0.3
 const CEILING_HEIGHT: float = 4.25
-## 플레이어만 막는 투명 벽(투척 구역 경계)과 투척선 위치(z).
-const NO_ENTRY_Z: float = -3.2
-const THROW_LINE_Z: float = -3.1
-## 원형 카드 테이블(바닥 중심·반지름·높이).
-const TABLE_CENTER := Vector3(0, 0, 3.5)
-const TABLE_RADIUS: float = 1.05
+
+## 카드 테이블(도면 "플레이어 테이블")과 자리 4개. 자리 순서는 왼쪽·안쪽·오른쪽·바깥쪽이다.
+const TABLE_CENTER := Vector3(0, 0, 4.4)
+const TABLE_SIZE := Vector2(2.15, 1.55)
 const TABLE_HEIGHT: float = 0.85
-## 기획 2-7 "스툴 장애물 3개". 바닥 중심 위치와 충돌 원기둥 크기. 점프로 넘을 수 있는 높이다.
-const OBSTACLES: Array[Vector3] = [Vector3(-3.8, 0, -0.8), Vector3(1.6, 0, -1.4), Vector3(3.4, 0, 1.0)]
-const OBSTACLE_RADIUS: float = 0.3
-const OBSTACLE_HEIGHT: float = 0.6
-## 왼쪽 벽 바 카운터(바 스툴 포함)와 입구 벽 주크박스가 차지하는 상자.
-const BAR_BOX := AABB(Vector3(-5.85, 0, 0.8), Vector3(2.5, 1.2, 5.4))
-const JUKEBOX_BOX := AABB(Vector3(-2.0, 0, 6.1), Vector3(1.0, 1.65, 0.75))
+const SEATS: Array[Vector3] = [Vector3(-1.5, 0, 4.4), Vector3(0, 0, 5.65), Vector3(1.5, 0, 4.4), Vector3(0, 0, 3.2)]
+const SEAT_DISTANCE: float = 1.0
+const RAISED_HEIGHT: float = 1.6
+
+## 도면의 럼주통. 큰 통 4개는 다트 홀 네 귀퉁이(둘은 투척 구역 안), 작은 통은 그 곁이다.
+const BARRELS: Array[Vector3] = [Vector3(-5.1, 0, -6.8), Vector3(5.0, 0, -7.2),
+	Vector3(-5.1, 0, -3.1), Vector3(5.0, 0, -3.15)]
+const BARREL_RADIUS: float = 0.4
+const BARREL_HEIGHT: float = 0.9
+const SMALL_BARRELS: Array[Vector3] = [Vector3(5.4, 0, -6.15), Vector3(-5.55, 0, -2.4),
+	Vector3(4.5, 0, -2.5), Vector3(5.4, 0, -2.3)]
+const SMALL_BARREL_RADIUS: float = 0.2
+const SMALL_BARREL_HEIGHT: float = 0.5
+
+## 라운지 가구: 왼쪽 벽 바 카운터, NPC 자리 테이블과 스툴 2개, 오른쪽 당구대.
+const BAR_BOX := AABB(Vector3(-5.85, 0, 0.0), Vector3(0.95, 1.2, 7.4))
+const NPC_TABLE_BOX := AABB(Vector3(4.95, 0, 3.3), Vector3(1.65, 0.85, 1.5))
+const NPC_STOOLS: Array[Vector3] = [Vector3(5.8, 0, 2.6), Vector3(5.8, 0, 6.3)]
+const STOOL_RADIUS: float = 0.3
+const STOOL_HEIGHT: float = 0.6
+const POOL_TABLE_BOX := AABB(Vector3(10.4, 0, 2.8), Vector3(1.5, 0.8, 2.55))
 
 ## 정적 메시 묶기(그리기 호출 줄이기). class_name 이 없는 도구라 preload 로 부른다.
 const StaticBatch = preload("res://art/static_batch.gd")
@@ -42,9 +66,41 @@ var is_ready: bool = true
 
 ## 방 배치 상수를 한 줄 글자로 만든다. 생성기가 방(pub_game.tscn)에 저장하고, 실행 때 같은지 비교한다.
 static func layout_signature() -> String:
-	return var_to_str([BOARD_CENTER, BOARD_SCALE, SEATS, ROOM_HALF, WALL_THICKNESS, CEILING_HEIGHT,
-		NO_ENTRY_Z, THROW_LINE_Z, TABLE_CENTER, TABLE_RADIUS, TABLE_HEIGHT,
-		OBSTACLES, OBSTACLE_RADIUS, OBSTACLE_HEIGHT, BAR_BOX, JUKEBOX_BOX])
+	return var_to_str([BOARD_CENTER, BOARD_SCALE, SEATS, DART_HALL, LOUNGE, WALL_THICKNESS, CEILING_HEIGHT,
+		NO_ENTRY_Z, THROW_LINE_Z, LANE_HALF, TABLE_CENTER, TABLE_SIZE, TABLE_HEIGHT,
+		BARRELS, BARREL_RADIUS, SMALL_BARRELS, SMALL_BARREL_RADIUS,
+		BAR_BOX, NPC_TABLE_BOX, NPC_STOOLS, POOL_TABLE_BOX])
+
+
+## 사람이 설 수 있는 바닥 두 칸(벽 안쪽에서 몸 반지름만큼 뺀 것).
+## 가운데 보호 레인은 여기서 빼지 않는다 — 레인 벽(레이어 4)이 막고 양옆은 지나다닐 수 있다.
+## 다트 홀 칸은 라운지까지 이어지므로 z 끝을 라운지와 같이 둔다 — 둘의 합집합이 ㄱ자다.
+static func walkable_halls() -> Array[Rect2]:
+	var front: float = DART_HALL.position.y + BODY_MARGIN
+	var hall := Rect2(DART_HALL.position.x + BODY_MARGIN, front,
+		DART_HALL.size.x - BODY_MARGIN * 2, LOUNGE.end.y - BODY_MARGIN - front)
+	var lounge := LOUNGE.grow(-BODY_MARGIN)
+	return [hall, lounge]
+
+
+## 여기서만 던질 수 있다. 라운지(테이블·바)에서는 못 던진다.
+## 레인 양옆이 뚫려 있어 투척선을 지나 과녁 옆까지 갈 수 있으므로 "투척선 뒤"도 함께 본다.
+static func in_throw_zone(point: Vector3) -> bool:
+	return DART_HALL.has_point(Vector2(point.x, point.z)) and point.z >= THROW_LINE_Z
+
+
+## 몸이 방 밖으로 새지 않게 하는 마지막 안전망. 가까운 칸 안으로 당긴다(벽 충돌이 먼저 막는다).
+static func clamp_floor(point: Vector3) -> Vector3:
+	var best := point
+	var best_distance: float = INF
+	for hall: Rect2 in walkable_halls():
+		var inside := Vector3(clampf(point.x, hall.position.x, hall.end.x), point.y,
+			clampf(point.z, hall.position.y, hall.end.y))
+		var distance: float = point.distance_squared_to(inside)
+		if distance < best_distance:
+			best_distance = distance
+			best = inside
+	return best
 
 
 func _ready() -> void:
@@ -53,21 +109,37 @@ func _ready() -> void:
 	var half_wall := WALL_THICKNESS / 2.0
 	var wall_height := CEILING_HEIGHT + 0.25
 	var wall_y := CEILING_HEIGHT - wall_height / 2.0
-	# 바닥·벽 4면·천장(보이지 않는 충돌. 그림은 Pub).
-	_box(Vector3(0, -half_wall, 0), Vector3(ROOM_HALF.x * 2, WALL_THICKNESS, ROOM_HALF.y * 2))
-	_box(Vector3(-ROOM_HALF.x, wall_y, 0), Vector3(WALL_THICKNESS, wall_height, ROOM_HALF.y * 2))
-	_box(Vector3(ROOM_HALF.x, wall_y, 0), Vector3(WALL_THICKNESS, wall_height, ROOM_HALF.y * 2))
-	_box(Vector3(0, wall_y, -ROOM_HALF.y), Vector3(ROOM_HALF.x * 2, wall_height, WALL_THICKNESS))
-	_box(Vector3(0, wall_y, ROOM_HALF.y), Vector3(ROOM_HALF.x * 2, wall_height, WALL_THICKNESS))
-	_box(Vector3(0, CEILING_HEIGHT + half_wall, 0), Vector3(ROOM_HALF.x * 2, WALL_THICKNESS, ROOM_HALF.y * 2))
-	# 플레이어 마스크에만 포함되는 투명 벽: 다트 레이는 통과한다.
-	_box(Vector3(0, 2, NO_ENTRY_Z), Vector3(ROOM_HALF.x * 2, 6, 0.1), 4)
-	# 사람이 부딪히는 가구: 테이블·바·주크박스·스툴 장애물.
-	_cylinder(TABLE_CENTER, TABLE_RADIUS, TABLE_HEIGHT)
+	# 바닥·천장(보이지 않는 충돌. 그림은 Pub). 두 칸을 각각 덮는다.
+	for room: Rect2 in [DART_HALL, LOUNGE]:
+		_slab(room, -half_wall)
+		_slab(room, CEILING_HEIGHT + half_wall)
+	# 벽 8면: 도면 ㄱ자 둘레를 따라간다.
+	_wall_z(DART_HALL.position.y, DART_HALL.position.x, DART_HALL.end.x, wall_y, wall_height)
+	_wall_x(DART_HALL.position.x, DART_HALL.position.y, DART_HALL.end.y, wall_y, wall_height)
+	_wall_x(DART_HALL.end.x, DART_HALL.position.y, DART_HALL.end.y, wall_y, wall_height)
+	_wall_z(LOUNGE.position.y, LOUNGE.position.x, DART_HALL.position.x, wall_y, wall_height)
+	_wall_z(LOUNGE.position.y, DART_HALL.end.x, LOUNGE.end.x, wall_y, wall_height)
+	_wall_x(LOUNGE.position.x, LOUNGE.position.y, LOUNGE.end.y, wall_y, wall_height)
+	_wall_x(LOUNGE.end.x, LOUNGE.position.y, LOUNGE.end.y, wall_y, wall_height)
+	_wall_z(LOUNGE.end.y, LOUNGE.position.x, LOUNGE.end.x, wall_y, wall_height)
+	# 플레이어 마스크에만 포함되는 투명 벽(다트 레이는 통과한다): 가운데 보호 레인 복도.
+	# 앞(투척선)과 양옆만 막아 레인 안으로 못 들어오게 하고, 레인 바깥 양옆 통로는 열어 둔다.
+	var lane_depth: float = NO_ENTRY_Z - DART_HALL.position.y
+	var lane_middle: float = (NO_ENTRY_Z + DART_HALL.position.y) / 2.0
+	_box(Vector3(0, 2, NO_ENTRY_Z), Vector3(LANE_HALF * 2, 6, 0.1), 4)
+	for side: float in [-1.0, 1.0]:
+		_box(Vector3(side * LANE_HALF, 2, lane_middle), Vector3(0.1, 6, lane_depth), 4)
+	# 사람이 부딪히는 가구.
+	_box(TABLE_CENTER + Vector3.UP * TABLE_HEIGHT / 2.0, Vector3(TABLE_SIZE.x, TABLE_HEIGHT, TABLE_SIZE.y))
 	_box(BAR_BOX.get_center(), BAR_BOX.size)
-	_box(JUKEBOX_BOX.get_center(), JUKEBOX_BOX.size)
-	for obstacle in OBSTACLES:
-		_cylinder(obstacle, OBSTACLE_RADIUS, OBSTACLE_HEIGHT)
+	_box(NPC_TABLE_BOX.get_center(), NPC_TABLE_BOX.size)
+	_box(POOL_TABLE_BOX.get_center(), POOL_TABLE_BOX.size)
+	for barrel in BARRELS:
+		_cylinder(barrel, BARREL_RADIUS, BARREL_HEIGHT)
+	for barrel in SMALL_BARRELS:
+		_cylinder(barrel, SMALL_BARREL_RADIUS, SMALL_BARREL_HEIGHT)
+	for stool in NPC_STOOLS:
+		_cylinder(stool, STOOL_RADIUS, STOOL_HEIGHT)
 	_prepare_pub()
 
 
@@ -92,6 +164,24 @@ func _prepare_pub() -> void:
 	# 화면 없는 시험(--headless)에서는 그리지 않으므로 묶는 시간만 아낀다.
 	if DisplayServer.get_name() != "headless":
 		StaticBatch.optimize(pub)
+
+
+## 방 한 칸을 덮는 판(바닥·천장). 가장자리는 벽 두께만큼 넉넉히 덮는다.
+func _slab(room: Rect2, y: float) -> void:
+	_box(Vector3(room.get_center().x, y, room.get_center().y),
+		Vector3(room.size.x + WALL_THICKNESS, WALL_THICKNESS, room.size.y + WALL_THICKNESS))
+
+
+## x 에 세운 벽(z 구간). 벽 상자는 테두리 위에 놓이고 안쪽 면이 WALL_THICKNESS/2 안으로 들어온다.
+func _wall_x(x: float, z_from: float, z_to: float, wall_y: float, wall_height: float) -> void:
+	_box(Vector3(x, wall_y, (z_from + z_to) / 2.0),
+		Vector3(WALL_THICKNESS, wall_height, absf(z_to - z_from) + WALL_THICKNESS))
+
+
+## z 에 세운 벽(x 구간).
+func _wall_z(z: float, x_from: float, x_to: float, wall_y: float, wall_height: float) -> void:
+	_box(Vector3((x_from + x_to) / 2.0, wall_y, z),
+		Vector3(absf(x_to - x_from) + WALL_THICKNESS, wall_height, WALL_THICKNESS))
 
 
 func _box(at: Vector3, size: Vector3, layer: int = 1) -> void:

@@ -9,7 +9,7 @@ extends RefCounted
 const LINE_MARGIN: float = 0.45
 ## 이 거리(m) 안에 들어오면 다 온 것으로 보고 멈춘다.
 const ARRIVE_RADIUS: float = 0.2
-## 테이블을 돌아갈 때 중심에서 떨어져 지나갈 거리. 테이블 반지름에 몸 반지름과 여유를 더한 값이다.
+## 테이블을 감싸는 원에서 더 떨어져 지나갈 거리(몸 반지름 + 여유).
 const TABLE_MARGIN: float = 0.8
 ## 투척선에 선 뒤 한 발을 던지기까지 조준하는 시간(초). 시연값 — 팀 확정 필요.
 const AIM_SECONDS: float = 1.2
@@ -70,7 +70,7 @@ static func _steer(from: Vector3, target: Vector3) -> Vector3:
 	if forward <= 0 or forward >= distance:
 		return to_target
 	var side: Vector3 = to_center - to_target / distance * forward
-	var clearance: float = TableView.TABLE_RADIUS + TABLE_MARGIN
+	var clearance: float = TableView.TABLE_SIZE.length() / 2.0 + TABLE_MARGIN
 	if side.length() >= clearance:
 		return to_target
 	# 테이블 옆(지금 비껴 있는 쪽)으로 clearance 만큼 떨어진 지점을 본다.

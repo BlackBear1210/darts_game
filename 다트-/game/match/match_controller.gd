@@ -8,12 +8,17 @@ signal dart_thrown(data: Dictionary)
 
 @export var config: MatchConfig = preload("res://game/match/default_match.tres")
 
+## 카드 목록(이름·분류·효과)은 카드 라운드 시연의 것을 그대로 쓴다 — 카드 정의는 한 곳만 유지한다.
+const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
+
 var session: NetworkSession
 var state := MatchState.new()
 var local_peer_id: int = 0
 var solve_throw: Callable
 ## 테이블 집합 판정용 GameView 함수. check_seated(peer_id) -> bool, force_seat(peer_id). 없으면 집합을 바로 끝낸다.
 var check_seated: Callable
+## 투척 위치 판정용 GameView 함수. in_throw_zone(peer_id) -> bool. 없으면 위치를 보지 않는다(씬 없는 시험).
+var in_throw_zone: Callable
 var force_seat: Callable
 var developer_enabled: bool = false
 var notice: String = ""
@@ -24,6 +29,8 @@ var _remote_seconds: float = 0.0
 var _pending_hit: Dictionary = {}
 var _request_number: int = 0
 var _last_requests: Dictionary = {}
+## 카드를 뽑는 난수. 방장만 돌리고 결과는 스냅샷으로 나간다.
+var _random := RandomNumberGenerator.new()
 
 
 func configure(room: RoomState, peer_id: int, connection: NetworkSession = null) -> void:
@@ -46,7 +53,7 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 
 func start() -> void:
 	if local_peer_id == 1 and state.phase == MatchState.Phase.WAITING:
-		_begin_turn()
+		_begin_cards()
 
 
 func remaining_seconds() -> float:
@@ -90,6 +97,8 @@ func _accept_throw(sender: int, match_id: int, turn_id: int, request_id: int, ai
 		return
 	if charge < 0 or charge > 1 or request_id <= int(_last_requests.get(sender, 0)):
 		return
+	if in_throw_zone.is_valid() and not in_throw_zone.call(sender):
+		return
 	_last_requests[sender] = request_id
 	_launch(sender, aim, charge, request_id)
 
@@ -105,6 +114,8 @@ func bot_throw(aim: Vector2, charge: float) -> void:
 	if state.darts_left <= 0 or _now() >= _turn_end:
 		return
 	if not aim.is_finite() or not is_finite(charge) or charge < 0 or charge > 1:
+		return
+	if in_throw_zone.is_valid() and not in_throw_zone.call(active.peer_id):
 		return
 	_request_number += 1
 	_launch(active.peer_id, aim, charge, _request_number)
@@ -144,6 +155,23 @@ func _process(_delta: float) -> void:
 		MatchState.Phase.TABLE:
 			if _everyone_seated() or _now() >= _phase_end:
 				_close_table()
+		MatchState.Phase.CARDS:
+			if _now() >= _phase_end:
+				_begin_turn()
+
+
+## 라운드의 다트가 시작되기 전 카드 나눠 주기(2026-10-28 사용자 요청).
+## 쓴 만큼만 7장까지 채운다 — 한 장도 안 썼으면 한 장도 받지 않는다(CardHandRules 확정 규칙).
+## before 는 이 단계로 넘어오며 알릴 말(집합 지각 같은 것). 카드 알림이 그것을 덮지 않게 앞에 붙인다.
+func _begin_cards(before: String = "") -> void:
+	var dealt: int = 0
+	for player in state.players:
+		while player.hand.size() < CardHandRules.HAND_LIMIT:
+			player.hand.append(CardCatalog.random_type(_random))
+			dealt += 1
+	var text: String = "카드 나눠 주기 — 각자 %d장" % CardHandRules.HAND_LIMIT if dealt > 0 else "모두 %d장 그대로" % CardHandRules.HAND_LIMIT
+	notice = text if before.is_empty() else "%s · %s" % [before, text]
+	_set_phase(MatchState.Phase.CARDS, config.card_seconds)
 
 
 func _begin_turn() -> void:
@@ -218,9 +246,11 @@ func _close_table() -> void:
 			force_seat.call(player.peer_id)
 		player.speed_scale = config.slow_speed_scale
 		late.append(player.display_name)
+	var late_text: String = ""
 	if not late.is_empty():
-		notice = "지각: %s — 자동 착석, 이번 라운드 이동 속도 %d%%" % [", ".join(late), roundi(config.slow_speed_scale * 100)]
-	_begin_turn()
+		late_text = "지각: %s — 자동 착석, 이번 라운드 이동 속도 %d%%" % [", ".join(late), roundi(config.slow_speed_scale * 100)]
+	# 다음 라운드도 다트 전에 카드를 채운다(지각 알림은 그대로 앞에 남긴다).
+	_begin_cards(late_text)
 
 
 func sync_roster(room: RoomState) -> void:
@@ -299,13 +329,14 @@ func restart() -> void:
 	for player in state.players:
 		player.score = 0
 		player.speed_scale = 1.0
+		player.hand.clear()
 	state.round_number = 1
 	state.turn_index = 0
 	state.last_hit = {}
 	_pending_hit.clear()
 	_last_requests.clear()
 	notice = "재경기를 시작했습니다."
-	_begin_turn()
+	_begin_cards()
 
 
 func _set_phase(phase: MatchState.Phase, duration: float) -> void:

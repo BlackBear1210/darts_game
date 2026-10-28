@@ -202,14 +202,23 @@ func _check_scene(render: bool) -> void:
 	current_scene = scene
 	var limit_seconds: float = 900.0
 	var waited: float = 0.0
+	# 2026-10-28: 카드 턴 단계가 돌고, 다트 중에는 카드를 낼 수 없어야 한다.
+	var saw_card_turn: bool = false
+	var cards_open_in_darts: bool = false
 	# is_instance_valid: 장면이 도중에 다시 시작되면(설정 창 "새 게임") 옛 장면이 지워진다 → 오류로 멈추지 않고 실패로 알린다(2026-10-28).
 	while is_instance_valid(scene) and not bool(scene.get("game_over")) and waited < limit_seconds:
+		var ctx: Object = scene.get("ctx")
+		if ctx != null:
+			saw_card_turn = saw_card_turn or str(ctx.get("phase")) == "card_turn"
+			cards_open_in_darts = cards_open_in_darts or (str(ctx.get("phase")) == "darts" and bool(ctx.get("cards_open")))
 		await create_timer(0.5, true, false, true).timeout
 		waited += 0.5
 	_check(is_instance_valid(scene), "씬이 도중에 다시 시작되지 않았다")
 	if not is_instance_valid(scene):
 		return
 	_check(bool(scene.get("game_over")), "씬이 끝까지 진행된다(%.0f초)" % waited)
+	_check(saw_card_turn, "카드 턴 단계가 돈다(자리 순서대로 한 장씩)")
+	_check(not cards_open_in_darts, "다트 중에는 카드를 낼 수 없다")
 	var stats: Dictionary = scene.get("stats")
 	_check(int(stats.get("dealt", 0)) >= 28, "처음에 28장 이상 나눠 줌")
 	_check(int(stats.get("used", 0)) >= 1, "카드가 한 장 이상 쓰였다")

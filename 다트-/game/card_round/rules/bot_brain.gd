@@ -1,7 +1,8 @@
 extends RefCounted
 ## 시연용 봇의 카드 판단(상태 없음). 몇 초마다 한 번 "지금 무엇을 할지"만 고른다.
-## 심리전을 보여 주려는 값이다: 자기 차례엔 자기 강화 카드를, 남의 차례엔 방해 카드를 꺼내 들고,
-## 누가 카드를 꺼내 들면 무효(×0)로 막으려 하고, 가끔은 꺼냈다가 그냥 내려놓는다(허세). 확률은 전부 시연값.
+## 심리전을 보여 주려는 값이다: 자기 카드 턴에는 자기 강화나 방해 카드를 내고,
+## 남의 턴에 누가 카드를 꺼내 들면 무효(×0)로 막으려 하고, 가끔은 꺼냈다가 그냥 내려놓는다(허세). 확률은 전부 시연값.
+## 2026-10-28부터 카드는 카드 턴에만 낸다(다트 중에는 못 낸다).
 
 const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
@@ -12,10 +13,9 @@ const THINK_MAX: float = 2.2
 
 
 ## 결과: {} = 아무것도 안 함 · {"lift": slot} · {"use": target} · {"lower": true}
-static func decide(rules: Rules, seat: int, now: float, random: RandomNumberGenerator, darts_phase: bool) -> Dictionary:
+## my_card_turn = 지금 이 자리의 카드 턴인가. 아니면 대응 카드(무효 ×0)만 낸다.
+static func decide(rules: Rules, seat: int, now: float, random: RandomNumberGenerator, my_card_turn: bool) -> Dictionary:
 	var me: Rules.Seat = rules.seats[seat]
-	var my_turn: bool = darts_phase and rules.is_turn_of(seat)
-	var thrower: int = rules.active_seat() if darts_phase else -1
 	if me.pending != null:
 		if not rules.is_ready(seat, now):
 			return {}
@@ -23,12 +23,10 @@ static func decide(rules: Rules, seat: int, now: float, random: RandomNumberGene
 		var targets: Array[int] = rules.valid_targets(seat, type)
 		match int(CardCatalog.card(type).target):
 			CardCatalog.Target.SELF:
-				if my_turn and random.randf() < 0.8:
+				if my_card_turn and random.randf() < 0.85:
 					return {"use": seat}
 			CardCatalog.Target.OPPONENT:
-				if thrower >= 0 and thrower != seat and random.randf() < 0.7:
-					return {"use": thrower}
-				if not darts_phase and random.randf() < 0.25 and not targets.is_empty():
+				if my_card_turn and not targets.is_empty() and random.randf() < 0.8:
 					return {"use": targets[random.randi_range(0, targets.size() - 1)]}
 			CardCatalog.Target.COUNTER:
 				if not targets.is_empty() and random.randf() < 0.85:
@@ -40,12 +38,8 @@ static func decide(rules: Rules, seat: int, now: float, random: RandomNumberGene
 	var wanted: int = -1
 	if someone_lifted and random.randf() < 0.5:
 		wanted = CardCatalog.Target.COUNTER
-	elif my_turn and random.randf() < 0.55:
-		wanted = CardCatalog.Target.SELF
-	elif thrower >= 0 and thrower != seat and random.randf() < 0.3:
-		wanted = CardCatalog.Target.OPPONENT
-	elif random.randf() < 0.06:
-		wanted = CardCatalog.Target.OPPONENT
+	elif my_card_turn and random.randf() < 0.75:
+		wanted = CardCatalog.Target.SELF if random.randf() < 0.5 else CardCatalog.Target.OPPONENT
 	if wanted < 0:
 		return {}
 	var choices: Array[int] = []

@@ -43,6 +43,11 @@ func _run() -> void:
 	_game = _main.get_node("Game") as GameView
 	_hud = _main.get_node("GameHUD") as GameHUD
 	_game.set_process_unhandled_input(false)
+	# 2026-10-28: 다트 전에 카드 나눠 주기 단계가 있다. 모두 7장을 받고 다트가 시작되는지 본다.
+	assert(_game.controller.state.phase == MatchState.Phase.CARDS)
+	await _wait_until(func() -> bool: return _game.controller.state.phase == MatchState.Phase.AIMING, 12.0, "카드 단계 뒤 다트가 시작되지 않았습니다.")
+	for player: MatchPlayer in _game.controller.state.players:
+		assert(player.hand.size() == CardHandRules.HAND_LIMIT, "손패 %d장" % player.hand.size())
 	assert(_game.actors.size() == 4 and _game.controller.state.players.size() == 4)
 	assert(_game.controller.config.turn_seconds == 20)
 	var bots := _hud._bots()
@@ -105,21 +110,31 @@ func _run() -> void:
 	_key(KEY_F3)
 	assert(_game.controller.state.revision == revision)
 	await create_timer(1.1).timeout
-	# 눈높이, 카메라 소유권과 제한 구역을 실제 서버 물리로 확인한다.
-	await _drive(Vector2(0, -1), 3.0)
-	assert(local.position.z >= -2.86 and local.position.y >= 0)
+	# 눈높이, 카메라 소유권과 보호 레인을 실제 서버 물리로 확인한다.
+	# 2026-10-28: 레인은 가운데 복도만 막고 양옆은 뚫려 있다(구경·방해용).
+	# 자리(x = -1.5)는 레인 바깥이라 투척선을 지나 과녁 옆까지 걸어갈 수 있다.
+	await _drive(Vector2(0, -1), 4.0)
+	assert(local.position.z < TableView.NO_ENTRY_Z and local.position.y >= 0)
+	assert(local.position.z >= TableView.DART_HALL.position.y + TableView.BODY_MARGIN - 0.01)
+	# 거기서 레인 쪽으로 밀어도 레인 벽에 막혀 안으로 못 들어간다.
+	await _drive(Vector2(1, 0), 1.5)
+	assert(local.position.x < -TableView.LANE_HALF)
 	_game.request_seat()
 	assert(not local.seated)
-	await _drive(Vector2(1, 0), 4.0)
-	assert(local.position.x <= 5.56)
-	await _drive(Vector2(0, 1), 4.0)
-	assert(local.position.z <= 6.56)
+	# 라운지로 돌아 나와 방 경계를 확인한다.
+	await _drive(Vector2(0, 1), 4.5)
+	assert(local.position.z <= TableView.LOUNGE.end.y - TableView.BODY_MARGIN + 0.01)
+	await _drive(Vector2(1, 0), 5.0)
+	assert(local.position.x <= TableView.LOUNGE.end.x - TableView.BODY_MARGIN + 0.01)
 	# 봇은 자기 차례에만 자리를 뜬다. 사람 차례로 되돌리고 모두 앉을 때까지 기다린다.
 	_game.controller.state.turn_index = 0
 	_game.controller._begin_turn()
 	await _wait_until(func() -> bool: return bots.all(func(bot: PlayerView) -> bool: return bot.seated), 8.0, "봇이 모두 자리로 돌아오지 않았습니다.")
 	for bot in bots:
 		assert(bot.position == TableView.SEATS[bot.identity.seat])
+	# 아래 탄도 검사는 투척선 뒤에서 한다(라운지 구석에서는 단차 벽이 경로를 가린다).
+	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
+	await physics_frame
 	# 캐릭터가 경로에 있어도 레이 마스크 1은 캐릭터 레이어 2를 무시한다.
 	var result: Dictionary = _game.solve_dart(Vector2.ZERO, 1)
 	assert(result.points == 50 and result.target.is_equal_approx(TableView.BOARD_CENTER))
@@ -148,6 +163,17 @@ func _run() -> void:
 	_game.controller.state.turn_index = 0
 	_game.controller._begin_turn()
 	assert(not local.seated)
+	# 라운지(테이블 쪽)에서는 방장이 투척을 거부한다 — 다트 홀로 들어와야 던질 수 있다.
+	local.position = TableView.SEATS[local.identity.seat]
+	await physics_frame
+	assert(not _game.can_throw_from(1) and not _game.throw_input.enabled)
+	var lounge_revision: int = _game.controller.state.revision
+	_game.controller.submit_throw(Vector2.ZERO, 1)
+	assert(_game.controller.state.revision == lounge_revision and _game.controller.state.phase == MatchState.Phase.AIMING)
+	# 아래는 투척·마감 규칙 검사다. 자리 이동은 이미 위에서 실제 물리로 확인했으므로 여기서는 바로 세운다.
+	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
+	await physics_frame
+	assert(_game.can_throw_from(1))
 	_game.controller.submit_throw(Vector2.ZERO, 1)
 	assert(_game.controller.state.phase == MatchState.Phase.FLIGHT)
 	revision = _game.controller.state.revision
@@ -155,14 +181,15 @@ func _run() -> void:
 	_key(KEY_F4)
 	_game.controller.submit_throw(Vector2.ZERO, 1)
 	assert(_game.controller.state.revision == revision)
-	await create_timer(1.2).timeout
-	assert(_game.controller.state.find_player(1).score == 50)
+	# 투척선에서 과녁까지 2m라 비행이 0.3초쯤이다. 고정 대기 대신 착탄을 기다린다
+	# (정산이 끝나 다음 턴이 시작되면 darts_left 가 다시 3이 되어 검사할 수 없다).
+	await _wait_until(func() -> bool: return _game.controller.state.find_player(1).score == 50, 3.0, "첫 발이 착탄하지 않았습니다.")
 	assert(_game.controller.state.phase == MatchState.Phase.AIMING and _game.controller.state.darts_left == 2)
 	var three_dart_turn: int = _game.controller.state.turn_id
 	for dart_index: int in range(2):
+		var want: int = (dart_index + 2) * 50
 		_game.controller.submit_throw(Vector2.ZERO, 1)
-		await create_timer(1.2).timeout
-		assert(_game.controller.state.find_player(1).score == (dart_index + 2) * 50)
+		await _wait_until(func() -> bool: return _game.controller.state.find_player(1).score == want, 3.0, "다음 발이 착탄하지 않았습니다.")
 		if dart_index == 0:
 			assert(_game.controller.state.turn_id == three_dart_turn and _game.controller.state.darts_left == 1)
 	assert(_game.controller.state.darts_left == 0)
@@ -188,6 +215,8 @@ func _run() -> void:
 	# 라운드 사이 테이블 집합: 제한시간 안에 앉지 않으면 자동 착석 + 다음 라운드 슬로우. 봇은 늘 앉아 있다.
 	var controller := _game.controller
 	controller.config.table_seconds = 0.3
+	# 집합 뒤에도 카드 나눠 주기를 거치므로 그 시간도 짧게 둔다.
+	controller.config.card_seconds = 0.1
 	controller.state.turn_index = 3
 	controller.state.round_number = 1
 	controller._begin_turn()
@@ -195,7 +224,7 @@ func _run() -> void:
 	controller._advance_turn()
 	assert(controller.state.phase == MatchState.Phase.TABLE and controller.state.round_number == 2)
 	assert(controller.state.turn_index == 0 and not local.seated)
-	await create_timer(0.5).timeout
+	await create_timer(0.7).timeout
 	assert(controller.state.phase == MatchState.Phase.AIMING and local.seated)
 	assert(local.position == TableView.SEATS[local.identity.seat])
 	assert(controller.state.find_player(1).speed_scale == controller.config.slow_speed_scale)
@@ -217,6 +246,10 @@ func _run() -> void:
 	controller._timeout_turn()
 	controller._advance_turn()
 	assert(controller.state.find_player(1).speed_scale == 1.0)
+	controller._process(0)
+	# 집합이 닫히면 카드 나눠 주기 → 그 시간이 지나야 다트다.
+	assert(controller.state.phase == MatchState.Phase.CARDS)
+	await create_timer(0.15).timeout
 	controller._process(0)
 	assert(controller.state.phase == MatchState.Phase.AIMING and controller.state.round_number == 3)
 	# 마지막 차례 이탈은 다음 라운드 첫 차례가 되고, 종료 후 이탈은 경기를 재개하지 않는다.
@@ -247,7 +280,7 @@ func _run() -> void:
 	_main.get_node("NetworkSession").leave_room()
 	await process_frame
 	assert(_main.get_node("Lobby").visible and _main.get_node_or_null("Game") == null)
-	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, bot walks to the oche and throws three darts then returns to its seat, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
+	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, protected lane with open side aisles, seven cards dealt before the darts, bot walks to the oche and throws three darts then returns to its seat, lounge throw rejected, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
 	_main.queue_free()
 	await process_frame
 	quit()

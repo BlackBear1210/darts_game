@@ -92,6 +92,7 @@ git grep -n "class_name CardHandRules"
 | `game/throwing/`, `game/dart/` | `tests/test_throwing.gd` |
 | `game/cards/`, `game/flow_preview/` | `tests/test_game_flow.gd` |
 | `art/` | `tests/test_art_showcase.gd` (+ `-- --render`로 그림 확인) |
+| `game/table/`, `art/pub/` | `tests/test_game_look.gd` — 배치 상수를 바꿨으면 `art/pub/pub_builder.gd` 를 먼저 실행한다 |
 | `network/`, `lobby/`, `app/` | `tests/run_multiplayer.py` |
 
 ## 5. 기록 남기기

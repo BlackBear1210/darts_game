@@ -49,7 +49,8 @@ func _ready() -> void:
 
 func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false) -> void:
 	identity = player
-	position = TableView.SEATS[player.seat] + Vector3(0, 0.05, 0.8)
+	# 자리 뒤에 선 채로 시작한다. 뒷벽에 붙은 자리도 있어 방 안으로 당긴다.
+	position = TableView.clamp_floor(TableView.SEATS[player.seat] + Vector3(0, 0.05, 0.8))
 	color = COLORS[player.seat]
 	_dress(player.seat)
 	# 캐릭터마다 고유 렌더 레이어. 각 카메라에서 자기 몸만 제외한다(모델의 모든 조각 + 이름표).
@@ -130,9 +131,8 @@ func simulate(delta: float, controls: Dictionary) -> void:
 		else:
 			velocity.y = 0
 		move_and_slide()
-		# 추가 좌표 경계는 네트워크 입력과 접촉 오차에도 경기장을 벗어나지 않게 한다.
-		position.x = clampf(position.x, -5.55, 5.55)
-		position.z = clampf(position.z, -2.85, 6.55)
+		# 추가 좌표 경계는 네트워크 입력과 접촉 오차에도 경기장을 벗어나지 않게 한다(ㄱ자 방 두 칸).
+		position = TableView.clamp_floor(position)
 		position.y = maxf(position.y, 0)
 	update_posture()
 

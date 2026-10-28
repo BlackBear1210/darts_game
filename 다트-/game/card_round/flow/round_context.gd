@@ -23,6 +23,13 @@ const WHEEL_POSITION := Vector3(0, 1.25, -4.6)
 var phase: String = "intro"
 ## 카드를 다 나눠 주고 공개한 뒤 = 꺼내 들기·쓰기가 가능하다.
 var cards_open: bool = false
+## 지금 카드 턴인 자리(-1 = 카드 턴 아님). 카드는 자기 카드 턴에만 꺼내 들 수 있다.
+## 예외: 남이 꺼내 든 카드를 막는 대응 카드(무효 ×0)는 그 대기 시간 안에 누구나 낼 수 있다.
+var card_turn_seat: int = -1
+## 이번 카드 턴에 카드를 쓴 사람(-1 = 아직). 턴을 끝낼 때 본다.
+var card_used_by: int = -1
+## 사람이 Enter 로 카드 턴을 넘겼다.
+var passed: bool = false
 var game_over: bool = false
 ## true 면 내 자리도 봇처럼 움직인다(자동 검사·화면 캡처용).
 var autoplay: bool = false

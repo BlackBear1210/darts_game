@@ -115,11 +115,15 @@ func prompt_text() -> String:
 		return "왼클릭을 길게 눌렀다 떼서 던지기 · 오른클릭 취소 · 남은 %d발" % (_ctx.rules.darts_left if _ctx.phase == "darts" else _darts.punish_left)
 	if _ctx.rules.seats[Context.LOCAL_SEAT].pending != null:
 		return "F 쓰기 · Tab 대상 바꾸기 · 같은 숫자 = 내려놓기"
+	if _ctx.phase == "darts":
+		return "카드는 카드 턴에만 쓴다 · 걸어 나가 몸으로 막기(맞으면 방해 성공) · E 앉기/일어나기 · V 말하기"
 	if not _ctx.cards_open:
 		return "카드를 나눠 주는 중… · C 전체 보기 · Esc 설정 · Alt 마우스 꺼내기(라운드 표시에 올려 보기)"
-	if _ctx.phase == "darts":
-		return "1~7 카드 꺼내 들기 · 걸어 나가 몸으로 막기(맞으면 방해 성공) · E 앉기/일어나기 · V 말하기"
-	return "1~7 카드 꺼내 들기 · 8·9 보상 카드 · C 전체 보기 · Esc 설정"
+	if _ctx.card_turn_seat == Context.LOCAL_SEAT:
+		return "내 카드 턴 · 1~7 꺼내 들기 → F 쓰기 · 8·9 보상 카드 · Enter 패스"
+	if _ctx.card_turn_seat >= 0:
+		return "%s 카드 턴 · 무효(×0)로 대응할 수 있다 · C 전체 보기" % _ctx.name_of(_ctx.card_turn_seat)
+	return "카드 확인 · C 전체 보기 · Esc 설정"
 
 
 ## 충전 라운드 점수 발표용 순위 줄(꼴찌부터 보여 준다 — HUD 가 순서를 뒤집는다).

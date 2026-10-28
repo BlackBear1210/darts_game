@@ -42,7 +42,8 @@ func _run() -> void:
 	_hud = _main.get_node("GameHUD") as GameHUD
 	# 실제 Input 이벤트가 WASD/점프/숙이기 폴링으로 이어지는지 확인한다.
 	var local := _game.actors[1] as PlayerView
-	# 시작 위치와 서 있는 상태를 유지한 채 E 입력 없이 실제 누름·해제로 발사한다.
+	# 2026-10-28: 라운지에서는 못 던진다. 투척선 뒤로 옮긴 뒤 E 입력 없이 실제 누름·해제로 발사한다.
+	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	await process_frame
 	await process_frame

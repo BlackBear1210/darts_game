@@ -39,6 +39,52 @@ def start(engine, folder, count, afk=False):
         raise
 
 
+# 라운지에서 다트 홀로 나가는 옆길(테이블과 바 / NPC 테이블 사이). TableView 배치에 맞춘 값이다.
+LANE_LEFT = -3.0
+LANE_RIGHT = 3.0
+# 투척선 뒤에 서는 자리(TableView.THROW_LINE_Z = -4.05 보다 뒤).
+OCHE = (0.0, -3.5)
+
+
+def walk(peers, peer, identity, target, tolerance=0.5, steps=60):
+    """실제 이동 명령으로 목표까지 걸어간다(순간이동 금지). 도착하면 True."""
+    for _ in range(steps):
+        p = pose(states(peers)[0], identity)["position"]
+        dx, dz = target[0] - p[0], target[1] - p[2]
+        if math.hypot(dx, dz) < tolerance:
+            peer.command("stop")
+            done(peers)
+            return True
+        length = max(1.0, math.hypot(dx, dz))
+        peer.command("move", [dx / length, dz / length, 0, False, False])
+        time.sleep(0.1)
+    peer.command("stop")
+    done(peers)
+    return False
+
+
+def walk_to_oche(peers, peer, identity, seat_xz):
+    """2026-10-28 규칙: 라운지에서는 못 던진다. 테이블을 피해 옆길로 돌아 투척선 뒤까지 간다."""
+    p = pose(states(peers)[0], identity)["position"]
+    if p[2] > -0.2:
+        lane = LANE_LEFT if seat_xz[0] <= 0 else LANE_RIGHT
+        assert walk(peers, peer, identity, (lane, p[2])), ("옆길로 못 나왔다", identity)
+        assert walk(peers, peer, identity, (lane, 0.6)), ("단차 앞까지 못 갔다", identity)
+    assert walk(peers, peer, identity, OCHE, tolerance=0.6), ("투척선까지 못 갔다", identity)
+
+
+def walk_to_seat(peers, peer, identity, seat_xz):
+    """다트 홀에서 자기 자리로 돌아가 앉는다(테이블 집합에 지각하지 않게)."""
+    p = pose(states(peers)[0], identity)["position"]
+    lane = LANE_LEFT if seat_xz[0] <= 0 else LANE_RIGHT
+    if p[2] < 0.2:
+        assert walk(peers, peer, identity, (lane, 0.6)), ("라운지로 못 돌아왔다", identity)
+        assert walk(peers, peer, identity, (lane, seat_xz[1])), ("자리 옆까지 못 갔다", identity)
+    assert walk(peers, peer, identity, seat_xz, tolerance=0.45), ("자리까지 못 갔다", identity)
+    peer.command("seat")
+    done(peers)
+
+
 def rejected(peers, peer, value):
     before = states(peers)[0]["match"]
     peer.command("raw_throw", value)
@@ -75,7 +121,8 @@ def run_match(engine, folder, count):
         for s in ss[1:]:
             assert math.dist(pose(s, ids[1])["position"], client_pos) < 0.12
         # 이동한 사람이 자기 자리로 직접 돌아온다. 위치를 순간이동시키지 않는다.
-        seats = [(-2, 3.5), (0, 5.5), (2, 3.5), (0, 1.5)]
+        # TableView.SEATS 와 같아야 한다(2026-10-28 도면 방, 1.5배 확대).
+        seats = [(-1.5, 4.4), (0, 5.65), (1.5, 4.4), (0, 3.2)]
         seat = next(p["seat"] for p in ss[0]["room"]["players"] if p["peer_id"] == ids[1])
         target_x, target_z = seats[seat]
         for _ in range(40):
@@ -97,29 +144,48 @@ def run_match(engine, folder, count):
                                          for p in s["poses"]) for s in ss), "standing and seated players")
         rejected(peers, peers[1], [first["match_id"], first["turn_id"], 500, 0, 0, 1])
         rejected(peers, peers[1], [first["match_id"] - 1, first["turn_id"], 501, 0, 0, 1])
+        # 자기 차례여도 라운지(테이블 쪽)에서는 방장이 투척을 거부한다.
+        ss = states(peers)
+        active = ss[0]["match"]["players"][ss[0]["match"]["turn_index"]]["peer_id"]
+        before = ss[0]["match"]
+        peers[ids.index(active)].command("throw", [0, 0, 1])
+        done(peers)
+        time.sleep(0.2)
+        assert states(peers)[0]["match"] == before, "라운지에서 던진 다트가 받아들여졌다"
         # 5라운드 턴마다 3발, 모든 PC의 점수와 최종 적중 좌표가 같아야 한다.
+        # 투척선까지 걸어 나가야 하므로 집합(fast_match 1초)에 맞춰 돌아오려면 다음 사람 차례를 빌려야 한다.
+        # 턴 20초 안에 "앞사람 복귀 + 내 이동 + 3발"이 다 들어가도록 라운드마다 첫 투척자 한 명만 돌아가 앉는다.
+        # 그 사람은 1.0, 나머지는 지각이라 자동 착석 + 슬로우 0.5 여야 한다.
+        punctual = None
         for turn in range(count * 5):
             ss = wait_for(peers, lambda ss: all(s.get("match", {}).get("phase") == 2 and s["match"]["turn_id"] == turn + 1 for s in ss), "next turn")
-            if turn == count:
-                # 1라운드 뒤 테이블 집합: 서 있던 사람만 자동 착석 + 슬로우, 앉아 있던 사람은 그대로.
+            if turn > 0 and turn % count == 0:
                 # 자세는 20Hz 이동 채널로 오므로 경기 스냅샷(AIMING)보다 조금 늦게 도착할 수 있다.
                 ss = wait_for(peers, lambda ss: all(all(p["seated"] for p in s["poses"]) for s in ss), "late players auto-seated")
-                assert all(all(p["speed_scale"] == (1.0 if p["peer_id"] in seated_ids else 0.5) for p in s["match"]["players"]) for s in ss)
-            if turn == count * 2:
-                # 다음 집합에서 슬로우가 풀리고, 전원 앉아 있으면 새 지각자가 없다.
-                assert all(all(p["speed_scale"] == 1.0 for p in s["match"]["players"]) for s in ss)
+                assert all(all(p["speed_scale"] == (1.0 if p["peer_id"] == punctual else 0.5) for p in s["match"]["players"]) for s in ss), ("집합 슬로우", punctual)
             active = ss[0]["match"]["players"][ss[0]["match"]["turn_index"]]["peer_id"]
             peer = peers[ids.index(active)]
-            for dart_index in range(3):
-                # 동일 턴에서 두 번 요청해도 1발만 확정한다.
-                peer.command("throw", [0, 0, 1])
+            seat_xz = seats[next(p["seat"] for p in ss[0]["room"]["players"] if p["peer_id"] == active)]
+            # 앉아 있으면 일어나서 투척선까지 걸어 나간다.
+            if pose(states(peers)[0], active)["seated"]:
+                peer.command("seat")
                 done(peers)
+            walk_to_oche(peers, peer, active, seat_xz)
+            for dart_index in range(3):
+                # 투척선에서 과녁까지 2m라 비행이 0.3초다. 명령 파일 왕복(~0.2초)보다 짧아
+                # "비행 중 중복 요청"을 여기서 재현할 수 없다(두 번째가 비행이 끝난 뒤 도착해 정상 투척이 된다).
+                # 비행 중 잠금은 tests/test_prototype.gd 가 같은 프로세스에서 확정적으로 검사한다.
+                # 여기서는 한 발이 정확히 50점씩만 더해지는지(누적 합)로 추가 투척이 없음을 본다.
                 peer.command("throw", [0, 0, 1])
                 done(peers)
                 ss = wait_for(peers, lambda ss: all(s["match"].get("last_hit", {}).get("peer_id") == active and s["match"]["last_hit"].get("points") == 50 and sum(p["score"] for p in s["match"]["players"]) == (turn * 3 + dart_index + 1) * 50 for s in ss), "single score synchronized")
                 assert all(s["match"]["last_hit"] == ss[0]["match"]["last_hit"] for s in ss)
                 if dart_index < 2:
                     assert all(s["match"]["turn_id"] == turn + 1 and s["match"]["darts_left"] == 2 - dart_index for s in ss)
+            # 라운드의 첫 투척자만 다음 사람 차례 동안 자리로 돌아가 앉는다(지각하지 않는 한 명).
+            if turn % count == 0:
+                walk_to_seat(peers, peer, active, seat_xz)
+                punctual = active
         ss = wait_for(peers, lambda ss: all(s["match"]["phase"] == 6 for s in ss), "finished")
         assert all([p["score"] for p in s["match"]["players"]] == [750] * count for s in ss)
         peers[1].command("restart")
@@ -127,7 +193,7 @@ def run_match(engine, folder, count):
         assert states(peers)[0]["match"]["phase"] == 6
         peers[0].command("restart")
         wait_for(peers, lambda ss: all(s["match"]["phase"] == 2 and s["match"]["round"] == 1 and not s["match"]["last_hit"] and all(p["score"] == 0 for p in s["match"]["players"]) for s in ss), "rematch reset")
-        print(f"PASS: {count} real peers, standing/seated throws, movement/jump/crouch, ownership, invalid requests, table gathering auto-seat/slow, 5 rounds, identical impact/score, duplicate throw, rematch", flush=True)
+        print(f"PASS: {count} real peers, walk from the table to the oche each turn, lounge throw rejected, movement/jump/crouch, ownership, invalid requests, table gathering auto-seat/slow, 5 rounds, identical impact/score, one dart per request, rematch", flush=True)
     finally:
         for p in peers:
             p.stop()

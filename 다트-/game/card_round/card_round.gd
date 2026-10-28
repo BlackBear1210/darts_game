@@ -11,7 +11,7 @@ extends Node3D
 ##                                turn_effects · disruption · round_camera · local_input · hud_presenter · round_capture · player_builder
 ##
 ## 흐름: 흐트러진 덱 → 자동 섞기(정석 리플·마술사·딜러) → 가지런한 덱 → 한 사람에 한 장씩 7장까지 → 앞면 공개 →
-##       왼손 7장 = 테이블 7칸 → 1~7 꺼내 들기(대기) → 다른 사람이 보고 대응(무효 ×0·방해) → 다트 라운드 →
+##       왼손 7장 = 테이블 7칸 → 카드 턴(자리 순서대로 한 장 또는 패스, 남은 대응 ×0만 끼어듦) → 다트 라운드 →
 ##       충전 라운드(자동 착석·점수 발표·쓴 만큼만 7장까지) → … → 끝: 꼴찌는 돌아가는 원판, 나머지는 던지기 → 골드.
 ## 내 자리 = 2번(바가지, 테이블 뒤쪽 · 과녁이 정면). autoplay 면 내 자리도 봇이 움직인다(자동 검사·화면 캡처용).
 ##
@@ -47,6 +47,9 @@ const SynthAudio = preload("res://art/showcase/synth_audio.gd")
 const DEAL_GAP: float = 0.14
 const CHECK_SECONDS: float = 4.0
 const TURN_SECONDS: float = 30.0
+## 카드 턴 제한 시간(초). 사람은 생각할 시간을 주고, 봇은 시연이 늘어지지 않게 짧게 본다.
+const CARD_TURN_SECONDS: float = 20.0
+const BOT_CARD_SECONDS: float = 3.5
 ## 봇이 막는 사람이 있어도 비키지 않고 그냥 던질 확률.
 const THROW_THROUGH_CHANCE: float = 0.6
 ## 끝 라운드가 없는 모드(목표 점수·500→0)도 시연은 이 라운드에서 점수 순으로 끝낸다.
@@ -169,6 +172,7 @@ func _setup_parts() -> void:
 	capture.setup(ctx, view, capture_folder)
 	mover.local_seated.connect(view.face_table)
 	cards.turn_effect_added.connect(effects.apply)
+	cards.card_used.connect(func(seat: int) -> void: ctx.card_used_by = seat)
 	cards.card_marked.connect(capture.on_card_marked)
 	cards.nullified.connect(capture.on_nullified)
 	darts.score_changed.connect(presenter.refresh_labels)
@@ -181,7 +185,7 @@ func _setup_parts() -> void:
 
 # --- 전체 진행 ---
 
-## 처음부터 끝까지: 준비 → (카드 단계 → 다트 단계 → 라운드 정리) 반복 → 엔딩.
+## 처음부터 끝까지: 준비 → (카드 단계 → 카드 턴 → 다트 단계 → 라운드 정리) 반복 → 엔딩.
 func _run() -> void:
 	# 카드 그림을 먼저 굽는다(카드를 하나라도 만들기 전에 — CardView 가 뒷면 그림을 처음 만들 때 캐시한다).
 	await CardFaces.bake(self)
@@ -201,6 +205,7 @@ func _run() -> void:
 	await ctx.hud.banner("DARTY 카드 라운드 시연", "흐트러진 덱 → 섞기 → 한 장씩 7장 → 다트. 수치는 전부 시연값이다.", 2.0)
 	while true:
 		await _card_stage()
+		await _card_turn_stage()
 		await _dart_stage()
 		_finish_round()
 		ctx.stats.rounds = ctx.rules.round_number
@@ -290,11 +295,49 @@ func _deal() -> void:
 	await ctx.wait(0.5)
 
 
-## 다트 단계: 자리 순서대로 한 사람 3발. 카드는 이 동안에도 언제든 꺼내 들고 쓸 수 있다.
+## 카드 턴: 자리 순서대로 한 명씩 카드 한 장을 내거나 패스한다(2026-10-28 사용자 결정).
+## 대응 카드(무효 ×0)만 예외로, 누가 꺼내 들었을 때 그 대기 시간 안에 다른 사람도 낼 수 있다.
+func _card_turn_stage() -> void:
+	ctx.phase = "card_turn"
+	ctx.hud.set_round(ctx.rules.round_number, RoundTracker.Stage.CARDS, _total_rounds())
+	await ctx.hud.banner("%d라운드 · 카드 턴" % ctx.rules.round_number,
+		"자리 순서대로 한 장씩 내거나 패스 · 무효(×0)는 누구나 대응", 1.3)
+	for seat in ctx.rules.order:
+		if ctx.rules.finished:
+			break
+		await _card_turn(seat)
+	ctx.card_turn_seat = -1
+
+
+## 한 사람의 카드 턴: 한 장을 쓰거나 패스하면 끝난다. 제한 시간을 넘겨도 패스로 본다.
+func _card_turn(seat: int) -> void:
+	var bot: bool = ctx.bot_driven(seat)
+	ctx.card_turn_seat = seat
+	ctx.card_used_by = -1
+	ctx.passed = false
+	ctx.hud.toast("%s 카드 턴" % ctx.name_of(seat), PlayerLook.COLORS[seat].lightened(0.35))
+	if bot:
+		ctx.hud.set_turn("카드 턴 · %s" % ctx.name_of(seat))
+	else:
+		ctx.hud.set_turn("내 카드 턴 · 1~7 꺼내 들기 → F 쓰기 · Enter 패스")
+		ctx.hud.banner("내 카드 턴!", "한 장만 쓸 수 있다 · 안 쓸 거면 Enter", 1.2)
+	await ctx.wait_until(func() -> bool:
+		return ctx.card_used_by == seat or ctx.passed or ctx.rules.finished,
+		BOT_CARD_SECONDS if bot else CARD_TURN_SECONDS)
+	if ctx.card_used_by != seat and not ctx.rules.finished:
+		ctx.hud.toast("%s 패스" % ctx.name_of(seat))
+	# 꺼내 든 채로 턴이 끝나면 내려놓는다(다음 사람 턴으로 넘어간다).
+	cards.lower(seat)
+	ctx.card_turn_seat = -1
+	await ctx.wait(0.4)
+
+
+## 다트 단계: 자리 순서대로 한 사람 3발. 2026-10-28부터 이 동안에는 카드를 쓸 수 없다(카드 턴에만).
 func _dart_stage() -> void:
 	ctx.phase = "darts"
+	ctx.cards_open = false
 	ctx.hud.set_round(ctx.rules.round_number, RoundTracker.Stage.DARTS, _total_rounds())
-	await ctx.hud.banner("%d라운드 · 다트!" % ctx.rules.round_number, "한 사람 3발 · 카드는 언제든 꺼내 들고 쓸 수 있다", 1.3)
+	await ctx.hud.banner("%d라운드 · 다트!" % ctx.rules.round_number, "한 사람 3발 · 카드는 카드 턴에만 쓴다", 1.3)
 	for position in range(ctx.rules.order.size()):
 		if ctx.rules.finished:
 			break

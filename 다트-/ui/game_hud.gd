@@ -1,6 +1,8 @@
 class_name GameHUD
 extends CanvasLayer
 ## 경기 상태를 표시하고 사용자 요청을 소유 노드에 전달한다.
+## 카드 목록(이름·분류)은 카드 라운드 시연의 것을 그대로 쓴다 — 카드 정의는 한 곳만 유지한다.
+const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
 
 signal leave_requested
 signal lobby_requested
@@ -155,7 +157,9 @@ func _process(_delta: float) -> void:
 	_score.text = "\n".join(lines)
 	var active_name: String = state.active_player().display_name if state.active_player() != null else "대기"
 	var gathering: bool = state.phase == MatchState.Phase.TABLE
-	if gathering:
+	if state.phase == MatchState.Phase.CARDS:
+		_turn.text = "라운드 %d / %d · 카드 나눠 주기\n남은 시간 %.1f초 · 다트 전에 각자 %d장" % [state.round_number, controller.config.rounds, controller.remaining_seconds(), CardHandRules.HAND_LIMIT]
+	elif gathering:
 		_turn.text = "라운드 %d 준비 · 테이블 집합!\n남은 시간 %.1f초 · 자기 색 자리에서 E로 앉기" % [state.round_number, controller.remaining_seconds()]
 	else:
 		_turn.text = "라운드 %d / %d · %s\n남은 시간 %.1f초 · 다트 %d / %d발" % [state.round_number, controller.config.rounds, active_name, controller.remaining_seconds(), state.darts_left, controller.config.darts_per_turn]
@@ -163,8 +167,15 @@ func _process(_delta: float) -> void:
 	var me := state.find_player(id)
 	if me != null and me.speed_scale < 1.0:
 		_turn.text += "\n슬로우 페널티: 이번 라운드 이동 속도 %d%%" % roundi(me.speed_scale * 100)
+	# 내 손패: 종류별 장수(카드 그림은 왼쪽 아래 1인칭 부채에 있다).
+	if me != null and not me.hand.is_empty():
+		var categories: Array[int] = []
+		for type: int in me.hand:
+			categories.append(int(CardCatalog.card(type).category))
+		_turn.text += "\n손패 %d장 · %s" % [me.hand.size(), CardHandRules.summary(categories)]
 	var seated: bool = game.is_seated(id)
-	var seat_text: String = "E: 일어서기" if seated else ("E: 착석 가능 (선택)" if game.can_sit(id) else "서 있는 상태로도 투척 가능")
+	var in_zone: bool = game.can_throw_from(id)
+	var seat_text: String = "E: 일어서기" if seated else ("E: 착석 가능 (선택)" if game.can_sit(id) else ("투척선 뒤 — 던질 수 있습니다" if in_zone else "다트 홀로 가야 던질 수 있습니다"))
 	if gathering and not seated:
 		seat_text = "E: 지금 앉으세요!" if game.can_sit(id) else "자기 색 자리로 이동하세요 (늦으면 자동 착석 + 슬로우)"
 	var can_throw: bool = state.phase == MatchState.Phase.AIMING and state.active_player() != null and state.active_player().peer_id == id
@@ -179,6 +190,8 @@ func _process(_delta: float) -> void:
 		throw_status = "다트 발사 중"
 	elif state.phase == MatchState.Phase.SETTLING:
 		throw_status = "착탄 정산 중"
+	elif not in_zone:
+		throw_status = "다트 홀로 이동하세요 · 투척선 뒤에서만 던질 수 있습니다"
 	elif Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		throw_status = "게임 화면 클릭: 마우스 복귀"
 	elif throw_input.charging:

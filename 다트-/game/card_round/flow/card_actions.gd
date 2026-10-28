@@ -7,6 +7,8 @@ extends RefCounted
 signal card_marked(seat: int, slot: int)
 ## ×0 무효로 상대가 꺼내 든 카드를 없앴다.
 signal nullified(by: int, target: int)
+## 카드를 한 장 썼다(카드 턴을 끝내는 신호 — card_round.gd 가 듣는다).
+signal card_used(seat: int)
 ## 지금 던지는 사람에게 "차례 동안" 효과가 걸렸다 → 과녁 소품을 바로 보이게 한다(turn_effects.gd).
 signal turn_effect_added(target: int)
 
@@ -41,9 +43,25 @@ func press_slot(seat: int, slot: int) -> void:
 	lift(seat, slot)
 
 
+## 지금 이 자리가 이 칸을 꺼내 들 수 있나.
+## 자기 카드 턴이면 아무 카드나, 남의 턴이면 막을 대기 카드가 있는 대응 카드(무효 ×0)만.
+func can_lift(seat: int, slot: int) -> bool:
+	if seat == _ctx.card_turn_seat:
+		return true
+	var card: Rules.Card = _ctx.rules.card_at(seat, slot)
+	if card == null or int(CardCatalog.card(card.type).target) != CardCatalog.Target.COUNTER:
+		return false
+	return not _ctx.rules.valid_targets(seat, card.type).is_empty()
+
+
 ## 꺼내 들기 = 대기 상태. 모두가 보고(알림), READY_SECONDS 뒤부터 쓸 수 있다.
 func lift(seat: int, slot: int) -> void:
 	if not _ctx.cards_open or _ctx.game_over:
+		return
+	if not can_lift(seat, slot):
+		if seat == Context.LOCAL_SEAT and not _ctx.autoplay:
+			var whose: String = "%s 카드 턴입니다" % _ctx.name_of(_ctx.card_turn_seat) if _ctx.card_turn_seat >= 0 else "지금은 카드를 낼 수 없습니다"
+			_ctx.hud.toast("%s · 대응 카드(무효)만 낼 수 있어요" % whose, Color("ff9a8a"), 1.6)
 		return
 	if not _ctx.rules.lift(seat, slot, _ctx.now):
 		return
@@ -91,6 +109,7 @@ func use(seat: int, target: int) -> bool:
 		turn_effect_added.emit(target)
 	_ctx.voice.say(seat, "talk")
 	sync_fans()
+	card_used.emit(seat)
 	return true
 
 
@@ -176,7 +195,7 @@ func think_bots() -> void:
 		if not _ctx.bot_driven(seat) or _ctx.now < _bot_next_think[seat] or _mover.stunned(seat):
 			continue
 		_bot_next_think[seat] = _ctx.now + BotBrain.think_delay(_ctx.random)
-		var decision: Dictionary = BotBrain.decide(_ctx.rules, seat, _ctx.now, _ctx.random, _ctx.phase == "darts")
+		var decision: Dictionary = BotBrain.decide(_ctx.rules, seat, _ctx.now, _ctx.random, _ctx.card_turn_seat == seat)
 		if decision.has("lift"):
 			lift(seat, int(decision.lift))
 		elif decision.has("use"):

@@ -68,6 +68,8 @@ func _run() -> void:
 	_tour.fov = 62
 	_game.add_child(_tour)
 	var local := _game.actors[1] as PlayerView
+	# 2026-10-28: 라운지에서는 못 던진다. 1인칭 투척 장면은 투척선 뒤에서 찍는다.
+	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_aim_at_board(local)
 	await create_timer(0.4).timeout
@@ -91,16 +93,16 @@ func _run() -> void:
 		root.get_texture().get_image().save_png(_output.path_join("throw_frames/%02d.png" % i))
 	await create_timer(1.0).timeout
 	assert(_game.controller.state.find_player(1).score == 110)
-	await _look(Vector3(0.6, 2.75, -3.75), Vector3(0, 2.75, -6.8), "03_board_two_darts")
+	await _look(Vector3(0.6, 2.75, -5.6), Vector3(0, 2.75, -7.3), "03_board_two_darts")
 	_first_person()
 	await create_timer(0.1).timeout
 	await _throw(Vector2(-0.35, 0.8))
 	# 방 둘러보기(HUD 숨김).
-	await _look(Vector3(4.9, 3.5, 6.4), Vector3(-1.0, 0.9, -0.8), "04_overview_from_entrance")
-	await _look(Vector3(2.9, 1.7, 6.3), Vector3(0, 0.8, 3.4), "05_table_and_seats")
-	await _look(Vector3(-1.4, 1.65, 1.4), Vector3(-5.0, 1.15, 4.0), "06_bar_and_bartender")
-	await _look(Vector3(5.0, 2.3, -2.5), Vector3(-0.6, 1.6, -6.3), "07_lane_and_fence")
-	await _look(Vector3(1.2, 3.4, -5.6), Vector3(0, 0.8, 3.0), "08_room_from_board")
+	await _look(Vector3(7.4, 3.8, 9.6), Vector3(-1.5, 0.9, -1.2), "04_overview_from_entrance")
+	await _look(Vector3(4.4, 1.7, 9.0), Vector3(0, 0.8, 5.1), "05_table_and_seats")
+	await _look(Vector3(-2.1, 1.65, 2.1), Vector3(-7.0, 1.15, 6.0), "06_bar_and_bartender")
+	await _look(Vector3(7.0, 2.6, -3.5), Vector3(-0.9, 1.6, -7.0), "07_lane_and_fence")
+	await _look(Vector3(1.8, 3.6, -6.9), Vector3(0, 0.8, 4.5), "08_room_from_board")
 	# 봇 차례: 봇이 오른팔을 들고 조준하는 모습.
 	var bot := _game.actors.values().filter(func(actor: PlayerView) -> bool: return actor.identity.is_bot)[0] as PlayerView
 	_game.controller.developer_bot_turn(bot.identity.peer_id)

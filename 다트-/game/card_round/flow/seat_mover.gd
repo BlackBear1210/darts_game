@@ -9,12 +9,14 @@ signal local_seated
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const BotDriver = preload("res://game/player/bot_driver.gd")
 
-## 던지는 자리(투척선보다 1.2m 뒤). 투척선을 넘지 않으므로 규칙상 문제없다.
-const THROW_Z: float = -1.9
+## 던지는 자리는 투척선보다 이만큼 뒤다. 막는 사람이 그 앞에 설 자리를 남겨 둔다.
+const THROW_BACK: float = 1.2
 ## 막는 사람은 던지는 사람보다 이만큼 과녁 쪽에 선다.
 const BLOCK_GAP: float = 0.85
-## 사람이 갈 수 있는 가장 앞(투척선 바로 뒤).
-const MIN_STAND_Z: float = -2.85
+## 던지는 자리·설 수 있는 가장 앞은 TableView 투척선에서 끌어온다(맵이 바뀌면 같이 따라온다).
+## 둘 다 투척선 뒤라 보호 레인(과녁 앞 복도)에 들어가지 않는다.
+const THROW_Z: float = TableView.THROW_LINE_Z + THROW_BACK
+const MIN_STAND_Z: float = TableView.THROW_LINE_Z + 0.25
 ## 자동 착석: 이 시간 안에 못 앉으면 바로 앉힌다.
 const GATHER_SECONDS: float = 6.0
 

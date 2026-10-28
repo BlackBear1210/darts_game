@@ -76,6 +76,8 @@ func handle(event: InputEvent) -> void:
 			_cards.use(Context.LOCAL_SEAT, int(_cards.target_choice.get(Context.LOCAL_SEAT, -1)))
 		KEY_TAB:
 			_cards.cycle_target()
+		KEY_ENTER, KEY_KP_ENTER:
+			_ctx.passed = true
 		KEY_V:
 			_ctx.voice.say(Context.LOCAL_SEAT, "talk")
 		KEY_E:
