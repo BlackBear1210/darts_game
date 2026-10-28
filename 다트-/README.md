@@ -10,9 +10,11 @@ Godot **4.6.3.stable.official.7d41c59c4**, GDScript, Forward Plus / D3D12, Jolt 
 
 디자인 예시(펍·캐릭터 4종·실제 규격 다트판)는 `art/showcase/showcase.tscn`을 열고 **F6**. 실제 경기와 별개다. 투척 시점(2번)은 마우스 1인칭 시선 · A/D 좌우 이동 · 왼쪽 버튼 꾹 충전/놓기 투척 · 오른쪽 버튼 취소다. [art/README.md](art/README.md)를 참고한다.
 
+카드 라운드 시연(2026-10-28 기획: 흐트러진 덱 → 섞기 모션 → 한 장씩 7장 → 왼손 부채 → 1~7 꺼내 들기·무효 대응 → 다트 → 충전 라운드 → 스턴·흐림·목소리 변조 → 벌칙 원판 → 골드)은 `game/card_round/card_round.tscn`을 열고 **F6**. 실제 경기와 별개다. [docs/CARD_ROUND_PROTOTYPE.md](docs/CARD_ROUND_PROTOTYPE.md)를 참고한다.
+
 Godot 프로젝트 관리자에 이 프로젝트가 안 보이면 **가져오기(Import)** 로 이 폴더의 `project.godot`을 고른다. 아스트라 폴더 안의 별도 Godot(`.tools/godot`)이 아니라 팀이 쓰는 Godot 4.6.3을 연다.
 
-에디터 없이 보려면 저장소 최상위의 `실행_게임.cmd`(F5와 같음), `실행_흐름도시연.cmd`, `실행_디자인예시.cmd`, `에디터_열기.cmd`를 더블클릭한다. Godot 4.6.3 exe를 바탕화면·다운로드에서 찾고, 못 찾으면 위치를 안내한다. 다른 위치면 환경 변수 `GODOT`에 exe 경로를 넣는다.
+에디터 없이 보려면 저장소 최상위의 `실행_게임.cmd`(F5와 같음), `실행_흐름도시연.cmd`, `실행_카드라운드.cmd`, `실행_디자인예시.cmd`, `에디터_열기.cmd`를 더블클릭한다. Godot 4.6.3 exe를 바탕화면·다운로드에서 찾고, 못 찾으면 위치를 안내한다. 다른 위치면 환경 변수 `GODOT`에 exe 경로를 넣는다.
 
 아래 경로는 모두 `다트-/` 기준이다.
 

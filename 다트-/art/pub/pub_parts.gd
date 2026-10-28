@@ -72,7 +72,8 @@ static func round_table(parent: Node3D, pos: Vector3, radius: float, height: flo
 	MeshKit.cylinder(t, "TableEdge", radius, 0.13, Vector3(0, height - 0.065, 0), wood(), 48)
 	MeshKit.cylinder(t, "BrassEdge", radius + 0.005, 0.025, Vector3(0, height - 0.013, 0), brass(), 48)
 	MeshKit.cylinder(t, "Felt", radius - 0.07, 0.012, Vector3(0, height + 0.005, 0), felt(), 48)
-	var logo := MeshKit.label(t, "TableBrand", "다 티\n소셜 클럽", Vector3(0, height + 0.014, 0), 55, Color("c8ba82"), 0.0016)
+	# 테이블 가운데 펠트 로고. 브랜드 영문 표기(2026-10-28): "다 티" → "DARTY".
+	var logo := MeshKit.label(t, "TableBrand", "DARTY\n소셜 클럽", Vector3(0, height + 0.014, 0), 55, Color("c8ba82"), 0.0016)
 	logo.rotation.x = -PI / 2
 	return t
 

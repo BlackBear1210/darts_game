@@ -133,7 +133,8 @@ func architecture(p: Node3D) -> void:
 	MeshKit.box(sign, "Frame", Vector3(1.75, 1.25, 0.09), Vector3.ZERO, brass)
 	MeshKit.box(sign, "Paper", Vector3(1.66, 1.16, 0.04), Vector3(0, 0, 0.06), dark)
 	MeshKit.label(sign, "Title", "좋은 한 발,\n좋은 사람들.", Vector3(0, 0.16, 0.09), 55, Color("e0c58d"), 0.0018)
-	MeshKit.label(sign, "Caption", "다 티   /   소 셜   클 럽", Vector3(0, -0.33, 0.09), 21)
+	# 브랜드 영문 표기(2026-10-28): "다 티" → "DARTY".
+	MeshKit.label(sign, "Caption", "DARTY   /   소 셜   클 럽", Vector3(0, -0.33, 0.09), 21)
 
 ## 다트판 벽: 초록 패널, 간판, 캐비닛, 다트판, 투척 레인과 투척선(Oche).
 ## 다트판 링 반지름 = BoardLayout(팀 판정 기준) 비율 × BoardSpec.SCORING_RADIUS. 숫자 순서도 BoardLayout 것을 쓴다(board_art.gd).
@@ -141,7 +142,8 @@ func board_wall(p: Node3D) -> void:
 	MeshKit.box(p, "FeaturePanel", Vector3(3.2, 3.55, 0.16), Vector3(0, 1.86, -4.74), green)
 	for x in [-1.5, 1.5]:
 		MeshKit.box(p, "FeatureBorder", Vector3(0.025, 3.3, 0.025), Vector3(x, 1.87, -4.64), brass)
-	MeshKit.label(p, "Brand", "다 티", Vector3(0, 3.16, -4.62), 110, Color("e6ca90"), 0.0025)
+	# 브랜드 영문 표기(2026-10-28): "다 티" → "DARTY". 영문이 더 넓어 110 → 96.
+	MeshKit.label(p, "Brand", "DARTY", Vector3(0, 3.16, -4.62), 96, Color("e6ca90"), 0.0025)
 	MeshKit.label(p, "BrandSubtitle", "소 셜   클 럽", Vector3(0, 2.88, -4.61), 30)
 	MeshKit.label(p, "LaneTitle", "01   /   멋진 한 발을 던져요", Vector3(0, 0.79, -4.60), 25)
 	MeshKit.box(p, "Cabinet", Vector3(1.38, 1.55, 0.10), Vector3(0, 1.80, -4.58), wood)

@@ -128,9 +128,10 @@ static func _board_wall(p: Node3D) -> void:
 	var scores := MeshKit.label(p, "ChalkScores", "점 수\n\n―", Vector3(center.x - (half + half / 2.0 + 0.02), center.y + 0.05, face + 0.095), 28, chalk, 0.003)
 	scores.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	MeshKit.label(p, "ChalkRules", "하 우 스  룰\n\n한 차례 3발\n꾹 = 충전\n오른쪽 = 취소\n늦으면 슬로우!", Vector3(center.x + (half + half / 2.0 + 0.02), center.y + 0.05, face + 0.095), 30, chalk, 0.003)
-	# 간판 글자(캐비닛 아래).
+	# 간판 글자(캐비닛 아래). 브랜드는 영문 "DARTY"로 쓴다(2026-10-28 사용자 요청 — 전에는 한글 "다 티").
+	# 영문 5글자가 한글 2글자보다 넓어 글자 크기를 110 → 96 으로 줄였다.
 	var bottom := center.y - half
-	MeshKit.label(p, "Brand", "다 티", Vector3(center.x, bottom - 0.42, face + 0.06), 110, Color("e6ca90"), 0.0042)
+	MeshKit.label(p, "Brand", "DARTY", Vector3(center.x, bottom - 0.42, face + 0.06), 96, Color("e6ca90"), 0.0042)
 	MeshKit.label(p, "BrandSubtitle", "소 셜   클 럽", Vector3(center.x, bottom - 0.82, face + 0.06), 34, Color("ecdfbf"), 0.0045)
 
 
@@ -262,7 +263,8 @@ static func _decor(p: Node3D) -> void:
 	MeshKit.box(sign, "Frame", Vector3(1.75, 1.25, 0.09), Vector3.ZERO, PubParts.brass())
 	MeshKit.box(sign, "Paper", Vector3(1.66, 1.16, 0.04), Vector3(0, 0, 0.06), PubParts.dark())
 	MeshKit.label(sign, "Title", "좋은 한 발,\n좋은 사람들.", Vector3(0, 0.16, 0.09), 55, Color("e0c58d"), 0.0018)
-	MeshKit.label(sign, "Caption", "다 티   /   소 셜   클 럽", Vector3(0, -0.33, 0.09), 21)
+	# 브랜드 영문 표기(2026-10-28): "다 티" → "DARTY".
+	MeshKit.label(sign, "Caption", "DARTY   /   소 셜   클 럽", Vector3(0, -0.33, 0.09), 21)
 	# 과녁 양옆(못 들어가는 구역) 장식: 화분·술통.
 	for side: float in [-1.0, 1.0]:
 		PubParts.plant(p, Vector3(side * (inner.x - 0.6), 0, -inner.y + 0.6))

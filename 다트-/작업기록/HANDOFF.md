@@ -1,3 +1,13 @@
+# 최신 인수인계 — 카드 라운드 시연 단독 장면 (2026-10-28)
+
+- 상세 기록: `작업기록/2026-10-28_카드라운드_시연.md`. 흐름표·조작·시연값: `docs/CARD_ROUND_PROTOTYPE.md`. 결정: `docs/DECISIONS.md` 2026-10-28.
+- `game/card_round/` 단독 장면(F6). **F5 경기·네트워크와 연결 안 함.** 규칙 계산은 노드 없는 `round_rules.gd`라 나중에 방장 쪽으로 옮길 수 있다.
+- 바깥 변경: `art/characters/character_rig.gd`에 `holding_cards`(기본 꺼짐), `art/cards/*.webp` 밉맵, `darty_launch.cmd cards` + `실행_카드라운드.cmd`.
+- 함정: 카드 재질에 발광을 넣으면 펍 글로우에 색이 바랜다. HUD는 앵커 프리셋 대신 고정 위치·`CenterContainer`. `CardFaces.bake`는 `CardView`를 만들기 전에. 펍 생성물의 `CardBack` 자리표시는 `add_child` 전에 지운다(`StaticBatch`가 합치기 전).
+- 검증: test_card_round(`--play`) PASS, 기존 test_rules / test_throwing / test_game_flow / test_art_showcase / test_game_look / test_prototype PASS, D3D12 캡처 15장 확인. **사람의 직접 조작은 미검증.**
+
+---
+
 # 최신 인수인계 — 봇이 투척선까지 걸어가 던진다 (2026-10-27)
 
 - 상세 기록: `작업기록/2026-10-27_봇_투척선.md`. 결정: `docs/DECISIONS.md` 2026-10-27.

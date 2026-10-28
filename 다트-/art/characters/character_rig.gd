@@ -4,7 +4,7 @@ extends RefCounted
 ## character_factory.gd 가 만든 관절 노드(LegL/LegR/Body/ArmL/ArmR/Neck)의 회전·위치만 바꾼다.
 ##
 ## 몸짓 목록: 서기(숨쉬기) · 걷기(팔다리 흔들기) · 앉기(다리 앞으로) · 숙이기(몸 낮추고 구부정) ·
-##           점프(다리 접기) · 조준(오른팔 들기) · 던지기(팔 휘두르기) · 눈 깜빡임.
+##           점프(다리 접기) · 조준(오른팔 들기) · 던지기(팔 휘두르기) · 눈 깜빡임 · 카드 들기(왼팔, holding_cards).
 ## 사용법: PlayerView 가 매 프레임 animate() 를 부른다. 던질 때 play_throw() 한 번.
 ## 나중에 블렌더 리깅 + Mixamo 애니메이션(.glb)으로 바꾸면 이 파일 대신 AnimationPlayer/AnimationTree 를 쓴다.
 ## 그때도 PlayerView 가 넘겨주는 값(속도·자세·조준 중·던지기)은 그대로 쓰면 된다.
@@ -33,6 +33,12 @@ const BLINK_EVERY := 3.4
 const BLINK_TIME := 0.12
 ## 목표 자세로 따라가는 빠르기. 클수록 딱딱하게, 작을수록 흐느적하게 움직인다.
 const FOLLOW := 12.0
+## 카드 들기(카드 라운드 시연): 왼팔을 앞으로 들고 몸 안쪽으로 모은다. 부채는 Body 자식으로 손 앞에 붙는다.
+const HOLD_ARM_ANGLE := -1.35
+const HOLD_ARM_INWARD := -0.35
+
+## 왼손에 카드를 들고 있는지. 켜면 걷거나 앉아도 왼팔은 카드 든 자세를 유지한다.
+var holding_cards := false
 
 var leg_l: Node3D
 var leg_r: Node3D
@@ -117,6 +123,9 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	# 조준 중이면 오른팔을 앞-위로 들고, 던지는 중이면 뒤로 젖혔다가 앞으로 내린다.
 	if aiming:
 		arm_r_angle = AIM_ARM_ANGLE
+	if holding_cards:
+		arm_l_angle = HOLD_ARM_ANGLE
+		arm_spread = 0.0
 	if _throw_age >= 0.0:
 		_throw_age += delta
 		var t := clampf(_throw_age / THROW_SECONDS, 0.0, 1.0)
@@ -136,6 +145,7 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	body.rotation.x = lerpf(body.rotation.x, lean, weight)
 	arm_l.rotation.x = lerpf(arm_l.rotation.x, arm_l_angle, weight)
 	arm_l.rotation.z = lerpf(arm_l.rotation.z, arm_spread, weight)
+	arm_l.rotation.y = lerpf(arm_l.rotation.y, HOLD_ARM_INWARD if holding_cards else 0.0, weight)
 	arm_r.rotation.z = lerpf(arm_r.rotation.z, -arm_spread, weight)
 	var arm_weight := 1.0 if _throw_age >= 0.0 else weight
 	arm_r.rotation.x = lerpf(arm_r.rotation.x, arm_r_angle, arm_weight)

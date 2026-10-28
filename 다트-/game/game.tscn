@@ -1,38 +1,38 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://8hdree3ba3pd"]
 
 [ext_resource type="PackedScene" path="res://game/table/table.tscn" id="1_table"]
-[ext_resource type="Script" path="res://game/game.gd" id="2_game"]
-[ext_resource type="Script" path="res://game/match/match_controller.gd" id="3_match"]
-[ext_resource type="Script" path="res://game/throwing/dart_throw_controller.gd" id="4_input"]
+[ext_resource type="Script" uid="uid://cm31y55xbiwxb" path="res://game/game.gd" id="2_game"]
+[ext_resource type="Script" uid="uid://cpc80pn1aiskp" path="res://game/match/match_controller.gd" id="3_match"]
+[ext_resource type="Script" uid="uid://b8v4o11bc8d5u" path="res://game/throwing/dart_throw_controller.gd" id="4_input"]
 [ext_resource type="PackedScene" path="res://game/dart/dart.tscn" id="5_dart"]
-[ext_resource type="Script" path="res://game/throwing/trajectory_preview.gd" id="6_preview"]
+[ext_resource type="Script" uid="uid://vulm8j6jmp13" path="res://game/throwing/trajectory_preview.gd" id="6_preview"]
 
-[node name="Game" type="Node3D"]
+[node name="Game" type="Node3D" unique_id=452074249]
 script = ExtResource("2_game")
 
-[node name="Camera" type="Camera3D" parent="."]
-position = Vector3(0, 1.6, 4.3)
+[node name="Camera" type="Camera3D" parent="." unique_id=923790970]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 4.3)
 current = true
 fov = 65.0
 
-[node name="Hand" type="Node3D" parent="Camera"]
+[node name="Hand" type="Node3D" parent="Camera" unique_id=405943354]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, -0.14, -0.55)
 visible = false
-position = Vector3(0.2, -0.14, -0.55)
 
-[node name="HeldDart" parent="Camera/Hand" instance=ExtResource("5_dart")]
-rotation_degrees = Vector3(6, 32, 0)
+[node name="HeldDart" parent="Camera/Hand" unique_id=660269510 instance=ExtResource("5_dart")]
+transform = Transform3D(0.8480481, 0.055391647, 0.52701634, 0, 0.9945219, -0.104528464, -0.52991927, 0.08864517, 0.8434024, 0, 0, 0)
 
-[node name="Table" parent="." instance=ExtResource("1_table")]
+[node name="Table" parent="." unique_id=329066793 instance=ExtResource("1_table")]
 
-[node name="MatchController" type="Node" parent="."]
+[node name="MatchController" type="Node" parent="." unique_id=637053538]
 script = ExtResource("3_match")
 
-[node name="ThrowController" type="Node" parent="."]
+[node name="ThrowController" type="Node" parent="." unique_id=1026126438]
 script = ExtResource("4_input")
 
-[node name="Players" type="Node3D" parent="."]
+[node name="Players" type="Node3D" parent="." unique_id=716118106]
 
-[node name="Darts" type="Node3D" parent="."]
+[node name="Darts" type="Node3D" parent="." unique_id=702595528]
 
-[node name="TrajectoryPreview" type="MeshInstance3D" parent="."]
+[node name="TrajectoryPreview" type="MeshInstance3D" parent="." unique_id=1865211080]
 script = ExtResource("6_preview")

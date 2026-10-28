@@ -5,9 +5,10 @@ rem DARTY launcher. Double-click the Korean-named .cmd files next to this.
 rem This file is ASCII only on purpose: cmd.exe reads batch files in the
 rem system code page, so Korean text inside a .cmd file can break.
 rem
-rem Usage: darty_launch.cmd showcase ^| flow ^| game ^| editor ^| where
+rem Usage: darty_launch.cmd showcase ^| flow ^| cards ^| game ^| editor ^| where
 rem   showcase = art showcase  (art/showcase/showcase.tscn, Astra design)
 rem   flow     = flow preview  (game/flow_preview/flow_preview.tscn, cards)
+rem   cards    = card round    (game/card_round/card_round.tscn, 2026-10-28 plan)
 rem   game     = main game F5  (app/main.tscn, developer mode + 3 bots)
 rem   editor   = open the project in the Godot editor
 rem   where    = print which Godot and project folder will be used
@@ -39,8 +40,9 @@ rem --- 3. What to open
 set "SCENE="
 if /i "%TARGET%"=="showcase" set "SCENE=res://art/showcase/showcase.tscn"
 if /i "%TARGET%"=="flow" set "SCENE=res://game/flow_preview/flow_preview.tscn"
+if /i "%TARGET%"=="cards" set "SCENE=res://game/card_round/card_round.tscn"
 if /i "%TARGET%"=="where" goto :where
-if /i not "%TARGET%"=="showcase" if /i not "%TARGET%"=="flow" if /i not "%TARGET%"=="game" if /i not "%TARGET%"=="editor" goto :bad_target
+if /i not "%TARGET%"=="showcase" if /i not "%TARGET%"=="flow" if /i not "%TARGET%"=="cards" if /i not "%TARGET%"=="game" if /i not "%TARGET%"=="editor" goto :bad_target
 
 pushd "%PROJECT_DIR%"
 rem First run after cloning: import once so scripts and scenes resolve.
@@ -74,6 +76,6 @@ pause
 exit /b 1
 
 :bad_target
-echo [DARTY] Unknown target "%TARGET%". Use: showcase, flow, game, editor, where
+echo [DARTY] Unknown target "%TARGET%". Use: showcase, flow, cards, game, editor, where
 pause
 exit /b 1

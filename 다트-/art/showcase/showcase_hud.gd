@@ -94,7 +94,8 @@ func build() -> void:
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 18)
 	top.add_child(top_row)
-	var wordmark := label("다 티", 29, GOLD)
+	# 브랜드 영문 표기(2026-10-28): "다 티" → "DARTY".
+	var wordmark := label("DARTY", 29, GOLD)
 	top_row.add_child(wordmark)
 	var subtitle := label("소셜 클럽   /   3D 디자인 시안", 12, MUTED)
 	subtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -211,7 +212,7 @@ func _build_credits() -> void:
 	root.add_child(credits)
 	var column := VBoxContainer.new()
 	credits.add_child(column)
-	column.add_child(label("다티  /  크레딧 · 라이선스", 24, GOLD))
+	column.add_child(label("DARTY  /  크레딧 · 라이선스", 24, GOLD))
 	var text := RichTextLabel.new()
 	text.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	text.add_theme_font_size_override("normal_font_size", 14)
