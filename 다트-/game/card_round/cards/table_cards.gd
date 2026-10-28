@@ -5,6 +5,7 @@ extends Node3D
 
 const CardView = preload("res://game/card_round/cards/card_view.gd")
 const ShuffleMotions = preload("res://game/card_round/cards/shuffle_motions.gd")
+const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 
 ## 덱 더미 중심(테이블 펠트 위)과 방향.
 const DECK_YAW: float = 0.35
@@ -19,6 +20,10 @@ const RESERVE_Z: float = 0.49
 ## 한 장 나눠 주는 비행 시간과 포물선 높이.
 const DEAL_FLIGHT: float = 0.34
 const DEAL_ARC: float = 0.12
+## 가운데·밑장에서 뺄 때: 옆으로 빼내는 거리(m)·시간(초), 위 카드들을 들추는 높이(m).
+const PULL_OUT: float = 0.16
+const PULL_SECONDS: float = 0.22
+const PULL_LIFT: float = 0.018
 
 ## 덱 더미(아래 → 위). round_rules.deck 과 같은 장수·같은 순서 번호를 쓴다.
 var pile: Array = []
@@ -84,7 +89,9 @@ func shuffle(style: int, face_types: Array[int]) -> void:
 	await ShuffleMotions.play(style, self, pile, deck_center(), DECK_YAW, face_types)
 
 
-## 덱의 index 번째 카드를 빼서 자리 칸으로 날린다. 위가 아니면 옆으로 빼낸 뒤 날아가고 위 카드들이 내려앉는다.
+## 덱의 index 번째 카드를 빼서 자리 칸으로 날린다.
+## 맨 위가 아니면(가운데·밑장) 위 카드들을 살짝 들춘 채 옆으로 빼낸 뒤 날아가고, 위 카드들이 다시 내려앉는다.
+## 2026-10-28 사용자 피드백: 뽑는 곳이 한 장마다 무작위가 되어, 밑장·가운데 빼기는 천천히 보이게 하고 덱 위에 글자를 띄운다.
 func deal_card(index: int, card_type: int, seat: int, slot: int) -> void:
 	var card: Node3D = pile[index]
 	pile.remove_at(index)
@@ -92,13 +99,37 @@ func deal_card(index: int, card_type: int, seat: int, slot: int) -> void:
 	slots[seat][slot] = card
 	var to: Transform3D = slot_transform(seat, slot)
 	if index < pile.size():
-		var out: Vector3 = card.transform.basis * Vector3(0.11, 0, 0)
+		_pop_label("밑장!" if index == 0 else "가운데!", Color("ff8a6a") if index == 0 else PubTheme.GOLD)
+		for i in range(index, pile.size()):
+			var above: Node3D = pile[i]
+			create_tween().tween_property(above, "position", above.position + Vector3.UP * PULL_LIFT, PULL_SECONDS * 0.5)
+		var out: Vector3 = card.transform.basis * Vector3(PULL_OUT, 0, 0)
 		var pull := create_tween()
-		pull.tween_property(card, "position", card.position + out, 0.12)
+		pull.tween_property(card, "position", card.position + out, PULL_SECONDS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		await pull.finished
 		for i in range(index, pile.size()):
 			ShuffleMotions.move(self, pile[i], ShuffleMotions.stack_transform(deck_center(), DECK_YAW, i), 0.12)
 	ShuffleMotions.move(self, card, to, DEAL_FLIGHT, 0.0, DEAL_ARC)
+
+
+## 덱 위로 잠깐 떠올랐다 사라지는 글자("밑장!" · "가운데!").
+func _pop_label(text: String, color: Color) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.font = CardFaces.bold_font()
+	label.font_size = 72
+	label.pixel_size = 0.0022
+	label.outline_size = 16
+	label.outline_modulate = Color("122b27")
+	label.modulate = color
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	add_child(label)
+	label.position = deck_center() + Vector3.UP * 0.22
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(label, "position", label.position + Vector3.UP * 0.16, 0.7)
+	tween.tween_property(label, "modulate:a", 0.0, 0.7).set_delay(0.25)
+	tween.chain().tween_callback(label.queue_free)
 
 
 ## 이번에 나눠 준(아직 뒷면인) 카드를 자리별로 물결치듯 앞면으로 뒤집는다.

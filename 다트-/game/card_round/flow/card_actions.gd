@@ -7,10 +7,10 @@ extends RefCounted
 signal card_marked(seat: int, slot: int)
 ## ×0 무효로 상대가 꺼내 든 카드를 없앴다.
 signal nullified(by: int, target: int)
-## 카드를 한 장 썼다(카드 턴을 끝내는 신호 — card_round.gd 가 듣는다).
-signal card_used(seat: int)
 ## 지금 던지는 사람에게 "차례 동안" 효과가 걸렸다 → 과녁 소품을 바로 보이게 한다(turn_effects.gd).
 signal turn_effect_added(target: int)
+## 카드를 썼다(seat → target) — 봇이 대상을 손가락으로 가리킨다(gestures.gd).
+signal card_used(seat: int, target: int)
 
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const SeatMover = preload("res://game/card_round/flow/seat_mover.gd")
@@ -73,6 +73,25 @@ func lift(seat: int, slot: int) -> void:
 			PlayerLook.COLORS[seat].lightened(0.45), 2.0)
 
 
+## Q·E: 카드가 있는 칸(테이블 7칸 + 보상 칸)을 왼쪽(step -1)·오른쪽(+1)으로 넘기며 꺼내 든다. 끝에서는 반대쪽 끝으로 돈다.
+## 아무것도 안 들었으면 E = 첫 칸, Q = 마지막 칸. 2026-10-28 피드백: 숫자 1~7 은 누르기 어렵고 느리다.
+## 넘길 때마다 꺼내 들기(lift)라서 준비 시간이 다시 시작되고, 다른 사람도 그 카드를 본다.
+func browse(seat: int, step: int) -> void:
+	var filled: Array[int] = []
+	for slot in range(Rules.HAND_SLOTS + Rules.RESERVE_SLOTS):
+		if _ctx.rules.card_at(seat, slot) != null:
+			filled.append(slot)
+	if filled.is_empty():
+		return
+	var pending: Rules.Card = _ctx.rules.seats[seat].pending
+	var index: int = filled.find(_ctx.rules.slot_of(seat, pending)) if pending != null else -1
+	if index < 0:
+		index = 0 if step > 0 else filled.size() - 1
+	else:
+		index = posmod(index + step, filled.size())
+	lift(seat, filled[index])
+
+
 ## 꺼내 든 카드를 다시 손에 넣는다(허세로 내려놓기도 이것).
 func lower(seat: int) -> void:
 	_ctx.rules.lower(seat)
@@ -109,7 +128,7 @@ func use(seat: int, target: int) -> bool:
 		turn_effect_added.emit(target)
 	_ctx.voice.say(seat, "talk")
 	sync_fans()
-	card_used.emit(seat)
+	card_used.emit(seat, target)
 	return true
 
 

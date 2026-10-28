@@ -1,18 +1,20 @@
 extends RefCounted
 ## 차례 동안 눈에 보이는 효과: 과녁 숫자 섞기 · 가림판(왼쪽 절반) · 바람 표시 · 졸림(내 화면 눈꺼풀),
-## 그리고 사람을 맞힌 벌(그 사람의 차례가 끝날 때까지 화면 흐림 + 목소리 변조).
+## 그리고 사람을 맞힌 벌(그 사람의 차례가 끝날 때까지: 취기·마우스·난시 중 무작위 하나 + 목소리 변조).
 ## 무엇이 걸렸는지는 규칙(rules.dart_modifiers)이 정하고, 여기는 보이게만 한다.
 
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
+const ScreenDebuff = preload("res://game/card_round/fx/screen_debuff.gd")
 
 ## 맞힌 사람이 변조된 목소리로 투덜대는 간격(초).
 const WARP_TALK_SECONDS: float = 2.4
 
 ## 지금 차례의 과녁 숫자 배치. "숫자 섞기"가 걸리면 섞인 배치 — 채점(dart_actions.gd)도 이 배치를 쓴다.
 var layout := BoardLayout.new()
-## 사람을 맞혀 화면 흐림 + 목소리 변조 중인 자리(-1 = 없음).
-var blurred_seat: int = -1
+## 사람을 맞혀 벌 받는 중인 자리(-1 = 없음)와 그 벌 종류(취기·마우스·난시).
+var penalty_seat: int = -1
+var penalty_kind: ScreenDebuff.Penalty = ScreenDebuff.Penalty.NONE
 
 var _ctx: Context
 var _cover: MeshInstance3D
@@ -83,25 +85,34 @@ func restore() -> void:
 	_ctx.debuff.drowsy = false
 
 
-## 사람을 맞힌 벌: thrower 의 차례가 끝날 때까지 화면 흐림(내 화면일 때) + 목소리 변조.
-func blur(thrower: int) -> void:
-	blurred_seat = thrower
+## 사람을 맞힌 벌: thrower 의 차례가 끝날 때까지 취기·마우스·난시 중 하나(같은 확률, 내 화면일 때 보인다) + 목소리 변조.
+## 2026-10-28 피드백: 예전 "화면 흐림"은 너무 뿌옇다 → 셋 중 무작위. 고른 벌 이름을 돌려준다(알림 글에 쓴다).
+func penalize(thrower: int) -> String:
+	penalty_seat = thrower
+	penalty_kind = _ctx.random.randi_range(ScreenDebuff.Penalty.SWAY, ScreenDebuff.Penalty.ASTIGMATISM) as ScreenDebuff.Penalty
 	_ctx.voice.set_warped(thrower, true)
 	if thrower == Context.LOCAL_SEAT:
-		_ctx.debuff.blurred = true
+		_ctx.debuff.penalty = penalty_kind
 	_warp_talk_at = _ctx.now + 0.6
+	return ScreenDebuff.PENALTY_NAMES[penalty_kind]
+
+
+## 벌 받는 사람 머리 위·점수판에 쓸 짧은 이름(없으면 빈 글).
+func penalty_name(seat: int) -> String:
+	return ScreenDebuff.PENALTY_NAMES[penalty_kind] if seat == penalty_seat else ""
 
 
 ## seat 의 차례 끝: 맞힌 벌을 푼다.
 func end_turn(seat: int) -> void:
-	if blurred_seat == seat:
-		blurred_seat = -1
+	if penalty_seat == seat:
+		penalty_seat = -1
+		penalty_kind = ScreenDebuff.Penalty.NONE
 		_ctx.voice.set_warped(seat, false)
-		_ctx.debuff.blurred = false
+		_ctx.debuff.penalty = ScreenDebuff.Penalty.NONE
 
 
 ## 매 프레임: 벌 받는 사람이 변조된 목소리로 투덜대게 한다(목소리 변조가 들리도록).
 func process() -> void:
-	if blurred_seat >= 0 and _ctx.now >= _warp_talk_at:
-		_ctx.voice.say(blurred_seat, "talk")
+	if penalty_seat >= 0 and _ctx.now >= _warp_talk_at:
+		_ctx.voice.say(penalty_seat, "talk")
 		_warp_talk_at = _ctx.now + WARP_TALK_SECONDS
