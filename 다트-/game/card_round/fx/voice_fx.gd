@@ -41,7 +41,7 @@ func say(seat: int, kind: String) -> void:
 	player.play()
 
 
-## 목소리 변조를 켜고 끈다(변조 버스로 보내기). 맞힌 사람의 흐림 효과와 함께 쓴다.
+## 목소리 변조를 켜고 끈다(변조 버스로 보내기). 맞힌 사람의 벌(취기·마우스·난시)과 함께 쓴다.
 func set_warped(seat: int, warped: bool) -> void:
 	_warped[seat] = warped
 	var player := _players.get(seat) as AudioStreamPlayer3D

@@ -1,7 +1,7 @@
 extends RefCounted
 ## 규칙 상태 → 화면 글자. 화면 UI(ui/card_round_hud.gd)는 규칙을 모르고, 이 파일이 무엇을 쓸지 정해 넘긴다.
 ## 왼쪽 점수판(자리별 점수·카드 수·걸린 효과), 오른쪽 효과 목록, 위 차례 표시, 아래 안내 줄, 내가 꺼내 든 카드,
-## 머리 위 글자("아야!"·흐림·Zzz·▼ 내 카드 대상), 결과 화면 글.
+## 머리 위 글자("아야!"·맞힌 벌·Zzz·▼ 내 카드 대상), 결과 화면 글.
 
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const SeatMover = preload("res://game/card_round/flow/seat_mover.gd")
@@ -67,8 +67,8 @@ func update_status() -> void:
 		if _mover.ouch(seat):
 			lines.append("아야!")
 			color = Color("ff8a7a")
-		if seat == _effects.blurred_seat:
-			lines.append("≋ 흐림 · 목소리 변조 ≋")
+		if seat == _effects.penalty_seat:
+			lines.append("≋ %s · 목소리 변조 ≋" % _effects.penalty_name(seat))
 			color = Color("c9a6ff")
 		var mods: Dictionary = rules.dart_modifiers(seat)
 		if bool(mods.drowsy) and rules.is_turn_of(seat):
@@ -111,15 +111,17 @@ func prompt_text() -> String:
 		return "골드는 옷·아바타·닉네임 꾸미기에 쓸 예정(상점 미구현)"
 	if _input.my_throw():
 		if _ctx.actors[Context.LOCAL_SEAT].seated:
-			return "E 로 일어나서 투척선 쪽으로 걸어가기"
+			return "R 로 일어나서 던지는 칸(바닥 금색 칸)으로 걸어가기"
+		if not _input.in_throw_box():
+			return "던지는 칸(바닥 금색 칸) 안에서만 던질 수 있다"
 		return "왼클릭을 길게 눌렀다 떼서 던지기 · 오른클릭 취소 · 남은 %d발" % (_ctx.rules.darts_left if _ctx.phase == "darts" else _darts.punish_left)
 	if _ctx.rules.seats[Context.LOCAL_SEAT].pending != null:
-		return "F 쓰기 · Tab 대상 바꾸기 · 같은 숫자 = 내려놓기"
+		return "F 쓰기 · Q·E 다른 카드로 넘기기 · Tab 대상 바꾸기"
 	if not _ctx.cards_open:
-		return "카드를 나눠 주는 중… · C 전체 보기 · Esc 설정 · Alt 마우스 꺼내기(라운드 표시에 올려 보기)"
+		return "카드를 나눠 주는 중… (위·가운데·밑장 중 어디서 빼는지 보기) · C 전체 보기 · Esc 설정"
 	if _ctx.phase == "darts":
-		return "1~7 카드 꺼내 들기 · 걸어 나가 몸으로 막기(맞으면 방해 성공) · E 앉기/일어나기 · V 말하기"
-	return "1~7 카드 꺼내 들기 · 8·9 보상 카드 · C 전체 보기 · Esc 설정"
+		return "Q·E 카드 꺼내 들기 · 옆으로 돌아 방해선 너머(과녁 쪽)에서 몸으로 막기 · Space 점프로 막기 · R 앉기"
+	return "Q·E 카드 넘기기(1~9 바로 꺼내기) · 왼클릭 가리키기 · T 감정표현 · Esc 설정"
 
 
 ## 충전 라운드 점수 발표용 순위 줄(꼴찌부터 보여 준다 — HUD 가 순서를 뒤집는다).
@@ -149,15 +151,15 @@ func results_text(session_gold: Array[int]) -> String:
 	return "\n".join(lines)
 
 
-## 점수판 한 줄: 이름·점수·카드 수와 그 사람에게 걸린 것(대기·적용 중 효과, 흐림, 스턴, 꺼내 든 카드, 방해 횟수).
+## 점수판 한 줄: 이름·점수·카드 수와 그 사람에게 걸린 것(대기·적용 중 효과, 맞힌 벌, 스턴, 꺼내 든 카드, 방해 횟수).
 func _score_row(seat: int) -> Dictionary:
 	var rules: Rules = _ctx.rules
 	var chips := PackedStringArray()
 	for effect: Rules.Effect in rules.effects:
 		if effect.target == seat and effect.state in [Rules.EffectState.QUEUED, Rules.EffectState.ACTIVE] and effect.kind != "nullify":
 			chips.append("%s%s" % [CardCatalog.card(effect.card_type).name, "(적용 중)" if effect.state == Rules.EffectState.ACTIVE else ""])
-	if seat == _effects.blurred_seat:
-		chips.append("흐림·변조")
+	if seat == _effects.penalty_seat:
+		chips.append("벌: %s" % _effects.penalty_name(seat))
 	if _mover.stunned(seat):
 		chips.append("스턴")
 	if rules.seats[seat].pending != null:

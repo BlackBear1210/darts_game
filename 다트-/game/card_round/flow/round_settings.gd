@@ -10,8 +10,9 @@ const PATH := "user://card_round_settings.cfg"
 const SECTION := "card_round"
 
 ## 기본값 = 각 설정의 첫 번째 선택지.
-## mark 쓴 카드 표시 · shuffle 섞기 모션 · draw 뽑는 곳 · reward 방해 보상 · win 승리 조건 · speed 속도 · voice 합성 목소리
-var values: Dictionary = {"mark": 0, "shuffle": 0, "draw": 0, "reward": 0, "win": 0, "speed": 0, "voice": 0}
+## mark 쓴 카드 표시 · shuffle 섞기 모션 · reward 방해 보상 · win 승리 조건 · speed 속도 · voice 합성 목소리
+## ("draw" 뽑는 곳은 2026-10-28 피드백으로 없앴다 — 한 장마다 무작위. 예전 저장 파일에 남아 있어도 읽지 않는다.)
+var values: Dictionary = {"mark": 0, "shuffle": 0, "reward": 0, "win": 0, "speed": 0, "voice": 0}
 ## false 면 파일에 읽고 쓰지 않는다(자동 검사가 사용자의 저장을 덮어쓰지 않게).
 var persist: bool = true
 
@@ -41,10 +42,6 @@ func save_file() -> void:
 func mark() -> int:
 	return int(values.mark)
 
-
-## 덱 어디에서 뽑는가(Rules.DrawFrom: 위·가운데·아래·무작위).
-func draw_from() -> int:
-	return int(values.draw)
 
 
 ## 방해 보상 방식(설정 'reward').

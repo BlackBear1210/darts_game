@@ -32,7 +32,8 @@ var capturing: bool = false
 var now: float = 0.0
 var random := RandomNumberGenerator.new()
 ## 자동 검사(tests/test_card_round.gd)가 읽는 통계.
-var stats: Dictionary = {"dealt": 0, "used": 0, "darts": 0, "refilled_to_7": false, "body_hits": 0, "nullified": 0, "rounds": 0}
+## zone_bumps = 차례 아닌 사람이 "차례인 사람만" 구역에 걸어 들어와 되돌려진 횟수(throw_zone.gd). 봇 길찾기가 맞으면 0.
+var stats: Dictionary = {"dealt": 0, "used": 0, "darts": 0, "refilled_to_7": false, "body_hits": 0, "nullified": 0, "rounds": 0, "zone_bumps": 0}
 
 var root: Node3D
 var camera: Camera3D

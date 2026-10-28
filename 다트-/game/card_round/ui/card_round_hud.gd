@@ -15,13 +15,12 @@ signal restart_requested
 const SETTINGS: Array[Dictionary] = [
 	{"key": "mark", "label": "쓴 카드 표시", "options": ["빨간 페인트 X (기본)", "불에 그을림"]},
 	{"key": "shuffle", "label": "섞기 모션", "options": ["매번 무작위", "정석 리플", "마술사", "딜러"]},
-	{"key": "draw", "label": "나눠 줄 때 뽑는 곳", "options": ["맨 위", "가운데", "맨 아래", "무작위"]},
 	{"key": "reward", "label": "방해 성공 보상", "options": ["점수 +15", "라운드 한정 카드", "무작위"]},
 	{"key": "win", "label": "승리 조건 (새 게임부터)", "options": ["7라운드 최고점", "300점 먼저", "500 → 0 딱 맞추기"]},
 	{"key": "speed", "label": "진행 속도", "options": ["보통", "1.5배", "2배"]},
 	{"key": "voice", "label": "합성 목소리", "options": ["켜기", "끄기"]},
 ]
-const KEY_HELP := "1~7 카드 꺼내기(한 번 더 = 내리기) · 8·9 보상 카드 · F 쓰기 · Tab 대상 바꾸기\nWASD 이동 · E 앉기/일어나기 · 왼클릭 길게 = 던지기 · V 말하기 · C 전체 보기 · Shift 빨리 감기 · Alt 마우스 꺼내기"
+const KEY_HELP := "Q·E 카드 넘기기 · 1~7 카드 꺼내기(한 번 더 = 내리기) · 8·9 보상 카드 · F 쓰기 · Tab 대상 바꾸기\nWASD 이동 · R 앉기/일어나기 · 왼클릭 = 손가락으로 가리키기(내 차례엔 길게 눌러 던지기) · T(누르는 동안) 감정표현\nV 말하기 · C 전체 보기 · Shift 빨리 감기 · 마우스 포인터는 T·Esc 때만 나온다"
 ## 오른쪽 효과 패널: 맨 위 연산 줄은 최근 6개, 아래 목록은 최근 8개만 보인다(다 보이면 화면 아래로 넘친다).
 const EFFECT_LINE_MAX := 6
 const EFFECT_ROWS_MAX := 8
@@ -244,11 +243,12 @@ func show_card(card_type: int, ratio: float, target_text: String, problem: Strin
 	_card_text.text = str(data.text)
 	_card_target.text = target_text
 	_card_bar.value = ratio
+	# 2026-10-28 피드백: 아래 글은 짧고 크게 — "F 로 쓰기" 만. 안 쓸 카드는 Q·E 로 넘기면 된다.
 	if ratio < 1.0:
-		_card_status.text = "준비 중… 다른 사람도 지금 이 카드를 본다"
+		_card_status.text = "준비 중…"
 		_card_status.add_theme_color_override("font_color", PubTheme.GOLD)
 	elif problem.is_empty():
-		_card_status.text = "F 로 쓰기 · 같은 숫자 키 = 내려놓기"
+		_card_status.text = "F 로 쓰기"
 		_card_status.add_theme_color_override("font_color", Color("8cf0a0"))
 	else:
 		_card_status.text = problem
@@ -399,7 +399,7 @@ func _build_card_panel() -> void:
 	row.add_child(column)
 	_card_name = _label(32, PubTheme.GOLD, true)
 	column.add_child(_card_name)
-	_card_info = _label(18, Color("b9b2a0"))
+	_card_info = _label(20, Color("b9b2a0"))
 	column.add_child(_card_info)
 	_card_text = _label(21, PubTheme.PAPER)
 	_card_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -412,7 +412,7 @@ func _build_card_panel() -> void:
 	_card_bar.show_percentage = false
 	_card_bar.custom_minimum_size = Vector2(480, 12)
 	column.add_child(_card_bar)
-	_card_status = _label(19, PubTheme.GOLD)
+	_card_status = _label(34, PubTheme.GOLD, true)
 	column.add_child(_card_status)
 
 
@@ -442,7 +442,7 @@ func _build_prompt() -> void:
 	panel.add_child(_prompt)
 
 
-## 설정 창(Esc)을 만든다: 사용 표시·섞기·뽑는 곳·보상·승리 조건·속도·목소리.
+## 설정 창(Esc)을 만든다: 사용 표시·섞기·보상·승리 조건·속도·목소리.
 func _build_settings() -> void:
 	_settings = _panel(Color(PubTheme.INK, 0.96), PubTheme.GOLD, 3)
 	_settings.position = Vector2(560, 150)

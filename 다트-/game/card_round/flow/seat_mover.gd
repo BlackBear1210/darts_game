@@ -1,19 +1,17 @@
 extends RefCounted
 ## 캐릭터가 어디에 있고 어디로 걷는가: 자리에 앉기·일어나기, 걸어가기, 던지는 사람 앞을 따라가며 막기,
-## 스턴(잠깐 못 움직임), 맞으면 옆으로 튕겨 나가기, 충전 라운드의 자동 착석.
+## 스턴(잠깐 못 움직임), 맞으면 옆으로 튕겨 나가기, 충전 라운드의 자동 착석, 막는 봇의 점프.
 ## 봇 걸음은 F5 봇과 같은 조향 계산(BotDriver)을 쓴다. 사람(내 자리) 조작은 local_input.gd 가 한다.
+## 던지는 칸·방해선(throw_zone.gd)이 생긴 뒤로(2026-10-28) 봇은 "차례인 사람만" 구역을 옆길로 돌아간다.
 
 ## 내가 자리에 앉았다 → 카메라가 테이블 쪽을 보게 한다(round_camera.gd).
 signal local_seated
 
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const BotDriver = preload("res://game/player/bot_driver.gd")
+const ThrowZone = preload("res://game/card_round/flow/throw_zone.gd")
 
-## 던지는 자리(투척선보다 1.2m 뒤). 투척선을 넘지 않으므로 규칙상 문제없다.
-const THROW_Z: float = -1.9
-## 막는 사람은 던지는 사람보다 이만큼 과녁 쪽에 선다.
-const BLOCK_GAP: float = 0.85
-## 사람이 갈 수 있는 가장 앞(투척선 바로 뒤).
+## 사람이 갈 수 있는 가장 앞(펍 앞 벽 바로 뒤).
 const MIN_STAND_Z: float = -2.85
 ## 자동 착석: 이 시간 안에 못 앉으면 바로 앉힌다.
 const GATHER_SECONDS: float = 6.0
@@ -22,8 +20,10 @@ const GATHER_SECONDS: float = 6.0
 var gathering: bool = false
 
 var _ctx: Context
-## 자리별 걷기 목표: {to(바닥 위치), sit(도착하면 앉기), face(도착해서 볼 곳), follow(따라가며 막을 사람 자리, 없으면 -1)}
+## 자리별 걷기 목표: {to(바닥 위치), via(먼저 들를 경유점들), sit(도착하면 앉기), face(도착해서 볼 곳), follow(따라가며 막을 사람 자리, 없으면 -1)}
 var _walk: Dictionary = {}
+## 이 시각이 되면 한 번 점프한다(막는 봇, jump_after).
+var _jump_at: Array[float] = [INF, INF, INF, INF]
 var _stunned_until: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _ouch_until: Array[float] = [0.0, 0.0, 0.0, 0.0]
 
@@ -54,23 +54,25 @@ func stand(seat: int) -> void:
 
 
 ## to 로 걸어가 face 쪽을 보고 선다. follow 를 주면 그 사람이 던지는 동안 앞을 따라가며 막는다.
-func walk_to(seat: int, to: Vector3, face: Vector3, follow: int = -1) -> void:
-	_walk[seat] = {"to": to, "sit": false, "face": face, "follow": follow}
+## thrower = true 면 던지는 사람(구역 안으로 곧장 걸어간다). 아니면 구역을 옆길로 돌아간다(ThrowZone.route).
+func walk_to(seat: int, to: Vector3, face: Vector3, follow: int = -1, thrower: bool = false) -> void:
+	_walk[seat] = {"to": to, "via": [] if thrower else _detour(seat, to), "sit": false, "face": face, "follow": follow}
 
 
 ## 자기 자리로 걸어가 앉는다(이미 앉아 있으면 그대로).
 func send_home(seat: int) -> void:
 	if _ctx.actors[seat].seated:
 		return
-	_walk[seat] = {"to": TableView.SEATS[seat], "sit": true, "face": TableView.TABLE_CENTER, "follow": -1}
+	_walk[seat] = {"to": TableView.SEATS[seat], "via": _detour(seat, TableView.SEATS[seat]), "sit": true, "face": TableView.TABLE_CENTER, "follow": -1}
 
 
-## 던지는 자리에서 옆으로 비켜 선다(막는 사람을 피할 때). 레인 밖으로는 안 나간다.
+## 던지는 칸에서 옆으로 비켜 선다(막는 사람을 피할 때). 던지는 칸 밖으로는 안 나간다.
 func sidestep(seat: int) -> void:
 	if not _walk.has(seat):
 		return
 	var to: Vector3 = _walk[seat].to
-	to.x = clampf(to.x + (0.9 if to.x <= 0.0 else -0.9), -1.6, 1.6)
+	var limit: float = ThrowZone.LANE_HALF - 0.4
+	to.x = clampf(to.x + (0.9 if to.x <= 0.0 else -0.9), -limit, limit)
 	_walk[seat].to = to
 
 
@@ -116,11 +118,17 @@ func release_followers(thrower: int) -> void:
 			send_home(seat)
 
 
-## 막는 사람이 설 곳: 던지는 사람 바로 앞(과녁 쪽). 아직 자리에 있으면 던지는 자리 앞.
+## 막는 사람이 설 곳: 방해선 너머(과녁 쪽)에서 던지는 사람과 같은 x. 던지는 사람이 아직 자리 쪽이면 가운데.
+## 예전에는 던지는 사람 0.85m 앞이라 서 있기만 해도 무조건 막혔다(2026-10-28 피드백으로 방해선 도입).
 func block_spot(thrower: int) -> Vector3:
 	var at: Vector3 = _ctx.actors[thrower].global_position
-	var z: float = maxf(at.z - BLOCK_GAP, MIN_STAND_Z) if at.z < 0.5 else THROW_Z - BLOCK_GAP
-	return Vector3(at.x if at.z < 0.5 else 0.0, 0, z)
+	var limit: float = ThrowZone.LANE_HALF - 0.4
+	return Vector3(clampf(at.x, -limit, limit) if at.z < 0.5 else 0.0, 0, ThrowZone.BLOCK_STAND_Z)
+
+
+## seconds 뒤에 한 번 점프한다(막는 봇이 머리 위로 지나가는 다트를 막으려고). 도착해 서 있을 때만 뛴다.
+func jump_after(seat: int, seconds: float) -> void:
+	_jump_at[seat] = _ctx.now + seconds
 
 
 ## 누군가 이 사람 앞에 도착해 막고 있는가.
@@ -162,6 +170,11 @@ func knock_aside(thrower: int, victim: int) -> void:
 	var to: Vector3 = actor.position + side * 0.8 + away.normalized() * 0.2
 	to.z = maxf(to.z, MIN_STAND_Z)
 	to.x = clampf(to.x, -5.5, 5.5)
+	# 튕겨도 "차례인 사람만" 구역(throw_zone.gd)으로는 들어가지 않는다 — 방해선 너머에서 맞으면 옆으로만 밀린다.
+	if ThrowZone.in_keep_out(to) and not ThrowZone.in_keep_out(actor.position):
+		to.z = actor.position.z
+		if ThrowZone.in_keep_out(to):
+			to.x = actor.position.x
 	if actor.seated:
 		return
 	var tween := _ctx.root.create_tween()
@@ -187,13 +200,29 @@ func physics_step(delta: float) -> void:
 		var walk: Dictionary = _walk[seat]
 		var follow: int = int(walk.get("follow", -1))
 		if follow >= 0 and _ctx.rules.is_turn_of(follow):
-			# 막는 사람: 던지는 사람이 움직이면 따라간다.
+			# 막는 사람: 던지는 사람이 움직이면 방해선 너머에서 옆으로 따라간다.
 			walk.to = block_spot(follow)
 			walk.face = _ctx.actors[follow].global_position
-		if BotDriver.arrived(actor.position, walk.to):
+		# 경유점(구역 옆길)이 남아 있으면 그쪽으로 먼저 간다.
+		var via: Array = walk.via
+		while not via.is_empty() and BotDriver.arrived(actor.position, via[0]):
+			via.pop_front()
+		if not via.is_empty():
+			actor.simulate(delta, BotDriver.walk_controls(actor.position, via[0]))
+		elif BotDriver.arrived(actor.position, walk.to):
 			if bool(walk.sit):
 				sit(seat)
 			else:
-				actor.simulate(delta, {"yaw": Context.facing(walk.face - actor.position)})
+				var jump: bool = _ctx.now >= _jump_at[seat]
+				if jump:
+					_jump_at[seat] = INF
+				actor.simulate(delta, {"yaw": Context.facing(walk.face - actor.position), "jump": jump})
 		else:
 			actor.simulate(delta, BotDriver.walk_controls(actor.position, walk.to))
+
+
+## 걷기 경유점: 지금 위치 → to 가 "차례인 사람만" 구역을 지나면 옆길로(마지막 점 = to 는 빼고 돌려준다).
+func _detour(seat: int, to: Vector3) -> Array:
+	var points: Array = ThrowZone.route(_ctx.actors[seat].position, to)
+	points.pop_back()
+	return points

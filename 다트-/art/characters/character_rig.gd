@@ -4,7 +4,8 @@ extends RefCounted
 ## character_factory.gd 가 만든 관절 노드(LegL/LegR/Body/ArmL/ArmR/Neck)의 회전·위치만 바꾼다.
 ##
 ## 몸짓 목록: 서기(숨쉬기) · 걷기(팔다리 흔들기) · 앉기(다리 앞으로) · 숙이기(몸 낮추고 구부정) ·
-##           점프(다리 접기) · 조준(오른팔 들기) · 던지기(팔 휘두르기) · 눈 깜빡임 · 카드 들기(왼팔, holding_cards).
+##           점프(다리 접기) · 조준(오른팔 들기) · 던지기(팔 휘두르기) · 눈 깜빡임 · 카드 들기(왼팔, holding_cards) ·
+##           손가락으로 가리키기(오른팔, pointing).
 ## 사용법: PlayerView 가 매 프레임 animate() 를 부른다. 던질 때 play_throw() 한 번.
 ## 나중에 블렌더 리깅 + Mixamo 애니메이션(.glb)으로 바꾸면 이 파일 대신 AnimationPlayer/AnimationTree 를 쓴다.
 ## 그때도 PlayerView 가 넘겨주는 값(속도·자세·조준 중·던지기)은 그대로 쓰면 된다.
@@ -36,9 +37,14 @@ const FOLLOW := 12.0
 ## 카드 들기(카드 라운드 시연): 왼팔을 앞으로 들고 몸 안쪽으로 모은다. 부채는 Body 자식으로 손 앞에 붙는다.
 const HOLD_ARM_ANGLE := -1.35
 const HOLD_ARM_INWARD := -0.35
+## 가리키기(카드 라운드 시연, 왼클릭): 오른팔을 앞으로 뻗는다. 위를 보면 조금 더 든다.
+const POINT_ARM_ANGLE := -1.45
 
 ## 왼손에 카드를 들고 있는지. 켜면 걷거나 앉아도 왼팔은 카드 든 자세를 유지한다.
 var holding_cards := false
+## 손가락으로 가리키는 중인지. 켜면 오른팔을 앞으로 뻗고, 팔에 PointFinger 노드가 있으면 보인다
+## (손가락은 캐릭터 생성물에 없고 카드 라운드가 실행 중에 붙인다 — game/card_round/flow/gestures.gd). 조준·던지기가 먼저다.
+var pointing := false
 
 var leg_l: Node3D
 var leg_r: Node3D
@@ -52,6 +58,7 @@ var _walk_phase := 0.0
 var _time := 0.0
 var _throw_age := -1.0
 var _next_blink := 0.0
+var _finger: Node3D
 
 
 ## model = PlayerLook.character() 로 만든 캐릭터 루트. 관절 이름이 없으면(옛 생성물) 아무것도 움직이지 않는다.
@@ -123,6 +130,12 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	# 조준 중이면 오른팔을 앞-위로 들고, 던지는 중이면 뒤로 젖혔다가 앞으로 내린다.
 	if aiming:
 		arm_r_angle = AIM_ARM_ANGLE
+	elif pointing:
+		arm_r_angle = POINT_ARM_ANGLE - clampf(look_pitch, -0.5, 0.7) * 0.8
+	if _finger == null:
+		_finger = arm_r.get_node_or_null("PointFinger")
+	if _finger != null:
+		_finger.visible = pointing and not aiming and _throw_age < 0.0
 	if holding_cards:
 		arm_l_angle = HOLD_ARM_ANGLE
 		arm_spread = 0.0

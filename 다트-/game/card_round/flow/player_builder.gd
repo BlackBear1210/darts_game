@@ -43,12 +43,13 @@ static func build(ctx: Context, players_root: Node3D, mover: SeatMover, presente
 static func _left_hand_fan(view: PlayerView, seat: int) -> HandFan:
 	var fan := HandFan.new()
 	fan.name = "LeftHandCards"
-	fan.card_scale = 0.55
-	fan.radius = 0.075
-	fan.spread_degrees = 56.0
-	fan.lift_height = 0.045
-	fan.lift_scale = 1.35
-	fan.lift_forward = 0.02
+	# 2026-10-28 피드백: 상대 왼손 부채가 너무 작아 안 보인다 → 카드 크기·반지름·들어 올림을 약 1.55배(0.55 → 0.85).
+	fan.card_scale = 0.85
+	fan.radius = 0.115
+	fan.spread_degrees = 60.0
+	fan.lift_height = 0.07
+	fan.lift_scale = 1.3
+	fan.lift_forward = 0.03
 	fan.layer_mask = 1 << (seat + 1)
 	var body := view.get_node("Model/Body") as Node3D
 	body.add_child(fan)

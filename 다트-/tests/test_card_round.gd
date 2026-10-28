@@ -215,6 +215,8 @@ func _check_scene(render: bool) -> void:
 	_check(int(stats.get("used", 0)) >= 1, "카드가 한 장 이상 쓰였다")
 	_check(int(stats.get("darts", 0)) >= 12, "다트를 던졌다")
 	_check(bool(stats.get("refilled_to_7", false)), "충전 라운드 뒤 모두 7장")
+	# 2026-10-28 방해선: 봇(자동 진행이면 내 자리도)은 구역을 옆길로 돌아가야 한다 → 구역에 부딪혀 되돌려진 적이 없어야 한다.
+	_check(int(stats.get("zone_bumps", -1)) == 0, "차례 아닌 사람이 던지는 칸 근처 구역에 들어가지 않았다")
 	print("SCENE STATS ", stats)
 	scene.queue_free()
 	await process_frame

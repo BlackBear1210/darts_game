@@ -1,7 +1,7 @@
 extends RefCounted
 ## 다트 한 발: 카드 효과(힘·무거운 다트·바람·졸림·특수 다트 3갈래·가림판·숫자 섞기)를 조준·채점에 반영해 던지고,
 ## 날아가는 다트를 만들고, 과녁 점수 → 카드 연산(rules.resolve_dart) → 점수 반영까지 한다.
-## 벌칙 원판에 던지는 한 발도 여기 있다. 사람 몸에 맞으면 body_hit 신호만 보내고, 그 결과(스턴·보상·흐림)는 disruption.gd 가 처리한다.
+## 벌칙 원판에 던지는 한 발도 여기 있다. 사람 몸에 맞으면 body_hit 신호만 보내고, 그 결과(스턴·보상·맞힌 벌)는 disruption.gd 가 처리한다.
 
 ## 다트가 사람 몸(캡슐)에 맞았다.
 signal body_hit(thrower: int, victim: int)
@@ -9,6 +9,8 @@ signal body_hit(thrower: int, victim: int)
 signal wheel_body_hit
 ## 점수가 바뀌었다 → 머리 위 점수 글자를 다시 쓴다.
 signal score_changed
+## 다트 한 발이 끝났다(base = 과녁 기본 점수, 카드 연산 전) — 봇 감정표현이 듣는다(gestures.gd).
+signal dart_landed(seat: int, base: int)
 
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const TurnEffects = preload("res://game/card_round/flow/turn_effects.gd")
@@ -122,6 +124,7 @@ func throw(seat: int, aim: Vector2, charge: float) -> void:
 	if bool(outcome.win):
 		_ctx.hud.banner("%s 승리!" % _ctx.name_of(seat), rules.win_text(), 1.6)
 	score_changed.emit()
+	dart_landed.emit(seat, base)
 	if victim >= 0:
 		body_hit.emit(seat, victim)
 	busy = false

@@ -140,6 +140,13 @@ func draw_index(from: DrawFrom) -> int:
 	return random.randi_range(0, deck.size() - 1)
 
 
+## 이번 한 장을 덱 어디서 뽑을지: 위·가운데·아래(밑장) 중 하나를 같은 확률로(시연값).
+## 2026-10-28 사용자 피드백: "뽑는 곳" 설정을 없애고 한 장마다 무작위로 → 받는 사람이 밑장 빼기·중간 빼기를 보는 재미.
+## DrawFrom 의 앞 세 값(TOP 0 · MIDDLE 1 · BOTTOM 2) 순서에 기대므로 enum 순서를 바꾸면 같이 고친다.
+func random_draw_from() -> DrawFrom:
+	return random.randi_range(0, 2) as DrawFrom
+
+
 ## 덱의 index 번째 카드를 뽑아 돌려준다.
 func take_from_deck(index: int) -> Card:
 	var card: Card = deck[index]
@@ -251,7 +258,7 @@ func use_problem(seat: int, target: int, now: float) -> String:
 	if finished:
 		return "경기가 끝났다"
 	if card == null:
-		return "먼저 1~7로 카드를 꺼내 든다"
+		return "먼저 Q·E(또는 1~7)로 카드를 꺼내 든다"
 	if not is_ready(seat, now):
 		return "꺼내 든 뒤 %.1f초 기다려야 한다" % READY_SECONDS
 	if not valid_targets(seat, card.type).has(target):

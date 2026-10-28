@@ -5,10 +5,11 @@ extends Node3D
 ## 이 파일은 "무엇을 어떤 순서로 하나"(단계 순서)만 갖고, 실제 일은 부품이 한다(한 파일 = 한 가지 일).
 ##   rules/  규칙 계산(노드 없음)  round_rules · card_catalog · bot_brain · dart_solver
 ##   cards/  카드 보이기          card_faces · card_view · table_cards · hand_fan · shuffle_motions
-##   fx/     연출                 screen_debuff · voice_fx · stun_stars · punishment_wheel
-##   ui/     화면 UI              card_round_hud · round_tracker
+##   fx/     연출                 screen_debuff · voice_fx · stun_stars · punishment_wheel · emote_art · emote_bubble
+##   ui/     화면 UI              card_round_hud · round_tracker · emote_wheel(T 감정표현 피자판)
 ##   flow/   진행 부품            round_context(함께 쓰는 상자) · round_settings · seat_mover · card_actions · dart_actions
-##                                turn_effects · disruption · round_camera · local_input · hud_presenter · round_capture · player_builder
+##                                turn_effects · disruption · throw_zone(던지는 칸·방해선) · round_camera · local_input · hud_presenter
+##                                gestures(가리키기·감정표현) · round_capture · player_builder
 ##
 ## 흐름: 흐트러진 덱 → 자동 섞기(정석 리플·마술사·딜러) → 가지런한 덱 → 한 사람에 한 장씩 7장까지 → 앞면 공개 →
 ##       왼손 7장 = 테이블 7칸 → 1~7 꺼내 들기(대기) → 다른 사람이 보고 대응(무효 ×0·방해) → 다트 라운드 →
@@ -24,6 +25,8 @@ const CardActions = preload("res://game/card_round/flow/card_actions.gd")
 const DartActions = preload("res://game/card_round/flow/dart_actions.gd")
 const TurnEffects = preload("res://game/card_round/flow/turn_effects.gd")
 const Disruption = preload("res://game/card_round/flow/disruption.gd")
+const ThrowZone = preload("res://game/card_round/flow/throw_zone.gd")
+const Gestures = preload("res://game/card_round/flow/gestures.gd")
 const RoundCamera = preload("res://game/card_round/flow/round_camera.gd")
 const LocalInput = preload("res://game/card_round/flow/local_input.gd")
 const HudPresenter = preload("res://game/card_round/flow/hud_presenter.gd")
@@ -38,21 +41,21 @@ const VoiceFx = preload("res://game/card_round/fx/voice_fx.gd")
 const PunishmentWheel = preload("res://game/card_round/fx/punishment_wheel.gd")
 const Hud = preload("res://game/card_round/ui/card_round_hud.gd")
 const RoundTracker = preload("res://game/card_round/ui/round_tracker.gd")
+const EmoteWheel = preload("res://game/card_round/ui/emote_wheel.gd")
 const BotDriver = preload("res://game/player/bot_driver.gd")
 const CharacterFactory = preload("res://art/characters/character_factory.gd")
 const SynthAudio = preload("res://art/showcase/synth_audio.gd")
 
 ## 아래 값은 전부 시연값(팀 확정 전).
-## 딜링 한 장 간격(초), 카드 확인 시간(초), 사람 차례 제한 시간(초).
+## 딜링 한 장 간격(초, 맨 위 / 가운데·밑장), 카드 확인 시간(초), 사람 차례 제한 시간(초).
 const DEAL_GAP: float = 0.14
+const DEAL_GAP_PULLED: float = 0.32
 const CHECK_SECONDS: float = 4.0
 const TURN_SECONDS: float = 30.0
 ## 봇이 막는 사람이 있어도 비키지 않고 그냥 던질 확률.
 const THROW_THROUGH_CHANCE: float = 0.6
 ## 끝 라운드가 없는 모드(목표 점수·500→0)도 시연은 이 라운드에서 점수 순으로 끝낸다.
 const MAX_ROUNDS: int = 10
-## 설정 "뽑는 곳" 이름(Rules.DrawFrom 순서).
-const DRAW_NAMES: Array[String] = ["맨 위", "가운데", "맨 아래", "무작위 위치"]
 
 ## true = 내 자리도 봇처럼 자동(검사·캡처). F6 으로 직접 할 때는 false.
 @export var autoplay: bool = false
@@ -81,6 +84,9 @@ var cards := CardActions.new()
 var darts := DartActions.new()
 var effects := TurnEffects.new()
 var disruption := Disruption.new()
+var zone := ThrowZone.new()
+var gestures := Gestures.new()
+var emote_wheel := EmoteWheel.new()
 var view := RoundCamera.new()
 var input := LocalInput.new()
 var presenter := HudPresenter.new()
@@ -154,6 +160,7 @@ func _fill_context() -> void:
 	ctx.audio = SynthAudio.new()
 	ctx.audio.volume_db = -8.0
 	add_child(ctx.audio)
+	add_child(emote_wheel)
 
 
 ## 부품을 준비하고 서로 잇는다. 부품끼리는 신호로만 알린다(누가 듣는지는 여기 한 곳에서 보인다).
@@ -163,19 +170,26 @@ func _setup_parts() -> void:
 	cards.setup(ctx, mover)
 	darts.setup(ctx, effects)
 	disruption.setup(ctx, mover, cards, effects)
+	zone.setup(ctx)
+	gestures.setup(ctx, emote_wheel)
 	view.setup(ctx)
-	input.setup(ctx, cards, mover, view, darts, _throw_input, _hand)
+	input.setup(ctx, cards, mover, view, darts, _throw_input, _hand, gestures, emote_wheel)
 	presenter.setup(ctx, mover, cards, effects, darts, input)
-	capture.setup(ctx, view, capture_folder)
+	capture.setup(ctx, view, capture_folder, gestures, emote_wheel)
 	mover.local_seated.connect(view.face_table)
 	cards.turn_effect_added.connect(effects.apply)
 	cards.card_marked.connect(capture.on_card_marked)
 	cards.nullified.connect(capture.on_nullified)
+	cards.nullified.connect(gestures.on_nullified)
+	cards.card_used.connect(gestures.on_card_used)
+	darts.dart_landed.connect(gestures.on_dart_landed)
+	darts.dart_landed.connect(capture.on_dart_landed)
 	darts.score_changed.connect(presenter.refresh_labels)
 	darts.body_hit.connect(disruption.on_body_hit)
 	darts.wheel_body_hit.connect(capture.on_wheel_body_hit)
 	disruption.hit_resolved.connect(func(thrower: int, victim: int) -> void:
 		presenter.refresh_labels()
+		gestures.on_body_hit(thrower, victim)
 		capture.on_body_hit(thrower, victim))
 
 
@@ -192,6 +206,8 @@ func _run() -> void:
 	ctx.rules.fill_deck()
 	ctx.table_cards.scatter(ctx.rules.deck.size())
 	PlayerBuilder.build(ctx, $Players, mover, presenter)
+	zone.build_marks(self, ctx.table)
+	gestures.build()
 	ctx.voice.setup(ctx.actors)
 	view.face_table()
 	ctx.hud.set_round(1, RoundTracker.Stage.CARDS, _total_rounds())
@@ -261,32 +277,36 @@ func _card_stage() -> void:
 		ctx.stats.refilled_to_7 = true
 	ctx.hud.toast("모두 7장 확인 ✓ (왼손 7장 = 테이블 7칸)" if all_seven else "7장이 안 되는 사람이 있다!", Color("8cf0a0") if all_seven else Color("ff9a8a"))
 	ctx.cards_open = true
-	ctx.hud.set_turn("카드 확인 · 1~7 로 꺼내 들기")
+	ctx.hud.set_turn("카드 확인 · Q·E 로 꺼내 들기")
 	ctx.hud.banner("카드 확인!", "왼손 카드 = 테이블 카드. 꺼내 든 카드는 모두가 본다.", 1.3)
 	await ctx.wait(CHECK_SECONDS * 0.5)
 	await capture.shot("06_hand_fan")
+	capture.on_cards_checked()
 	await ctx.wait(CHECK_SECONDS * 0.5)
 
 
-## 딜링: 정해진 순서로 한 바퀴에 한 사람 한 장씩, 빈 칸이 다 찰 때까지(rules.deal_plan). 덱의 위·가운데·아래(설정)에서 뽑는다.
+## 딜링: 정해진 순서로 한 바퀴에 한 사람 한 장씩, 빈 칸이 다 찰 때까지(rules.deal_plan).
+## 뽑는 곳은 한 장마다 무작위(위·가운데·밑장, rules.random_draw_from) — 2026-10-28 피드백으로 설정에서 뺐다.
+## 가운데·밑장은 빼내는 모습이 보이게 다음 장까지 조금 더 기다린다.
 func _deal() -> void:
 	var rules: Rules = ctx.rules
 	var plan: Array[Vector2i] = rules.deal_plan()
-	var from: int = settings.draw_from()
 	var order_text := PackedStringArray()
 	for seat in rules.order:
 		order_text.append(PlayerLook.SYMBOLS[seat])
-	ctx.hud.toast("나눠 주기: 덱 %s에서 · 순서 %s (정하는 방법은 미정)" % [DRAW_NAMES[from], " → ".join(order_text)])
+	ctx.hud.toast("나눠 주기: 한 장마다 위·가운데·밑장 중 무작위 · 순서 %s (정하는 방법은 미정)" % " → ".join(order_text))
 	for i in range(plan.size()):
 		var step: Vector2i = plan[i]
-		var index: int = rules.draw_index(from as Rules.DrawFrom)
+		var from: Rules.DrawFrom = rules.random_draw_from()
+		var index: int = rules.draw_index(from)
 		var card: Rules.Card = rules.take_from_deck(index)
 		rules.place(step.x, step.y, card)
 		ctx.table_cards.deal_card(index, card.type, step.x, step.y)
 		ctx.stats.dealt = int(ctx.stats.dealt) + 1
-		if i == plan.size() / 2:
-			capture.shot_after("04_dealing", 0.05)
-		await ctx.wait(DEAL_GAP)
+		if i >= plan.size() / 2 and from != Rules.DrawFrom.TOP:
+			# 가운데·밑장을 빼는 순간("밑장!" 글자)을 한 번 찍는다.
+			capture.shot_once("04_dealing_pull", 0.12)
+		await ctx.wait(DEAL_GAP if from == Rules.DrawFrom.TOP else DEAL_GAP_PULLED)
 	await ctx.wait(0.5)
 
 
@@ -294,6 +314,7 @@ func _deal() -> void:
 func _dart_stage() -> void:
 	ctx.phase = "darts"
 	ctx.hud.set_round(ctx.rules.round_number, RoundTracker.Stage.DARTS, _total_rounds())
+	capture.on_darts_started()
 	await ctx.hud.banner("%d라운드 · 다트!" % ctx.rules.round_number, "한 사람 3발 · 카드는 언제든 꺼내 들고 쓸 수 있다", 1.3)
 	for position in range(ctx.rules.order.size()):
 		if ctx.rules.finished:
@@ -310,9 +331,10 @@ func _turn(position: int) -> void:
 	effects.apply(seat)
 	ctx.hud.toast("%s 차례" % ctx.name_of(seat), PlayerLook.COLORS[seat].lightened(0.35))
 	mover.stand(seat)
+	zone.set_active(seat)
 	disruption.plan(seat)
 	if ctx.bot_driven(seat):
-		mover.walk_to(seat, Vector3(ctx.random.randf_range(-0.5, 0.5), 0, SeatMover.THROW_Z), TableView.BOARD_CENTER)
+		mover.walk_to(seat, Vector3(ctx.random.randf_range(-0.5, 0.5), 0, ThrowZone.THROW_STAND_Z), TableView.BOARD_CENTER, -1, true)
 		await ctx.wait_until(func() -> bool: return mover.arrived(seat), 7.0)
 		while rules.is_turn_of(seat) and not rules.finished:
 			await ctx.wait(ctx.random.randf_range(0.9, 1.4))
@@ -323,10 +345,12 @@ func _turn(position: int) -> void:
 				ctx.hud.toast("%s: 옆으로 비켜 선다" % ctx.name_of(seat))
 				await ctx.wait_until(func() -> bool: return mover.arrived(seat), 1.6)
 			actor.aiming = true
+			# 조준 자세를 보고 막는 봇이 점프할 수도 있다(다트는 0.35초 뒤에 나간다).
+			disruption.jump_blockers(seat, 0.0, 0.45)
 			await ctx.wait(0.35)
 			await darts.throw(seat, BotDriver.random_aim(), BotDriver.random_charge())
 	else:
-		ctx.hud.banner("내 차례!", "투척선 쪽으로 걸어가 왼클릭을 길게 눌렀다 떼면 던진다 · 3발", 1.5)
+		ctx.hud.banner("내 차례!", "던지는 칸(바닥 금색 칸)에서 왼클릭을 길게 눌렀다 떼면 던진다 · 3발", 1.5)
 		var deadline: float = ctx.now + TURN_SECONDS
 		await ctx.wait_until(func() -> bool: return not rules.is_turn_of(seat) or rules.finished, TURN_SECONDS)
 		if rules.is_turn_of(seat) and ctx.now >= deadline - 0.05:
@@ -335,6 +359,7 @@ func _turn(position: int) -> void:
 	await ctx.wait(0.7)
 	actor.aiming = false
 	rules.end_turn()
+	zone.set_active(-1)
 	effects.end_turn(seat)
 	effects.restore()
 	darts.clear_darts()
@@ -392,9 +417,10 @@ func _punishment() -> void:
 		darts.punish_seat = seat
 		darts.punish_left = DartActions.PUNISH_DARTS
 		mover.stand(seat)
+		zone.set_active(seat)
 		ctx.hud.toast("%s 던질 차례" % ctx.name_of(seat), PlayerLook.COLORS[seat].lightened(0.35))
 		if ctx.bot_driven(seat):
-			mover.walk_to(seat, Vector3(ctx.random.randf_range(-0.4, 0.4), 0, SeatMover.THROW_Z), Context.WHEEL_POSITION)
+			mover.walk_to(seat, Vector3(ctx.random.randf_range(-0.4, 0.4), 0, ThrowZone.THROW_STAND_Z), Context.WHEEL_POSITION, -1, true)
 			await ctx.wait_until(func() -> bool: return mover.arrived(seat), 7.0)
 			while darts.punish_left > 0:
 				ctx.actors[seat].aiming = true
@@ -408,6 +434,7 @@ func _punishment() -> void:
 		await ctx.wait_until(func() -> bool: return not darts.busy, 3.0)
 		ctx.actors[seat].aiming = false
 		await ctx.wait(0.6)
+		zone.set_active(-1)
 		mover.send_home(seat)
 	darts.punish_seat = -1
 	darts.wheel.stop()
@@ -427,8 +454,10 @@ func _process(delta: float) -> void:
 	view.update(delta)
 	presenter.update_status()
 	input.update_throw_state()
+	disruption.watch_local_charge(input.charging())
 	presenter.update_hud()
 	effects.process()
+	gestures.process(delta)
 
 
 func _physics_process(delta: float) -> void:
@@ -438,6 +467,7 @@ func _physics_process(delta: float) -> void:
 	var me: PlayerView = ctx.actors[Context.LOCAL_SEAT]
 	if me.visible and not mover.auto_driven(Context.LOCAL_SEAT):
 		input.drive_local(delta)
+	zone.keep_out(delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
