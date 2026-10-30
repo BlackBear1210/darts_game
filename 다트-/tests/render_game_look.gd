@@ -58,10 +58,15 @@ func _throw(aim: Vector2) -> void:
 func _run() -> void:
 	root.mode = Window.MODE_FULLSCREEN
 	_main = (load("res://app/main.tscn") as PackedScene).instantiate()
+	_main.developer_mode = true
 	root.add_child(_main)
+	_main._boot_developer()
 	await create_timer(1.0).timeout
 	_game = _main.get_node("Game") as GameView
 	_hud = _main.get_node("GameHUD") as GameHUD
+	# 2026-10-30: 경기는 카드 턴부터 시작한다. 카드 배부가 끝나 다트 차례가 된 뒤 촬영한다.
+	while _game.controller.state.phase == MatchState.Phase.CARDS:
+		await process_frame
 	# 실제 마우스가 시점을 흔들거나 캐릭터를 움직이지 않게 입력을 끈다(촬영용).
 	_game.set_process_unhandled_input(false)
 	_tour = Camera3D.new()

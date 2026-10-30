@@ -7,7 +7,7 @@
 
 | 영역 | 현재 책임 |
 | --- | --- |
-| `app/main.tscn`, `main.gd` | 지속 연결과 로비/경기/HUD 조립, 개발 빌드 자동 호스트 |
+| `app/main.tscn`, `main.gd` | 지속 연결과 로비/3D 대기실/경기/HUD 조립, 명시적 개발 실행 |
 | `network/network_session.gd` | ENet 방 생성·참가·거부 사유·로딩 장벽, 실제 발신자 ID가 붙은 메시지 전달 |
 | `lobby/room_state.gd`, `room_player.gd` | 최대 4인 자리/준비/로딩, 사람·봇 공개 신원 |
 | `game/game.tscn`, `game.gd` | 로컬 1인칭 시점·이동 입력, 방장 이동 처리 연결, 착석 요청, 다트 환경 레이와 과녁 교차, 확정 비행 표현 |
@@ -27,6 +27,21 @@ Autoload는 없다. `/root/Main/NetworkSession`은 화면 전환 중 유지한�
 RPC는 이 지속 노드에서만 수신하고, Game/MatchController는 로컬 signal 구독으로 자기 책임의 메시지를 받는다.
 화면을 없앤 직후 도착한 이동 패킷도 삭제된 Scene 경로를 조회하지 않는다.
 `NetworkSession`은 점수·물리·턴 규칙을 계산하지 않는다.
+
+## 2026-10-30 현재 기본 실행 경로
+
+F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `PlayerPreferences`는 개인 표시·음향 설정이다. `Main`은 `social_lobby` 방에 연결되는 즉시 `Game`과 `LoungeHUD`를 만들고, 방 단계 LOBBY인 동안 `MatchController`는 WAITING이다. 실제 착석 여부를 확인한 준비가 모두 모이면 기존 LOADING 장벽을 거쳐 경기를 시작한다. 재경기는 맵 대기와 준비 초기화로 돌아간다. Main의 `_lounge_memory`가 경기 장면 재생성 사이의 소품·음악·취기를 이어 준다.
+
+- `lobby/front_door.gd`, `ui/lounge_style.gd`, `ui/dart_cursor.gd`: 새 로비와 공용 UI, 다트 커서. 연결은 NetworkSession으로 위임한다.
+- `lobby/room_settings.gd`: 공개 설정 Resource. 비밀번호·개발자 권한은 포함하지 않는다. sanitize/허용 카드 풀/상대 가중치가 여기 있다.
+- `network/network_session.gd`: 초대/암호 도전 응답, 정원, 설정 발신자 검증, 준비와 자동 시작. 개발자 값은 local server host+debug 개발 플래그 조건을 별도로 확인한다.
+- `ui/settings_panel.gd`, `player_preferences.gd`: ESC 개인 설정과 모니터 방장/개발자 설정. 개인 설정은 ConfigFile, 공유 설정은 server 승인만 사용한다.
+- `game/match/match_cards.gd`: 실제 peer ID와 기존 순수 RoundRules 자리 인덱스를 변환한다. 카드 턴·선택·사용·대응·패스 및 카드 효과/승리를 MatchController로 연결한다. 스냅샷은 hand/pending_card/card_effects/card_peer/feed를 포함한다.
+- `game/lounge/lounge_world.gd`: 모니터·주크박스·소품과 테마. 방장만 물체 소유권/거리/요청 제한/병 궤적/적중/취기·스턴을 갱신한다. 시계는 남은 시간으로 보내 서로 다른 PC의 단조 시계 차이를 피한다. 과거 match_id 이벤트는 무시한다.
+- `game/lounge/youtube_bridge.gd`, `youtube_player.html`: 외부 브라우저 공식 임베드. 루프백에 /player·/state 읽기 전용 경로만 제공하고 헤더 크기·시간·동시 요청 수를 제한한다. 영상·전원·볼륨을 전달하고 파일/명령 실행 엔드포인트는 제공하지 않는다.
+- `ui/lounge_hud.gd`: 짧은 효과 피드·준비 인원·카드 키·상호작용·공동 순위. 기존 `GameHUD`는 legacy 예시/서버 검증 경로에 남긴다.
+
+원형 테이블은 `TableView` 원통 충돌과 `GameRoomBuilder` 생성기의 원형 상판을 같이 바꿨다. `pub_game.tscn`은 생성기로 다시 저장했다. 기존 renderer/physics/project.godot/큰 조립 씬 파일은 유지했다. 이후 절의 자동 호스트·카드 배부만 설명은 기존 legacy 실행 경로의 구조이며 새 기본 경로에서는 위 설명이 우선한다.
 
 ## 전용 서버
 

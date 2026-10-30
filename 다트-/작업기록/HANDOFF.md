@@ -1,3 +1,27 @@
+# 최신 인수인계 — 네온 오락실 · 깨지는 소품 · UI 개편 (2026-10-30 오후)
+
+- 상세: [2026-10-30_오락실_깨지는소품_UI개편.md](2026-10-30_오락실_깨지는소품_UI개편.md).
+- 소품 규칙·네트워크: `game/lounge/lounge_world.gd`(방장 판정, 10Hz 공개). 오락기 규칙은 `arcade/arcade_rules.gd`, 그림은 `arcade/arcade_room.gd` — 규칙과 그림을 섞지 말 것.
+- 테마를 바꾸면 `TableView.rebuild_pub(skip, trim)` 으로 펍 그림을 다시 만든다(`StaticBatch` 가 메시를 합쳐서 그룹만 숨길 수 없다).
+- 디자이너 파일 자리(있으면 자동 사용): `art/fonts/darty_*.ttf`, `art/ui/logo_darty.png`, `art/ui/icons/<이름>.png`, `art/audio/<이름>.ogg`, `art/props/<kind>.tscn`(재질 `M_Variant` = 변형 색), `art/arcade/carpet_blacklight.png`.
+- 함정: 킬로그 칸 구분에 제어 글자(U+001F 등)를 쓰지 말 것 — Godot JSON 이 이스케이프하지 않아 네트워크 시험 파이썬이 상태를 못 읽는다. `MatchController.FEED_SEPARATOR`(탭)만 쓴다.
+- 창 모드 시험(`render_*.gd`)은 assert 가 실패하면 창이 멈춰 있다 — 시간 제한을 두고 돌린다.
+
+---
+
+# 최신 작업 — F5 로비·라운지·게임 설정 (2026-10-30)
+
+- 상태: 실제 저장소 반영 및 2/3/4인 전체 경기 검증 완료. 에디터와 스크립트 106개 로딩 PASS. 커밋·푸시 없음.
+- F5는 로비 → 싱글/멀티 → 3D 대기실 → E 착석/Enter 참여 → 카드/다트 경기로 바뀌었다. 기본 예시 자동 실행을 끄고 `--developer --quick-test`로만 유지한다.
+- 상세 변경·검증·미완성 범위: [2026-10-30_로비_라운지_게임설정_고도화.md](2026-10-30_로비_라운지_게임설정_고도화.md). 카드 사용도 F5 서버 경기에 연결했다. 아래 과거 기록의 “카드 사용 불가”는 현재에는 해당하지 않는다.
+- 새 책임: `RoomSettings`, `FrontDoor`, `SettingsPanel`, `LoungeHUD`, `MatchCards`, `LoungeWorld`, `YouTubeBridge`. RPC는 기존 `/root/Main/NetworkSession`을 유지한다.
+- 검증: 실제 다중 프로세스 기존 2종+새 라운지, 새 규칙/소품/HTTP, 기존 규칙/카드/투척/프로토타입, D3D12 화면 확인. Git 커밋·푸시는 수행하지 않는다.
+- 운영 로그인/공개 방 목록·인터넷 중계, 외부 YouTube 실재생/다른 PC, F6 전체 보상·벌칙 연출의 F5 이식, 최종 아트·밸런스는 남아 있다. 자세한 한계는 상세 기록 참조.
+
+---
+
+아래는 당시 상태를 보존한 이전 작업 기록이다.
+
 # 최신 인수인계 — 카드 라운드 시연 단독 장면 (2026-10-28)
 
 - 상세 기록: `작업기록/2026-10-28_카드라운드_시연.md`. 흐름표·조작·시연값: `docs/CARD_ROUND_PROTOTYPE.md`. 결정: `docs/DECISIONS.md` 2026-10-28.

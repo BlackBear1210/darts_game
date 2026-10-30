@@ -11,6 +11,9 @@ signal dart_thrown(data: Dictionary)
 ## 카드 목록(이름·분류·효과)은 카드 라운드 시연의 것을 그대로 쓴다 — 카드 정의는 한 곳만 유지한다.
 const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
 
+const MatchCards = preload("res://game/match/match_cards.gd")
+var cards: RefCounted
+var room_settings := RoomSettings.new()
 var session: NetworkSession
 var state := MatchState.new()
 var local_peer_id: int = 0
@@ -39,6 +42,11 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 		session.game_action.connect(_receive_action)
 		session.game_event.connect(_receive_event)
 	config = config.duplicate() as MatchConfig
+	room_settings = room.settings
+	if room_settings.social_lobby:
+		config.rounds = room_settings.rounds
+		config.turn_seconds = room_settings.dart_seconds
+		config.card_seconds = room_settings.card_seconds
 	local_peer_id = peer_id
 	state.match_id = room.match_id
 	for identity in room.players:
@@ -53,6 +61,7 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 
 func start() -> void:
 	if local_peer_id == 1 and state.phase == MatchState.Phase.WAITING:
+		if room_settings.social_lobby: cards = MatchCards.new(self)
 		_begin_cards()
 
 
@@ -71,6 +80,8 @@ func submit_throw(aim: Vector2, charge: float) -> void:
 
 
 func _receive_action(sender: int, action: String, payload: Array) -> void:
+	if action == "card" and payload.size() == 3 and payload[0] == state.match_id and payload[1] is String and payload[2] is int:
+		if cards != null: cards.action(sender, payload[1], payload[2])
 	if action == "restart" and payload.is_empty() and sender == session.room.host_peer_id:
 		restart()
 	if action == "throw" and payload.size() == 5:
@@ -123,7 +134,14 @@ func bot_throw(aim: Vector2, charge: float) -> void:
 
 ## 확정된 한 발을 비행으로 보낸다. 사람과 봇이 같은 경로를 쓴다.
 func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void:
-	var data: Dictionary = solve_throw.call(aim, charge, peer_id)
+	var mods: Dictionary = cards.modifiers(peer_id) if cards != null else {}
+	var adjusted: Vector2 = aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
+	var data: Dictionary = solve_throw.call(adjusted, 1.0 if mods.get("power", false) else charge, peer_id)
+	if mods.get("triple", false):
+		for offset in [Vector2(-0.09, 0.03), Vector2(0.09, 0.03)]:
+			var alternate: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id)
+			if int(alternate.points) > int(data.points): data = alternate
+	if mods.get("cover", false) and float(data.x) < 0: data.points = 0
 	_pending_hit = data.duplicate()
 	_pending_hit.merge({"peer_id": peer_id, "request_id": request_id})
 	state.darts_left -= 1
@@ -156,7 +174,9 @@ func _process(_delta: float) -> void:
 			if _everyone_seated() or _now() >= _phase_end:
 				_close_table()
 		MatchState.Phase.CARDS:
-			if _now() >= _phase_end:
+			if cards != null:
+				cards.tick()
+			elif _now() >= _phase_end:
 				_begin_turn()
 
 
@@ -164,17 +184,26 @@ func _process(_delta: float) -> void:
 ## 쓴 만큼만 7장까지 채운다 — 한 장도 안 썼으면 한 장도 받지 않는다(CardHandRules 확정 규칙).
 ## before 는 이 단계로 넘어오며 알릴 말(집합 지각 같은 것). 카드 알림이 그것을 덮지 않게 앞에 붙인다.
 func _begin_cards(before: String = "") -> void:
+	if room_settings.social_lobby and not room_settings.cards_enabled:
+		_begin_turn()
+		return
 	var dealt: int = 0
 	for player in state.players:
 		while player.hand.size() < CardHandRules.HAND_LIMIT:
-			player.hand.append(CardCatalog.random_type(_random))
+			var type: int = room_settings.draw_card(_random) if room_settings.social_lobby else CardCatalog.random_type(_random)
+			if type < 0: break
+			player.hand.append(type)
 			dealt += 1
 	var text: String = "카드 나눠 주기 — 각자 %d장" % CardHandRules.HAND_LIMIT if dealt > 0 else "모두 %d장 그대로" % CardHandRules.HAND_LIMIT
 	notice = text if before.is_empty() else "%s · %s" % [before, text]
-	_set_phase(MatchState.Phase.CARDS, config.card_seconds)
+	if cards != null:
+		cards.begin_round()
+	else:
+		_set_phase(MatchState.Phase.CARDS, config.card_seconds)
 
 
 func _begin_turn() -> void:
+	if cards != null: cards.begin_dart_turn()
 	state.turn_id += 1
 	state.darts_left = config.darts_per_turn
 	_pending_hit.clear()
@@ -194,9 +223,21 @@ func _timeout_turn() -> void:
 func _land_dart() -> void:
 	if state.phase != MatchState.Phase.FLIGHT or _pending_hit.is_empty():
 		return
-	state.active_player().score += int(_pending_hit.points)
+	var won: bool = false
+	if cards != null:
+		var result: Dictionary = cards.score(int(_pending_hit.points))
+		_pending_hit.points = result.points
+		_pending_hit.reason = "버스트 · 차례 시작 점수로 복귀" if result.bust else str(result.formula) + "점"
+		if result.bust: state.darts_left = 0
+		won = result.win
+	else:
+		state.active_player().score += int(_pending_hit.points)
 	state.last_hit = _pending_hit.duplicate()
 	_pending_hit.clear()
+	add_feed(feed_entry("dart", state.active_player(), str(state.last_hit.reason)))
+	if won:
+		_set_phase(MatchState.Phase.FINISHED, 0)
+		return
 	if state.darts_left > 0 and _now() < _turn_end:
 		_set_phase(MatchState.Phase.AIMING, _turn_end - _now())
 	else:
@@ -205,6 +246,7 @@ func _land_dart() -> void:
 
 
 func _advance_turn() -> void:
+	if cards != null: cards.end_dart_turn()
 	state.turn_index += 1
 	if state.turn_index >= state.players.size():
 		state.turn_index = 0
@@ -254,8 +296,17 @@ func _close_table() -> void:
 
 
 func sync_roster(room: RoomState) -> void:
-	if not multiplayer.is_server() or state.players.is_empty():
+	if state.phase == MatchState.Phase.WAITING:
+		state.players.clear()
+		for identity in room.players:
+			var player := MatchPlayer.new()
+			player.peer_id = identity.peer_id
+			player.display_name = identity.display_name
+			player.seat = identity.seat
+			player.is_bot = identity.is_bot
+			state.players.append(player)
 		return
+	if not multiplayer.is_server() or state.players.is_empty(): return
 	var active_id: int = state.active_player().peer_id
 	var was_last: bool = state.turn_index == state.players.size() - 1
 	var removed_active: bool = false
@@ -267,7 +318,7 @@ func sync_roster(room: RoomState) -> void:
 			removed = true
 	if not removed:
 		return
-	if state.players.size() < RoomState.MIN_PLAYERS:
+	if state.players.size() < (1 if room_settings.solo else RoomState.MIN_PLAYERS):
 		state.turn_index = 0
 		notice = "참가자가 2명 미만이어서 경기를 종료했습니다."
 		_pending_hit.clear()
@@ -275,6 +326,11 @@ func sync_roster(room: RoomState) -> void:
 		return
 	if state.phase == MatchState.Phase.FINISHED:
 		state.turn_index = mini(state.turn_index, state.players.size() - 1)
+		_publish()
+		return
+	if state.phase == MatchState.Phase.CARDS and cards != null:
+		cards.rules.order = cards.rules.order.filter(func(index: int) -> bool: return state.find_player(cards.peers[index]) != null)
+		if state.find_player(state.card_peer) == null: cards.advance()
 		_publish()
 		return
 	if state.phase == MatchState.Phase.TABLE:
@@ -320,6 +376,9 @@ func developer_bot_turn(bot_id: int) -> void:
 
 
 func restart() -> void:
+	if room_settings.social_lobby and state.phase == MatchState.Phase.FINISHED:
+		if session != null: session.return_to_lobby()
+		return
 	if not multiplayer.is_server():
 		if session != null and session.is_room_host():
 			session.request_game_action.rpc_id(1, "restart", [])
@@ -369,3 +428,27 @@ func _receive_state(snapshot: Dictionary) -> void:
 
 func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
+
+
+func request_card(action: String, value: int = 0) -> void:
+	if session == null: return
+	if session.is_host():
+		if cards != null: cards.action(local_peer_id, action, value)
+	else: session.request_game_action.rpc_id(1, "card", [state.match_id, action, value])
+
+func add_feed(text: String) -> void:
+	state.feed.append(text.left(160))
+	while state.feed.size() > 5: state.feed.pop_front()
+
+
+## 킬로그 칸 구분(탭). 이름은 strip_escapes 로 탭이 빠지므로 섞이지 않는다.
+## 2026-10-30: 처음엔 보이지 않는 제어 글자(U+001F)를 썼는데, Godot JSON 이 그 글자를 이스케이프하지 않아
+## 상태 JSON 을 읽는 쪽(네트워크 시험의 파이썬)이 깨졌다. JSON 이 \t 로 적는 탭으로 바꿨다.
+const FEED_SEPARATOR := "\t"
+
+## 킬로그 한 줄(화면 오른쪽 위 칩으로 그린다). 칸은 FEED_SEPARATOR 로 나눈다.
+## 형식: 아이콘 · 주체 자리 · 주체 이름 · 내용 · 대상 자리 · 대상 이름 (자리 -1 = 없음).
+## 자리 번호가 있어 화면마다 자리 색으로 이름을 칠한다(배틀그라운드 킬로그처럼 "누가 [무엇으로] 누구를").
+static func feed_entry(icon: String, actor: MatchPlayer, text: String, target: MatchPlayer = null) -> String:
+	return FEED_SEPARATOR.join(PackedStringArray([icon, str(actor.seat if actor != null else -1), actor.display_name if actor != null else "",
+		text, str(target.seat if target != null else -1), target.display_name if target != null else ""]))

@@ -38,7 +38,9 @@ func _wait_until(condition: Callable, seconds: float, label: String) -> void:
 
 func _run() -> void:
 	_main = (load("res://app/main.tscn") as PackedScene).instantiate()
+	_main.developer_mode = true
 	root.add_child(_main)
+	_main._boot_developer()
 	await create_timer(0.3).timeout
 	_game = _main.get_node("Game") as GameView
 	_hud = _main.get_node("GameHUD") as GameHUD
@@ -279,7 +281,7 @@ func _run() -> void:
 	assert(ranking.count("1위") == 2 and "3위" in ranking and "4위" in ranking)
 	_main.get_node("NetworkSession").leave_room()
 	await process_frame
-	assert(_main.get_node("Lobby").visible and _main.get_node_or_null("Game") == null)
+	assert(_main.get_node("FrontDoor").visible and _main.get_node_or_null("Game") == null)
 	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, protected lane with open side aisles, seven cards dealt before the darts, bot walks to the oche and throws three darts then returns to its seat, lounge throw rejected, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
 	_main.queue_free()
 	await process_frame

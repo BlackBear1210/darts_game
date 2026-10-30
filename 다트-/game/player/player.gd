@@ -21,6 +21,12 @@ var pitch: float = 0.0
 var color: Color
 ## 지금 이 사람이 조준 중인지. GameView 가 매 프레임 넣고, 몸짓이 오른팔을 든다(모든 화면에서 보인다).
 var aiming: bool = false
+var ready_pose: bool = false
+var seat_lean: float = 0.0
+## 맞아서 밀려나는 속도(방장 시뮬레이션에서만 쓰고 위치로 모두에게 반영된다). 매 프레임 줄어든다.
+var knockback: Vector3 = Vector3.ZERO
+## 가챠 "왕머리" 같은 장난 효과(보이기만). LoungeWorld 가 매 프레임 넣는다.
+var head_scale: float = 1.0
 var _model: Node3D
 var _rig: CharacterRig
 var _label: Label3D
@@ -50,7 +56,7 @@ func _ready() -> void:
 func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false) -> void:
 	identity = player
 	# 자리 뒤에 선 채로 시작한다. 뒷벽에 붙은 자리도 있어 방 안으로 당긴다.
-	position = TableView.clamp_floor(TableView.SEATS[player.seat] + Vector3(0, 0.05, 0.8))
+	position = TableView.standing_spot(player.seat)
 	color = COLORS[player.seat]
 	_dress(player.seat)
 	# 캐릭터마다 고유 렌더 레이어. 각 카메라에서 자기 몸만 제외한다(모델의 모든 조각 + 이름표).
@@ -76,7 +82,17 @@ func _process(delta: float) -> void:
 	var posture := CharacterRig.Posture.SEAT if seated else (CharacterRig.Posture.CROUCH if crouched else CharacterRig.Posture.STAND)
 	var ground_speed := Vector2(velocity.x, velocity.z).length() / SPEED
 	var airborne := not seated and position.y > 0.05
+	_rig.cheering = ready_pose
 	_rig.animate(delta, ground_speed, posture, airborne, pitch, aiming)
+	# 두 손 참여 동작과 고개 내밀기는 시각 표현만 바꾼다. 충돌 캡슐은 움직이지 않는다.
+	# 왕머리: 목 관절을 키우면 머리·얼굴·머리카락이 함께 커진다(충돌 캡슐은 그대로).
+	_rig.neck.scale = _rig.neck.scale.lerp(Vector3.ONE * head_scale, minf(1, delta * 8))
+	if seated:
+		_rig.neck.position.x = lerpf(_rig.neck.position.x, seat_lean * 0.22, minf(1, delta * 9))
+		_rig.neck.rotation.z = seat_lean * -0.22
+	else:
+		_rig.neck.position.x = 0
+		_rig.neck.rotation.z = 0
 
 
 ## 던지기 몸짓을 한 번 재생한다(GameView._show_throw 가 부른다).
@@ -106,7 +122,7 @@ func _set_layers(node: Node, layer: int) -> void:
 
 
 func eye_position() -> Vector3:
-	return global_position + Vector3.UP * (0.95 if crouched or seated else EYE_HEIGHT)
+	return global_position + Vector3.UP * (0.95 if crouched or seated else EYE_HEIGHT) + basis.x * seat_lean * 0.18
 
 
 ## 조작은 방장만 넣는다. 사람은 자기 입력(GameView._accept_controls), 봇은 GameView._drive_bot 이 만든 값이다.
@@ -114,16 +130,19 @@ func simulate(delta: float, controls: Dictionary) -> void:
 	rotation.y = float(controls.get("yaw", rotation.y))
 	pitch = float(controls.get("pitch", pitch))
 	crouched = bool(controls.get("crouch", false)) and not seated
+	seat_lean = move_toward(seat_lean, float((controls.get("move", Vector2.ZERO) as Vector2).x) if seated else 0.0, delta * 4)
 	if seated:
 		velocity = Vector3.ZERO
+		knockback = Vector3.ZERO
 		position = TableView.SEATS[identity.seat]
 	else:
 		var axis: Vector2 = controls.get("move", Vector2.ZERO)
 		var direction := Basis(Vector3.UP, rotation.y) * Vector3(axis.x, 0, axis.y)
 		# speed_scale: 테이블 집합 지각 페널티(슬로우). 방장 시뮬레이션에만 적용되고 위치로 모든 화면에 반영된다.
 		var speed := SPEED * (0.5 if crouched else 1.0) * identity.speed_scale
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
+		velocity.x = direction.x * speed + knockback.x
+		velocity.z = direction.z * speed + knockback.z
+		knockback = knockback.move_toward(Vector3.ZERO, delta * 9.0)
 		if not is_on_floor():
 			velocity.y -= GRAVITY * delta
 		elif bool(controls.get("jump", false)):
@@ -149,7 +168,7 @@ func update_posture() -> void:
 
 func to_motion() -> Dictionary:
 	return {"id": identity.peer_id, "position": position, "yaw": rotation.y, "pitch": pitch,
-		"seated": seated, "crouched": crouched, "velocity": velocity}
+		"seat_lean": seat_lean, "seated": seated, "crouched": crouched, "velocity": velocity}
 
 
 func apply_motion(data: Dictionary) -> void:
@@ -157,6 +176,7 @@ func apply_motion(data: Dictionary) -> void:
 	rotation.y = data.yaw
 	pitch = data.pitch
 	seated = data.seated
+	seat_lean = float(data.get("seat_lean", 0))
 	crouched = data.crouched
 	velocity = data.velocity
 	update_posture()

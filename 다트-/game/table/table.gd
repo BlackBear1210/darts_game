@@ -66,7 +66,7 @@ var is_ready: bool = true
 
 ## 방 배치 상수를 한 줄 글자로 만든다. 생성기가 방(pub_game.tscn)에 저장하고, 실행 때 같은지 비교한다.
 static func layout_signature() -> String:
-	return var_to_str([BOARD_CENTER, BOARD_SCALE, SEATS, DART_HALL, LOUNGE, WALL_THICKNESS, CEILING_HEIGHT,
+	return var_to_str(["round_table_v1", BOARD_CENTER, BOARD_SCALE, SEATS, DART_HALL, LOUNGE, WALL_THICKNESS, CEILING_HEIGHT,
 		NO_ENTRY_Z, THROW_LINE_Z, LANE_HALF, TABLE_CENTER, TABLE_SIZE, TABLE_HEIGHT,
 		BARRELS, BARREL_RADIUS, SMALL_BARRELS, SMALL_BARREL_RADIUS,
 		BAR_BOX, NPC_TABLE_BOX, NPC_STOOLS, POOL_TABLE_BOX])
@@ -87,6 +87,13 @@ static func walkable_halls() -> Array[Rect2]:
 ## 레인 양옆이 뚫려 있어 투척선을 지나 과녁 옆까지 갈 수 있으므로 "투척선 뒤"도 함께 본다.
 static func in_throw_zone(point: Vector3) -> bool:
 	return DART_HALL.has_point(Vector2(point.x, point.z)) and point.z >= THROW_LINE_Z
+
+
+## 각 자리에서 테이블 바깥쪽으로 일어선다. 고정 +Z는 4번 자리를 상판 안에 넣는다.
+static func standing_spot(seat: int) -> Vector3:
+	var origin: Vector3 = SEATS[seat]
+	var outward: Vector3 = (origin - TABLE_CENTER).normalized()
+	return clamp_floor(origin + outward * 0.8 + Vector3.UP * 0.05)
 
 
 ## 몸이 방 밖으로 새지 않게 하는 마지막 안전망. 가까운 칸 안으로 당긴다(벽 충돌이 먼저 막는다).
@@ -130,7 +137,7 @@ func _ready() -> void:
 	for side: float in [-1.0, 1.0]:
 		_box(Vector3(side * LANE_HALF, 2, lane_middle), Vector3(0.1, 6, lane_depth), 4)
 	# 사람이 부딪히는 가구.
-	_box(TABLE_CENTER + Vector3.UP * TABLE_HEIGHT / 2.0, Vector3(TABLE_SIZE.x, TABLE_HEIGHT, TABLE_SIZE.y))
+	_cylinder(TABLE_CENTER, TABLE_SIZE.x / 2.0, TABLE_HEIGHT)
 	_box(BAR_BOX.get_center(), BAR_BOX.size)
 	_box(NPC_TABLE_BOX.get_center(), NPC_TABLE_BOX.size)
 	_box(POOL_TABLE_BOX.get_center(), POOL_TABLE_BOX.size)
@@ -151,6 +158,29 @@ func set_chalk_scores(text: String) -> void:
 	var label := pub.find_child("ChalkScores", true, false) as Label3D
 	if label != null:
 		label.text = text
+
+
+## 방 그림(Pub)을 새로 만든다. skip 에 든 묶음(예: "Bar")은 빼고 만든다.
+## 네온 오락실 테마가 같은 자리(같은 충돌 상자)에 기계를 세울 때 쓴다(game/lounge/lounge_world.gd).
+## 실행 중 메시 묶기(StaticBatch)가 끝난 뒤에는 묶음 하나만 숨길 수 없어서 통째로 다시 만든다.
+## trim 을 주면 묶기 전에 새 그림을 한 번 더 손볼 수 있다(예: 기계 위에 걸리는 펜던트 조명 빼기).
+func rebuild_pub(skip: Array[String], trim: Callable = Callable()) -> void:
+	var old := get_node_or_null("Pub")
+	var order: int = old.get_index() if old != null else 0
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	var pub := (load("res://art/pub/pub_game.tscn") as PackedScene).instantiate() as Node3D
+	for group_name in skip:
+		var group := pub.get_node_or_null(group_name)
+		if group != null:
+			pub.remove_child(group)
+			group.free()
+	pub.name = "Pub"
+	if trim.is_valid(): trim.call(pub)
+	add_child(pub)
+	move_child(pub, order)
+	_prepare_pub()
 
 
 ## 방 그림이 지금 규칙 좌표로 만들어졌는지 확인하고, 화면이 있을 때만 메시를 묶는다.

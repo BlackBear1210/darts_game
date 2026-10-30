@@ -34,6 +34,18 @@ func _initialize() -> void:
 	state.players = [player, bot]
 	var restored := MatchState.from_snapshot(state.to_snapshot())
 	assert(restored.to_snapshot() == state.to_snapshot())
+	# 예전 3종 카드 모듈이 에디터에서 로드돼도 현재 정수 손패와 섞이지 않는다.
+	var legacy := CardController.new()
+	legacy.begin(state.players)
+	var candidates: Array = legacy.private_snapshot(1).candidates
+	var bonus_index: int = 0
+	for index in range(candidates.size()):
+		if candidates[index].kind == CardDefinition.Kind.BONUS: bonus_index = index
+	assert(legacy.choose(player, bonus_index, 7))
+	assert(not legacy.plan_use(player, candidates[bonus_index].uid, -1, state))
+	assert(legacy.plan_use(player, candidates[bonus_index].uid, 1, state))
+	legacy.finish(state, 7)
+	assert(player.bonus == 10 and player.hand.is_empty())
 	var config := load("res://game/match/default_match.tres") as MatchConfig
 	assert(config.rounds == 5 and config.darts_per_turn == 3 and config.turn_seconds == 20)
 	var room := RoomState.new()

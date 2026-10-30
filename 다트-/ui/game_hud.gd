@@ -96,6 +96,11 @@ func configure(match_controller: MatchController, input: DartThrowController) ->
 	throw_input = input
 	throw_input.charge_cancelled.connect(func() -> void: _cancelled_at = controller._now())
 	game = controller.get_parent() as GameView
+	if game.controller.room_settings.social_lobby:
+		_root.hide()
+		game.lounge_hud = preload("res://ui/lounge_hud.gd").new()
+		game.lounge_hud.game = game
+		add_child(game.lounge_hud)
 	_viewport.world_3d = game.get_world_3d()
 
 
@@ -144,7 +149,7 @@ func _bots() -> Array[PlayerView]:
 
 
 func _process(_delta: float) -> void:
-	if game == null:
+	if game == null or game.controller.room_settings.social_lobby:
 		return
 	_help.position = Vector2(18, _root.size.y - (140 if game.developer_enabled else 116))
 	_buttons.position = Vector2(18, _root.size.y - 38)

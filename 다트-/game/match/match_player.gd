@@ -15,6 +15,8 @@ var multiplier: int = 1
 var hand: Array[int] = []
 ## 이동 속도 배율. 테이블 집합에 늦으면 다음 라운드 동안 MatchConfig.slow_speed_scale 이 된다.
 var speed_scale: float = 1.0
+var pending_card: int = -1
+var card_effects: Dictionary = {}
 
 
 func score_hit(base_score: int) -> int:
@@ -38,7 +40,7 @@ func effects_text() -> String:
 func to_snapshot() -> Dictionary:
 	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score, "bot": is_bot,
 		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": hand,
-		"speed_scale": speed_scale}
+		"speed_scale": speed_scale, "pending_card": pending_card, "card_effects": card_effects}
 
 
 static func from_snapshot(data: Dictionary) -> MatchPlayer:
@@ -53,4 +55,6 @@ static func from_snapshot(data: Dictionary) -> MatchPlayer:
 	player.multiplier = data.multiplier
 	player.speed_scale = data.get("speed_scale", 1.0)
 	player.hand.assign(data.get("hand", []))
+	player.pending_card = int(data.get("pending_card", -1))
+	player.card_effects = data.get("card_effects", {})
 	return player

@@ -14,10 +14,19 @@ const CONNECTION_TIMEOUT: float = 8.0
 const LOADING_TIMEOUT: float = 10.0
 const MAX_NAME_LENGTH: int = 20
 
+# 착석은 GameView가 검사한다. 비밀번호 검증값은 공개 RoomState에 넣지 않는다.
+var check_ready: Callable
+var developer_authorized: bool = false
+var _join_code: String = ""
+var _join_password: String = ""
+var _password_verifier: String = ""
+var _challenges: Dictionary = {}
+var room_port: int = DEFAULT_PORT
+
 var room := RoomState.new()
 var local_peer_id: int = 0
 var is_connecting: bool = false
-var message: String = "이름을 입력하고 방을 만들거나 참가하세요."
+var message: String = "오늘의 한 판, 함께 시작해 볼까요?"
 var backend: BackendConnection
 var account_ids: Dictionary = {}
 var _registering: Dictionary = {}
@@ -65,7 +74,7 @@ func host_dedicated(port: int = DEFAULT_PORT) -> Error:
 	return OK
 
 
-func host_room(display_name: String, port: int = DEFAULT_PORT) -> void:
+func host_room(display_name: String, port: int = DEFAULT_PORT, options: RoomSettings = null, password: String = "") -> void:
 	if backend != null:
 		message = "계정 모드는 전용 서버에 방 참가로 접속하세요."
 		changed.emit()
@@ -82,12 +91,19 @@ func host_room(display_name: String, port: int = DEFAULT_PORT) -> void:
 	multiplayer.multiplayer_peer = peer
 	local_peer_id = HOST_ID
 	room = RoomState.new()
+	if options != null:
+		room.settings = RoomSettings.from_snapshot(options.to_snapshot())
+	room_port = port
+	room.room_code = Crypto.new().generate_random_bytes(4).hex_encode().to_upper()
+	_password_verifier = password.sha256_text() if not password.is_empty() else ""
+	room.has_password = not _password_verifier.is_empty()
 	room.add_player(HOST_ID, _clean_name(display_name))
+	if room.settings.solo: room.add_bots(room.settings.bot_count)
 	message = "방을 만들었습니다. 참가자를 기다리는 중입니다."
 	_publish_room()
 
 
-func join_room(display_name: String, address: String, port: int = DEFAULT_PORT) -> void:
+func join_room(display_name: String, address: String, port: int = DEFAULT_PORT, code: String = "", password: String = "") -> void:
 	if _peer != null or not _validate_connection(display_name, port):
 		return
 	if address.strip_edges().is_empty():
@@ -100,6 +116,8 @@ func join_room(display_name: String, address: String, port: int = DEFAULT_PORT) 
 		message = "접속 요청 실패: %s" % error_string(error)
 		changed.emit()
 		return
+	_join_code = code.strip_edges().to_upper()
+	_join_password = password
 	_local_name = _clean_name(display_name)
 	_peer = peer
 	multiplayer.multiplayer_peer = peer
@@ -202,16 +220,30 @@ func _clean_name(display_name: String) -> String:
 
 func _on_connected_to_server() -> void:
 	local_peer_id = multiplayer.get_unique_id()
-	_register_player.rpc_id(HOST_ID, _local_name, backend.token if backend != null else "")
+	_request_challenge.rpc_id(HOST_ID)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _register_player(display_name: String, session_token: String = "") -> void:
+func _register_player(display_name: String, session_token: String = "", code: String = "", proof: String = "") -> void:
 	if not is_host():
 		return
 	var sender := multiplayer.get_remote_sender_id()
 	var player_name := _clean_name(display_name)
 	if not multiplayer.get_peers().has(sender) or room.find_player(sender) != null:
+		return
+	if room.settings.solo:
+		_reject_join.rpc_id(sender, "싱글 연습방에는 참가할 수 없습니다.")
+		return
+	if room.settings.private_room and code != room.room_code:
+		_reject_join.rpc_id(sender, "초대 코드가 일치하지 않습니다.")
+		return
+	if not code.is_empty() and code != room.room_code:
+		_reject_join.rpc_id(sender, "다른 방의 초대 코드입니다.")
+		return
+	var nonce: String = str(_challenges.get(sender, ""))
+	_challenges.erase(sender)
+	if room.has_password and (nonce.is_empty() or proof != (nonce + _password_verifier).sha256_text()):
+		_reject_join.rpc_id(sender, "방 비밀번호가 일치하지 않습니다.")
 		return
 	var account_id: String = ""
 	if backend != null:
@@ -236,7 +268,7 @@ func _register_player(display_name: String, session_token: String = "") -> void:
 	if room.phase != RoomState.Phase.LOBBY:
 		_reject_join.rpc_id(sender, "경기가 진행 중이므로 참가할 수 없습니다.")
 		return
-	if room.players.size() >= RoomState.MAX_PLAYERS:
+	if room.players.size() >= room.settings.capacity:
 		for bot in room.players:
 			if bot.is_bot:
 				room.remove_player(bot.peer_id)
@@ -258,6 +290,8 @@ func _request_ready(value: bool) -> void:
 func _accept_ready(peer_id: int, value: bool) -> void:
 	var player := room.find_player(peer_id)
 	if room.phase != RoomState.Phase.LOBBY or player == null:
+		return
+	if value and room.settings.social_lobby and (not check_ready.is_valid() or not check_ready.call(peer_id)):
 		return
 	player.is_ready = value
 	_publish_room()
@@ -285,6 +319,8 @@ func _publish_room() -> void:
 	_receive_room.rpc(room.to_snapshot())
 	_update_message()
 	changed.emit()
+	# 준비 버튼뿐 아니라 미참여자의 이탈 뒤에도 남은 전원의 참여를 평가한다.
+	if room.settings.social_lobby and room.can_start(): _start_match.call_deferred()
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -308,7 +344,11 @@ func _update_message() -> void:
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
-	if not is_host() or room.find_player(peer_id) == null:
+	if not is_host():
+		return
+	_challenges.erase(peer_id)
+	if room.find_player(peer_id) == null:
+		if room.settings.social_lobby and room.can_start(): _start_match.call_deferred()
 		return
 	room.remove_player(peer_id)
 	account_ids.erase(peer_id)
@@ -356,6 +396,11 @@ func _close(reason: String) -> void:
 	is_connecting = false
 	room = RoomState.new()
 	account_ids.clear()
+	_challenges.clear()
+	_password_verifier = ""
+	_join_password = ""
+	_join_code = ""
+	check_ready = Callable()
 	_registering.clear()
 	message = reason
 	changed.emit()
@@ -402,3 +447,58 @@ func request_movement(match_id: int, sequence: int, controls: Dictionary) -> voi
 @rpc("authority", "call_remote", "unreliable_ordered", 2)
 func receive_movement(match_id: int, sequence: int, poses: Array) -> void:
 	movement_snapshot.emit(match_id, sequence, poses)
+
+
+# 비밀번호 원문 대신 연결마다 새로 만든 nonce의 응답을 보낸다.
+# 운영 로그인/인터넷 중계는 별도 백엔드 영역이며 이 코드는 LAN 방 입장용이다.
+@rpc("any_peer", "call_remote", "reliable")
+func _request_challenge() -> void:
+	if not is_host(): return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if room.find_player(sender) != null or _challenges.has(sender): return
+	var nonce: String = Crypto.new().generate_random_bytes(16).hex_encode()
+	_challenges[sender] = nonce
+	_receive_challenge.rpc_id(sender, nonce)
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_challenge(nonce: String) -> void:
+	if not is_connecting: return
+	var proof: String = (nonce + _join_password.sha256_text()).sha256_text()
+	_register_player.rpc_id(HOST_ID, _local_name, backend.token if backend != null else "", _join_code, proof)
+	_join_password = ""
+
+func invitation() -> String:
+	var address: String = "127.0.0.1"
+	for candidate in IP.get_local_addresses():
+		if candidate.begins_with("192.168.") or candidate.begins_with("10.") or candidate.begins_with("172."):
+			address = candidate
+			break
+	return "DARTY-%s-%d-%s" % [address, room_port, room.room_code]
+
+func change_settings(data: Dictionary) -> void:
+	if is_host(): _accept_settings(local_peer_id, data)
+	elif is_room_host(): _request_settings.rpc_id(HOST_ID, data)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_settings(data: Dictionary) -> void:
+	if is_host(): _accept_settings(multiplayer.get_remote_sender_id(), data)
+
+func _accept_settings(sender: int, data: Dictionary) -> void:
+	if sender != room.host_peer_id: return
+	var updated := RoomSettings.from_snapshot(data)
+	# 참가자 수·방 공개 여부는 개설 시 결정한다. UI를 우회해도 개발자 수치는 바꿀 수 없다.
+	for field in ["solo", "capacity", "bot_count", "private_room", "social_lobby"]:
+		updated.set(field, room.settings.get(field))
+	if not (developer_authorized and sender == HOST_ID):
+		for field in ["card_weights", "disabled_cards", "hit_stun", "miss_cooldown"]:
+			updated.set(field, room.settings.get(field))
+	updated.sanitize()
+	if room.phase != RoomState.Phase.LOBBY:
+		# 진행 중 점수/손패는 보존한다. 새 시간은 다음 턴, 새 확률은 다음 보충부터 쓴다.
+		for field in ["rounds", "dart_seconds", "card_seconds", "special_chance"]:
+			room.settings.set(field, updated.get(field))
+	else:
+		room.settings = updated
+		# 규칙을 읽고 동의한 준비만 유효하다. 규칙이 바뀌면 다시 참여해야 한다.
+		for player in room.players: player.is_ready = player.is_bot
+	_publish_room()

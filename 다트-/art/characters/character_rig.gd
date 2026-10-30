@@ -45,6 +45,8 @@ var holding_cards := false
 ## 손가락으로 가리키는 중인지. 켜면 오른팔을 앞으로 뻗고, 팔에 PointFinger 노드가 있으면 보인다
 ## (손가락은 캐릭터 생성물에 없고 카드 라운드가 실행 중에 붙인다 — game/card_round/flow/gestures.gd). 조준·던지기가 먼저다.
 var pointing := false
+## 대기실 참여 동의. 양팔의 목표를 여기서 정해 걷기/앉기 보간과 싸우지 않게 한다.
+var cheering: bool = false
 
 var leg_l: Node3D
 var leg_r: Node3D
@@ -139,6 +141,10 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	if holding_cards:
 		arm_l_angle = HOLD_ARM_ANGLE
 		arm_spread = 0.0
+	if cheering:
+		arm_l_angle = -2.95
+		arm_r_angle = -2.95
+		arm_spread = 0.25
 	if _throw_age >= 0.0:
 		_throw_age += delta
 		var t := clampf(_throw_age / THROW_SECONDS, 0.0, 1.0)

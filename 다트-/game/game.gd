@@ -3,6 +3,17 @@ extends Node3D
 ## 공간, 로컬 시점, 방장 이동 시뮬레이션과 경기 기능을 조립한다.
 ## 조명·배경색은 Table/Pub(art/pub/pub_game.tscn)이 가진다. 여기서는 카메라·손·다트·칠판 점수만 연결한다.
 
+signal settings_requested(mode: String)
+const Preferences = preload("res://ui/player_preferences.gd")
+const LoungeWorld = preload("res://game/lounge/lounge_world.gd")
+const Sfx = preload("res://art/audio/sfx.gd")
+const BurstFx = preload("res://art/fx/burst_fx.gd")
+var lounge: Node3D
+var lounge_hud: CanvasLayer
+var _screen_fx: CanvasLayer
+var _cover: MeshInstance3D
+var _last_quality: int = -1
+
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
 ## 1인칭 손 모양(디자인 담당 생성 코드). class_name 이 없는 도구라 preload 로 부른다.
@@ -43,7 +54,14 @@ var _last_seat_request: Dictionary = {}
 var _bot_ready_at: float = 0.0
 ## 1인칭 왼손 카드 부채와 거기에 지금 올려둔 손패(같으면 다시 만들지 않는다).
 var _fan: HandFan
+## 소품 던지기 힘 모으기: 우클릭을 누른 시각(초). -1 = 안 누름. 꽉 차는 데 PROP_CHARGE_TIME 초.
+var _prop_charge_from: float = -1.0
+const PROP_CHARGE_TIME: float = 1.0
 var _shown_hand: Array[int] = []
+## 손맛 연출(보이기만): 1인칭 손 기본 자세, 내가 던진 직후 1→0 으로 줄어드는 반동, 과녁 흔들림.
+var _hand_base: Transform3D
+var _throw_kick: float = 0.0
+var _board_shake: float = 0.0
 
 
 func _ready() -> void:
@@ -54,6 +72,7 @@ func _ready() -> void:
 	throw_input.board = table.board
 	$TrajectoryPreview.hide()
 	$Camera/Hand.hide()
+	_hand_base = ($Camera/Hand as Node3D).transform
 	_prepare_hand_fan()
 
 
@@ -77,6 +96,22 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		if player.peer_id == local_peer_id:
 			camera.cull_mask = 0xfffff & ~(1 << (player.seat + 1))
 			_equip_hand(player.seat)
+	if room.settings.social_lobby:
+		lounge = LoungeWorld.new()
+		lounge.name = "LoungeWorld"
+		add_child(lounge)
+		lounge.configure(self)
+		if DisplayServer.get_name() != "headless":
+			_screen_fx = preload("res://game/card_round/fx/screen_debuff.gd").new()
+			add_child(_screen_fx)
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(BoardLayout.RADIUS * TableView.BOARD_SCALE, BoardLayout.RADIUS * TableView.BOARD_SCALE * 2, 0.05)
+		_cover = MeshInstance3D.new()
+		_cover.mesh = mesh
+		_cover.material_override = preload("res://art/mesh_kit.gd").material("card_cover", "243b49")
+		_cover.position = TableView.BOARD_CENTER + Vector3(-mesh.size.x / 2, 0, 0.08)
+		_cover.hide()
+		add_child(_cover)
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_state()
@@ -107,7 +142,8 @@ func _sync_hand_fan() -> void:
 	if _fan == null:
 		return
 	var me := controller.state.find_player(controller.local_peer_id)
-	var hand: Array[int] = me.hand if me != null else []
+	var hand: Array[int] = []
+	if me != null: hand.assign(me.hand)
 	if hand == _shown_hand:
 		return
 	_shown_hand = hand.duplicate()
@@ -129,6 +165,12 @@ func _equip_hand(seat: int) -> void:
 	($Camera/Hand/HeldDart as DartView).paint(PlayerLook.COLORS[seat])
 
 
+## 소품 던질 힘(0~1). 우클릭을 안 누르고 있으면 -1. HUD 충전 막대도 이 값을 쓴다.
+func prop_charge() -> float:
+	if _prop_charge_from < 0.0: return -1.0
+	return clampf((Time.get_ticks_msec() / 1000.0 - _prop_charge_from) / PROP_CHARGE_TIME, 0.0, 1.0)
+
+
 func _exit_tree() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -137,9 +179,49 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_jump = false
+		_prop_charge_from = -1.0
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if lounge != null and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var id: int = controller.local_peer_id
+		var hit: Dictionary = lounge.focus(id)
+		if event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_LEFT and hit.get("kind") == "prop":
+				lounge.request("take")
+				get_viewport().set_input_as_handled()
+				return
+			if event.button_index == MOUSE_BUTTON_RIGHT and lounge.held(id) >= 0:
+				# 우클릭을 누르는 동안 힘을 모은다(놓을 때 던진다). 짧게 누르면 살짝 놓기.
+				_prop_charge_from = Time.get_ticks_msec() / 1000.0
+				get_viewport().set_input_as_handled()
+				return
+		if event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and _prop_charge_from >= 0.0:
+			lounge.request("throw", prop_charge())
+			_prop_charge_from = -1.0
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventKey and event.pressed and not event.echo:
+			if event.keycode == KEY_ENTER and session.room.phase == RoomState.Phase.LOBBY:
+				var player: RoomPlayer = session.room.find_player(id)
+				if player != null and is_seated(id): session.set_ready(not player.is_ready)
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == Preferences.drink_key: lounge.request("drink")
+			if hit.get("kind") == "volume" and event.keycode in [KEY_Q, KEY_E]:
+				lounge.request("volume", -1 if event.keycode == KEY_Q else 1)
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == Preferences.interact_key and not hit.is_empty() and hit.get("kind") != "prop":
+				match str(hit.kind):
+					"monitor":
+						if session.is_room_host(): settings_requested.emit("room")
+					"power": lounge.request("power")
+					"link":
+						if lounge_hud != null: lounge_hud.open_link()
+					"claw", "gacha", "hoop": lounge.request(str(hit.kind), int(hit.get("index", 0)))
+				get_viewport().set_input_as_handled()
+				return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and controller.state.phase != MatchState.Phase.FINISHED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -148,13 +230,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
-		if event.keycode == KEY_E and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if event.keycode == Preferences.interact_key and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			request_seat()
 		if event.keycode == KEY_SPACE and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			_jump = true
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_yaw -= event.relative.x * MOUSE_SENSITIVITY
-		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENSITIVITY, -1.25, 1.25)
+		_yaw -= event.relative.x * MOUSE_SENSITIVITY * Preferences.sensitivity
+		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENSITIVITY * Preferences.sensitivity, -1.25, 1.25)
 
 
 func _physics_process(delta: float) -> void:
@@ -169,6 +251,9 @@ func _physics_process(delta: float) -> void:
 			axis = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 				float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))).limit_length()
 			crouch = Input.is_physical_key_pressed(KEY_CTRL)
+		var local: PlayerView = actors.get(controller.local_peer_id)
+		if local != null and local.seated and axis.y > 0:
+			_yaw -= MOTION_INTERVAL * 0.65
 		if is_processing_unhandled_input():
 			send_controls(axis, _yaw, _pitch, _jump, crouch)
 		_jump = false
@@ -183,11 +268,13 @@ func _physics_process(delta: float) -> void:
 		for id: int in actors:
 			var actor := actors[id] as PlayerView
 			if actor.identity.is_bot:
-				_drive_bot(actor, delta)
+				if lounge != null and lounge.is_stunned(id): actor.simulate(delta, {})
+				else: _drive_bot(actor, delta)
 				continue
 			var controls: Dictionary = _controls.get(id, {})
 			if controller._now() - float(controls.get("at", 0)) > INPUT_TIMEOUT:
 				controls = {}
+			if lounge != null and lounge.is_stunned(id): controls = {}
 			actor.simulate(delta, controls)
 			if _controls.has(id):
 				_controls[id]["jump"] = false
@@ -205,6 +292,7 @@ func _drive_bot(actor: PlayerView, delta: float) -> void:
 		return
 	if actor.seated:
 		actor.seated = false
+		actor.position = TableView.standing_spot(actor.identity.seat)
 		actor.update_posture()
 	var spot: Vector3 = BotDriver.throw_spot()
 	if not BotDriver.arrived(actor.position, spot):
@@ -289,7 +377,9 @@ func _accept_seat(sender: int) -> void:
 	_last_seat_request[sender] = now
 	if actor.seated:
 		actor.seated = false
-		actor.position = TableView.clamp_floor(actor.position + Vector3(0, 0.05, 0.7))
+		if session != null and session.room.phase == RoomState.Phase.LOBBY:
+			session._accept_ready(sender, false)
+		actor.position = TableView.standing_spot(actor.identity.seat)
 		actor.update_posture()
 	elif can_sit(sender):
 		_sit(actor)
@@ -325,10 +415,27 @@ func is_seated(id: int) -> bool:
 ## 지금 서 있는 자리에서 던질 수 있는지. 라운지(테이블 쪽)에서는 못 던진다.
 func can_throw_from(id: int) -> bool:
 	var actor := actors.get(id) as PlayerView
-	return actor != null and TableView.in_throw_zone(actor.position)
+	return actor != null and TableView.in_throw_zone(actor.position) and (lounge == null or not lounge.is_stunned(id))
 
 
-func _process(_delta: float) -> void:
+## 1인칭 손: 충전할수록 뒤로 빠지고(최대 충전이면 살짝 떨림), 놓으면 앞으로 튕겼다 사라진다.
+## 과녁도 다트가 꽂히면 잠깐 움찔한다. 둘 다 내 화면 연출이고 판정 좌표는 그대로다.
+func _animate_hand(delta: float) -> void:
+	_throw_kick = maxf(0.0, _throw_kick - delta * 3.2)
+	_board_shake = maxf(0.0, _board_shake - delta * 4.0)
+	var hand := $Camera/Hand as Node3D
+	var pull: float = throw_input.timing if throw_input.charging else 0.0
+	var now: float = Time.get_ticks_msec() / 1000.0
+	var tremble := Vector3(sin(now * 47.0), cos(now * 39.0), 0.0) * 0.0025 * pull * pull
+	var snap: float = sin(_throw_kick * PI)
+	hand.transform = _hand_base.translated_local(Vector3(0.025, -0.03, 0.11) * pull + tremble + Vector3(-0.01, 0.035, -0.17) * snap)
+	hand.visible = throw_input.enabled or _throw_kick > 0.0
+	($Camera/Hand/HeldDart as Node3D).visible = _throw_kick <= 0.0
+	camera.rotation.x += snap * 0.02
+	table.board.position = TableView.BOARD_CENTER + Vector3(sin(now * 70.0) * 0.006, 0.0, -0.012) * _board_shake
+
+
+func _process(delta: float) -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
 	if local == null:
 		return
@@ -336,10 +443,28 @@ func _process(_delta: float) -> void:
 	var own_turn: bool = state.active_player() != null and state.active_player().peer_id == controller.local_peer_id
 	camera.position = local.eye_position()
 	camera.rotation = Vector3(_pitch, _yaw, 0)
+	if lounge != null:
+		var amount: float = lounge.intoxication_amount(controller.local_peer_id)
+		if Preferences.visual_effects and not Preferences.reduced_motion:
+			camera.rotation.z = sin(Time.get_ticks_msec() / 780.0) * amount * 0.025
+		if _screen_fx != null:
+			_screen_fx.drowsy = Preferences.visual_effects and bool(local.identity.card_effects.get("drowsy", false))
+			_screen_fx.penalty = 3 if Preferences.visual_effects and amount > 1.4 else 0
+		if _last_quality != Preferences.quality:
+			_last_quality = Preferences.quality
+			get_viewport().scaling_3d_scale = [0.65, 0.85, 1.0][_last_quality]
+			get_viewport().msaa_3d = Viewport.MSAA_2X if _last_quality == 2 else Viewport.MSAA_DISABLED
+		for actor: PlayerView in actors.values():
+			var identity: RoomPlayer = session.room.find_player(actor.identity.peer_id)
+			actor.ready_pose = session.room.phase == RoomState.Phase.LOBBY and identity != null and identity.is_ready
+		var current: MatchPlayer = state.active_player()
+		if current != null:
+			table.board.show_layout(current.layout)
+			_cover.visible = bool(current.card_effects.get("cover", false)) and state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]
 	# 다트 홀 밖(라운지)에서는 조준·충전 자체를 잠근다 — 방장도 같은 조건으로 거부한다.
 	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
-	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-	$Camera/Hand.visible = throw_input.enabled
+	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (lounge == null or (lounge.held(controller.local_peer_id) < 0 and lounge.focus(controller.local_peer_id).is_empty()))
+	_animate_hand(delta)
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
 	for actor: PlayerView in actors.values():
@@ -381,6 +506,20 @@ func _show_throw(data: Dictionary) -> void:
 	if thrower != null:
 		dart.paint(thrower.color)
 		thrower.play_throw()
+		if thrower.identity.peer_id == controller.local_peer_id:
+			_throw_kick = 1.0
+	dart.landed.connect(_on_dart_landed)
+	Sfx.play_at(self, "whoosh", data.start, -8.0)
+
+
+## 다트가 멈춘 순간의 손맛: 과녁이 움찔하고 코르크 가루가 튀며 "턱" 소리가 난다. 판정과 무관하다.
+func _on_dart_landed(at: Vector3, hit_board: bool) -> void:
+	if hit_board:
+		_board_shake = 1.0
+		BurstFx.spawn(self, "cork", at, table.board.global_basis.z)
+		Sfx.play_at(self, "thunk", at, 0.0, randf_range(0.92, 1.08))
+	else:
+		Sfx.play_at(self, "bounce", at, -4.0)
 
 
 ## 과녁 왼쪽 칠판 글자: 자리 순서대로 "● 이름  점수".
@@ -429,7 +568,7 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 		if crosses_board:
 			var hit := Vector2(point.x - TableView.BOARD_CENTER.x, point.y - TableView.BOARD_CENTER.y) / radius
 			if hit.length() <= 1.0 + BoardScorer.BOUNDARY_EPSILON:
-				var points: int = BoardScorer.score(hit, BoardLayout.new())
+				var points: int = BoardScorer.score(hit, actor.identity.layout)
 				return _flight_result(start, point, time, hit, points, "%d점 적중" % points)
 		previous = point
 		previous_time = time
@@ -440,3 +579,21 @@ func _flight_result(start: Vector3, target: Vector3, duration: float, hit: Vecto
 	# 실패의 무한 좌표는 네트워크/JSON에 넣지 않는다.
 	return {"start": start, "target": target, "duration": duration, "x": hit.x if hit.is_finite() else 99.0,
 		"y": hit.y if hit.is_finite() else 99.0, "points": points, "base": points, "reason": reason}
+
+
+func sync_room(room: RoomState) -> void:
+	controller.room_settings = room.settings
+	if room.settings.social_lobby:
+		controller.config.rounds = room.settings.rounds
+		controller.config.turn_seconds = room.settings.dart_seconds
+		controller.config.card_seconds = room.settings.card_seconds
+	controller.sync_roster(room)
+	if room.phase == RoomState.Phase.LOBBY:
+		for player in controller.state.players:
+			if actors.has(player.peer_id): continue
+			var view := PLAYER_SCENE.instantiate() as PlayerView
+			_players_root.add_child(view)
+			view.configure(player)
+			actors[player.peer_id] = view
+	_apply_state()
+	if lounge != null: lounge.apply_theme()

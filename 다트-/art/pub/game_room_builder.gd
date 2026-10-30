@@ -213,7 +213,7 @@ static func _barrels(p: Node3D) -> void:
 			MeshKit.cylinder(p, node_name + "_Top", radius * 0.8, 0.02, at + Vector3(0, height + 0.01, 0), PubParts.trim(), 12)
 
 
-## 네모 카드 테이블(도면) + 자리 4개(자리 색 스툴·모양 매트·이름 글자) + 테이블 위 자리 매트(손패 7칸 + 예약 2칸).
+## 원형 카드 테이블(2026-10-29 요청) + 자리 4개(자리 색 스툴·모양 매트·이름 글자) + 테이블 위 자리 매트(손패 7칸 + 예약 2칸).
 static func _table_and_seats(p: Node3D) -> void:
 	var table_center: Vector3 = TableView.TABLE_CENTER
 	var size: Vector2 = TableView.TABLE_SIZE
@@ -222,9 +222,9 @@ static func _table_and_seats(p: Node3D) -> void:
 	table.name = "CardTable"
 	table.position = table_center
 	p.add_child(table)
-	MeshKit.box(table, "TableTop", Vector3(size.x, 0.08, size.y), Vector3(0, height - 0.04, 0), PubParts.wood())
-	MeshKit.box(table, "TableFelt", Vector3(size.x - 0.16, 0.006, size.y - 0.16), Vector3(0, height + 0.003, 0), PubParts.felt())
-	MeshKit.box(table, "TableApron", Vector3(size.x - 0.12, 0.12, size.y - 0.12), Vector3(0, height - 0.14, 0), PubParts.green())
+	MeshKit.cylinder(table, "TableTop", size.x / 2.0, 0.08, Vector3(0, height - 0.04, 0), PubParts.wood(), 48)
+	MeshKit.cylinder(table, "TableFelt", size.x / 2.0 - 0.08, 0.006, Vector3(0, height + 0.003, 0), PubParts.felt(), 48)
+	MeshKit.cylinder(table, "TableApron", size.x / 2.0 - 0.06, 0.12, Vector3(0, height - 0.14, 0), PubParts.green(), 48)
 	for sx: float in [-1.0, 1.0]:
 		for sz: float in [-1.0, 1.0]:
 			MeshKit.box(table, "TableLeg", Vector3(0.1, height - 0.2, 0.1),

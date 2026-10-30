@@ -31,15 +31,24 @@ func _key(code: Key) -> void:
 	event.keycode = code
 	event.pressed = true
 	root.push_input(event, true)
+	var release := event.duplicate() as InputEventKey
+	release.pressed = false
+	root.push_input(release, true)
 
 func _run() -> void:
 	# Windows의 창 테두리 크기 보정을 피하고 실제 1920×1080 픽셀도 확인한다.
-	root.mode = Window.MODE_FULLSCREEN
 	_main = (load("res://app/main.tscn") as PackedScene).instantiate()
+	_main.developer_mode = true
 	root.add_child(_main)
+	# 개인 설정 로딩 뒤 검사 해상도를 적용한다.
+	root.mode = Window.MODE_FULLSCREEN
+	_main._boot_developer()
 	await create_timer(1).timeout
 	_game = _main.get_node("Game") as GameView
 	_hud = _main.get_node("GameHUD") as GameHUD
+	# 카드 배부가 끝난 뒤 기존 투척 렌더 검증을 시작한다.
+	while _game.controller.state.phase == MatchState.Phase.CARDS:
+		await process_frame
 	# 실제 Input 이벤트가 WASD/점프/숙이기 폴링으로 이어지는지 확인한다.
 	var local := _game.actors[1] as PlayerView
 	# 2026-10-28: 라운지에서는 못 던진다. 투척선 뒤로 옮긴 뒤 E 입력 없이 실제 누름·해제로 발사한다.
@@ -122,7 +131,7 @@ func _run() -> void:
 	_key(KEY_F4)
 	assert(_game.controller.state.active_player().display_name == "봇 2")
 	await _capture("07_f4_bot_turn")
-	# E 입력으로 자기 자리에 앉고 실제 마우스 입력을 눌렀다가 놓는다.
+	# E로 착석하면 라운지 투척은 잠긴다. 다트 홀로 나와 실제 마우스 입력을 검사한다.
 	local.position = TableView.SEATS[0] + Vector3(0, 0.01, 0.6)
 	_game.controller.state.turn_index = 0
 	_game.controller._begin_turn()
@@ -130,7 +139,17 @@ func _run() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_key(KEY_E)
 	await create_timer(0.15).timeout
-	assert(local.seated and _game.throw_input.enabled)
+	assert(local.seated and not _game.throw_input.enabled)
+	# 요청 제한은 실제 단조 시계다. 저속 렌더 프레임의 SceneTreeTimer와 구분한다.
+	while _game.controller._now() - float(_game._last_seat_request.get(1, 0)) < 0.25:
+		await process_frame
+	_key(KEY_E)
+	await process_frame
+	assert(not local.seated)
+	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
+	await process_frame
+	await process_frame
+	assert(_game.throw_input.enabled)
 	aim_direction = (TableView.BOARD_CENTER - local.eye_position()).normalized()
 	_game._yaw = atan2(-aim_direction.x, -aim_direction.z)
 	_game._pitch = asin(aim_direction.y)
@@ -159,14 +178,15 @@ func _run() -> void:
 	assert(_game.throw_input.charging and _game.throw_input.timing == 1)
 	assert((_game.get_node("Camera/Hand") as Node3D).is_visible_in_tree())
 	assert(_hud._cross.get_global_rect().get_center().distance_to(root.get_visible_rect().size * 0.5) < 1.0)
-	await _capture("08_seated_charged")
+	await _capture("08_standing_charged")
 	var release := press.duplicate() as InputEventMouseButton
 	release.pressed = false
 	root.push_input(release, true)
 	input_blocker.queue_free()
 	await create_timer(0.06).timeout
 	assert(_game.controller.state.phase == MatchState.Phase.FLIGHT)
-	assert(not (_game.get_node("Camera/Hand") as Node3D).visible)
+	# 2026-10-30: 놓은 직후 빈손이 앞으로 휘두르는 동작(팔로스루)을 0.3초 보인다. 손에 든 다트는 바로 사라져야 한다.
+	assert(not (_game.get_node("Camera/Hand/HeldDart") as Node3D).is_visible_in_tree())
 	var dart: DartView = _game.get_node("Darts").get_child(0) as DartView
 	dart.set_physics_process(false)
 	_game.controller.set_process(false)

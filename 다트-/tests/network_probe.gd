@@ -33,7 +33,16 @@ func _boot() -> void:
 	_session = _main.get_node("NetworkSession") as NetworkSession
 	if _options.get("manual-loading", "false") == "true":
 		_session.changed.connect(_refresh_manual_game)
-	if _options.role == "host":
+	if _options.role == "social_host":
+		var rules := RoomSettings.new()
+		rules.social_lobby = true
+		rules.private_room = true
+		rules.capacity = 2
+		rules.card_seconds = 30
+		for entry: Dictionary in preload("res://game/card_round/rules/card_catalog.gd").CARDS:
+			if entry.id != "plus_10": rules.disabled_cards.append(str(entry.id))
+		_session.host_room(_options.name, int(_options.port), rules, "test-password")
+	elif _options.role == "host":
 		_session.host_room(_options.name, int(_options.port))
 	else:
 		if _options.has("backend-url"):
@@ -74,6 +83,14 @@ func _read_command() -> void:
 		return
 	_last_command = int(command.id)
 	match command.action:
+		"secure_join":
+			_session.join_room(_options.name, "127.0.0.1", int(_options.port), str(command.value[0]), str(command.value[1]))
+		"raw_settings":
+			_session._request_settings.rpc_id(1, command.value)
+		"settings":
+			_session.change_settings(command.value)
+		"card":
+			(_main.get_node("Game") as GameView).controller.request_card(str(command.value[0]), int(command.value[1]))
 		"ready":
 			_session.set_ready(command.value)
 		"start":
@@ -161,7 +178,7 @@ func _write_status() -> void:
 		"message": _session.message,
 		"room": _session.room.to_snapshot(),
 		"markers": markers,
-		"lobby_visible": lobby.visible if lobby != null else true,
+		"lobby_visible": (lobby.visible or (_main.get_node_or_null("FrontDoor") != null and _main.get_node("FrontDoor").visible)) if lobby != null else true,
 		"command_id": _last_command,
 
 	}

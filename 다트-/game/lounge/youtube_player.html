@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DARTY · Jukebox</title>
+<style>body{margin:0;background:#0b0e1b;color:#eef2ff;font:18px system-ui}main{max-width:850px;margin:5vh auto;padding:28px}h1{color:#79f2ce;letter-spacing:6px}p{color:#a8b6d0;line-height:1.7}#player{width:100%;aspect-ratio:16/9}button{background:#79f2ce;border:0;border-radius:10px;padding:15px 25px;font:inherit;cursor:pointer}</style>
+<main><h1>DARTY / JUKEBOX</h1><p>게임 속 전원 버튼과 볼륨 다이얼이 이 플레이어에 연결됩니다.<br>처음에는 아래의 재생 버튼을 눌러 음악을 허용해 주세요.</p><div id="player"></div><p id="status">게임과 연결하는 중…</p><button id="play">음악 듣기 시작</button></main>
+<script>
+let player,latest={},video='',enabled=false,lastPlaying=null;
+document.getElementById('play').onclick=()=>{enabled=true;if(player&&latest.video){player.playVideo();}};
+window.onYouTubeIframeAPIReady=()=>{player=new YT.Player('player',{height:'450',width:'800',playerVars:{origin:location.origin,playsinline:1},events:{onReady:poll,onError:e=>document.getElementById('status').textContent='이 영상은 재생할 수 없습니다 ('+e.data+'). 다른 링크를 선택해 주세요.'}});};
+async function poll(){try{const response=await fetch('/state');if(!response.ok)throw Error();latest=await response.json();document.getElementById('status').textContent=latest.video?'게임 속 Q / E로 볼륨 조절 · 전원 버튼으로 켜기 / 끄기':'게임 속 주크박스에 YouTube 링크를 넣어 주세요.';if(player&&player.cueVideoById){if(latest.video&&latest.video!==video){video=latest.video;player.cueVideoById(video);lastPlaying=null;}player.setVolume(Math.round(latest.volume*100));if(enabled&&latest.playing!==lastPlaying){latest.playing?player.playVideo():player.pauseVideo();lastPlaying=latest.playing;}}}catch(e){document.getElementById('status').textContent='게임 연결이 끊겼습니다. 음악을 멈춥니다.';if(player&&player.pauseVideo)player.pauseVideo();}setTimeout(poll,500);}
+const api=document.createElement('script');api.src='https://www.youtube.com/iframe_api';document.head.appendChild(api);
+</script></html>
