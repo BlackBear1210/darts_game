@@ -6,12 +6,16 @@ extends CanvasLayer
 ##   가운데     조준점 + 충전 막대(다트·소품 던지기)
 ##   아래 가운데 키 안내 칩(키캡 + 할 일), 대기실이면 준비 현황 칩
 ##   가운데 위  카드 턴의 고른 카드·대상 한 줄(카드 그림은 왼쪽 아래 3D 손패 부채가 보여 준다)
+##   오른쪽 아래 꺼내 든 카드 설명(그림 · 이름 · 효과 · 대상 · 준비 막대) — 카드 라운드 시연과 같은 자리
 ##   화면 전체  장난 효과(인형에 얼굴 가림 · 가챠 먹물)
 ## 글자 크기·색·카드 모양은 ui/lounge_style.gd 한 곳에서 온다.
 const Style = preload("res://ui/lounge_style.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
 const UiIcon = preload("res://ui/ui_icon.gd")
+const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
+const Rules = preload("res://game/card_round/rules/round_rules.gd")
+const MatchCards = preload("res://game/match/match_cards.gd")
 ## 자리 표식(색약이어도 모양으로 구분 — 기획 2-4).
 const SEAT_GLYPHS: Array[String] = ["●", "▲", "■", "◆"]
 ## 킬로그 한 줄이 떠 있는 시간(초)과 사라지는 시간.
@@ -35,6 +39,17 @@ var _prompt_key: String = ""
 var _ready_box: HBoxContainer
 var _ready_key: String = ""
 var _card_hint: Label
+var _card_panel: PanelContainer
+var _card_art: TextureRect
+var _card_name: Label
+var _card_info: Label
+var _card_text: Label
+var _card_target: Label
+var _card_bar: ProgressBar
+var _card_status: Label
+## 지금 꺼내 든 카드(손패 번호·종류)와 꺼낸 시각. 방장의 준비 시간(Rules.READY_SECONDS)을 화면에서 따라 센다.
+var _shown_pending: Vector2i = Vector2i(-1, -1)
+var _pending_since: float = 0.0
 var _charge: ProgressBar
 var _result: PanelContainer
 var _result_rows: VBoxContainer
@@ -139,6 +154,7 @@ func _build_bottom() -> void:
 	_card_hint = Style.label(_root, "", 18, Style.INK)
 	_card_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_card_hint.add_theme_stylebox_override("normal", Style.card(Style.GOLD, Style.INK, Vector2(0, 4), 3, 14, 16))
+	_build_card_panel()
 	_prompt_box = HBoxContainer.new()
 	_prompt_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_prompt_box.add_theme_constant_override("separation", 14)
@@ -149,6 +165,36 @@ func _build_bottom() -> void:
 	_ready_box.add_theme_constant_override("separation", 10)
 	_ready_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_ready_box)
+
+
+## 오른쪽 아래 '꺼내 든 카드' 패널: 카드 그림 옆에 이름·분류·효과 글·대상·준비 막대·쓰는 키.
+func _build_card_panel() -> void:
+	_card_panel = PanelContainer.new()
+	_card_panel.add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.92), Style.INK, Style.SHADOW, 3, 16, 14))
+	_card_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_panel.visible = false
+	_root.add_child(_card_panel)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	_card_panel.add_child(row)
+	_card_art = TextureRect.new()
+	_card_art.custom_minimum_size = Vector2(120, 180)
+	_card_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_card_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	row.add_child(_card_art)
+	var column := VBoxContainer.new()
+	column.custom_minimum_size = Vector2(380, 0)
+	column.add_theme_constant_override("separation", 4)
+	row.add_child(column)
+	_card_name = Style.heading(column, "", 28, Style.GOLD)
+	_card_info = Style.label(column, "", 15, Style.MUTED)
+	_card_text = Style.label(column, "", 18, Style.CREAM)
+	_card_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_card_text.custom_minimum_size.x = 380
+	_card_target = Style.label(column, "", 18, Style.MINT)
+	_card_bar = _bar(Style.MINT, 8)
+	column.add_child(_card_bar)
+	_card_status = Style.heading(column, "", 24, Style.GOLD)
 
 
 func _build_result() -> void:
@@ -229,6 +275,8 @@ func _process(delta: float) -> void:
 	_update_feed(state)
 	_update_cards(state, waiting, finished)
 	_card_hint.position = Vector2((width - _card_hint.size.x) / 2, 30)
+	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
+	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
 	# 손패 부채(왼쪽 아래 3D 카드)가 있으면 키 안내를 오른쪽으로 비켜 겹치지 않게 한다.
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
@@ -299,10 +347,9 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 		_phase_title.text = "경기 종료"
 		_phase_detail.text = "결과를 확인하세요."
 	elif state.phase == MatchState.Phase.CARDS:
-		var player: MatchPlayer = state.find_player(state.card_peer)
-		_phase_title.text = "카드 턴 · %s" % (player.display_name if player != null else "대기")
-		_phase_detail.text = "1–7 카드 · Tab 대상 · Enter 사용/패스"
-		limit = game.controller.config.card_seconds
+		_phase_title.text = "카드 확인"
+		_phase_detail.text = "받은 카드를 확인하세요. 카드는 다트 턴에 써요."
+		limit = MatchCards.VIEW_SECONDS
 	elif state.phase == MatchState.Phase.TABLE:
 		_phase_title.text = "테이블 집합!"
 		_phase_detail.text = "자기 자리로 돌아와 앉으세요. 늦으면 슬로우!"
@@ -310,7 +357,7 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 	else:
 		var active: MatchPlayer = state.active_player()
 		_phase_title.text = "%s의 다트" % (active.display_name if active != null else "대기")
-		_phase_detail.text = "%d발 남음 · 다른 사람은 방해해도 좋아요" % state.darts_left
+		_phase_detail.text = "%d발 남음 · 누구나 카드 사용 (효과는 던지는 사람에게)" % state.darts_left
 		limit = game.controller.config.turn_seconds
 	_timer_bar.max_value = maxf(1.0, limit)
 	_timer_bar.value = clampf(seconds, 0.0, _timer_bar.max_value)
@@ -376,14 +423,65 @@ static func _seat_color(seat: int) -> Color:
 func _update_cards(state: MatchState, waiting: bool, finished: bool) -> void:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	_card_hint.visible = false
-	if waiting or finished or me == null or state.phase != MatchState.Phase.CARDS: return
+	_card_panel.visible = false
+	if waiting or finished or me == null or not _card_phase(state): return
 	if me.pending_card >= 0:
-		var target: MatchPlayer = state.find_player(_target)
-		_card_hint.text = "고른 카드 · %s   →   %s      Tab 대상 바꾸기 · Enter 사용" % [Catalog.card(me.pending_card).name, target.display_name if target != null else "대상 자동"]
+		var target: String = _target_name(state, me)
+		_card_hint.text = "고른 카드 · %s   →   %s      Enter 사용" % [Catalog.card(me.pending_card).name, target]
 		_card_hint.visible = true
-	elif state.card_peer == me.peer_id:
-		_card_hint.text = "내 카드 턴!  1–7 로 카드 고르기 · Enter 패스"
+		_show_card_panel(me, target)
+	else:
+		_card_hint.text = "Q·E 카드 넘기기 (1–7 바로 고르기) · 효과는 지금 던지는 사람에게"
 		_card_hint.visible = true
+
+
+## 카드를 쓸 수 있는 때 = 다트 턴(조준·비행). 2026-10-31부터 따로 카드 턴은 없다.
+static func _card_phase(state: MatchState) -> bool:
+	return state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]
+
+
+## 무효(×0)로 막을 수 있는 사람 = 나 말고 카드를 꺼내 든 사람.
+func _counter_targets(state: MatchState, me: MatchPlayer) -> Array[int]:
+	var ids: Array[int] = []
+	for player in state.players:
+		if player.peer_id != me.peer_id and player.pending_card >= 0: ids.append(player.peer_id)
+	return ids
+
+
+## 무효(×0)로 막을 사람. Tab 으로 고른 사람이 카드를 내려놨으면 첫 사람으로 바꾼다. 없으면 0.
+func _counter_target(state: MatchState, me: MatchPlayer) -> int:
+	var ids: Array[int] = _counter_targets(state, me)
+	if ids.is_empty(): return 0
+	if not ids.has(_target): _target = ids[0]
+	return _target
+
+
+## 꺼내 든 카드가 걸릴 사람. 무효는 Tab 으로 고른 사람, 나머지는 누가 쓰든 지금 던지는 사람이다.
+func _target_name(state: MatchState, me: MatchPlayer) -> String:
+	if int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER:
+		var victim: int = _counter_target(state, me)
+		return "%s (Tab 바꾸기)" % state.find_player(victim).display_name if victim != 0 else "카드를 꺼내 든 사람 없음"
+	var active: MatchPlayer = state.active_player()
+	if active == null: return "대상 없음"
+	return "나 (지금 던지는 사람)" if active == me else "%s (지금 던지는 사람)" % active.display_name
+
+
+func _show_card_panel(me: MatchPlayer, target: String) -> void:
+	var pending := Vector2i(me.pending_slot, me.pending_card)
+	if pending != _shown_pending:
+		_shown_pending = pending
+		_pending_since = _time
+	var type: int = me.pending_card
+	_card_panel.visible = true
+	_card_art.texture = CardFaces.face(type)
+	_card_name.text = str(Catalog.card(type).name)
+	_card_info.text = "%s · %s" % [Catalog.category_name(type), Catalog.timing_text(type)]
+	_card_text.text = str(Catalog.card(type).text)
+	_card_target.text = "대상 · " + target
+	var ratio: float = clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
+	_card_bar.value = ratio * 100.0
+	_card_status.text = "준비 중…" if ratio < 1.0 else "Enter 로 쓰기"
+	_card_status.add_theme_color_override("font_color", Style.GOLD if ratio < 1.0 else Style.MINT)
 
 
 func _update_prompt() -> void:
@@ -497,15 +595,15 @@ func _prompt_for(focus: Dictionary) -> Array:
 	match str(focus.get("kind", "")):
 		"monitor": return [[key, "방장 모니터 열기"]] if game.session.is_room_host() else [["!", "방장만 게임 규칙을 바꿀 수 있어요"]]
 		"power": return [[key, "주크박스 전원 켜기 / 끄기"]]
-		"volume": return [["Q / E", "주크박스 볼륨 %d%%" % roundi(float(lounge.music.volume) * 100)]]
+		"volume": return [[key, "주크박스 볼륨 %d%% · 누를 때마다 한 단계" % roundi(float(lounge.music.volume) * 100)]]
 		"link": return [[key, "YouTube 링크 넣기"], ["B", "음악 플레이어 열기"]]
 		"prop": return [["좌클릭", "%s 잡기" % lounge.prop_name(int(focus.get("index", 0)))]]
 		"claw", "gacha", "hoop": return [[key, lounge.machine_prompt(game.controller.local_peer_id, str(focus.kind))]]
 	if lounge != null and lounge.held(game.controller.local_peer_id) >= 0:
 		var index: int = lounge.held(game.controller.local_peer_id)
 		var pairs: Array = [["우클릭 꾹", "%s 던지기 (짧게 = 살짝 놓기)" % lounge.prop_name(index)]]
-		if lounge.objects[index].kind == "bottle": pairs.push_front([OS.get_keycode_string(Preferences.drink_key), "한 모금"])
-		if lounge.objects[index].kind == "capsule": pairs.push_front([OS.get_keycode_string(Preferences.drink_key), "내가 열어 보기"])
+		if lounge.objects[index].kind == "bottle": pairs.push_front(["좌클릭", "한 모금"])
+		if lounge.objects[index].kind == "capsule": pairs.push_front(["좌클릭", "내가 열어 보기"])
 		return pairs
 	return [["WASD", "이동"], [key, "착석 · 기계"], ["좌클릭 꾹", "다트"], ["Esc", "설정"]]
 
@@ -515,23 +613,31 @@ func _unhandled_input(event: InputEvent) -> void:
 	var state: MatchState = game.controller.state
 	if event.keycode == KEY_B and game.lounge.focus(game.controller.local_peer_id).get("kind") == "link":
 		if game.lounge.bridge != null: game.lounge.bridge.open_player()
-	if state.phase != MatchState.Phase.CARDS: return
+	if not _card_phase(state): return
+	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
+	if me == null: return
 	if event.keycode >= KEY_1 and event.keycode <= KEY_7:
 		game.controller.request_card("select", event.keycode - KEY_1)
+	elif event.keycode >= KEY_KP_1 and event.keycode <= KEY_KP_7:
+		game.controller.request_card("select", event.keycode - KEY_KP_1)
+	elif event.keycode in [KEY_Q, KEY_E]:
+		_browse_card(me, -1 if event.keycode == KEY_Q else 1)
+		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_TAB:
-		var ids: Array[int] = []
-		for player in state.players:
-			if player.peer_id != game.controller.local_peer_id: ids.append(player.peer_id)
+		# 대상을 고르는 건 무효(×0)뿐이다. 나머지 카드는 언제나 지금 던지는 사람에게 걸린다.
+		var ids: Array[int] = _counter_targets(state, me)
 		if not ids.is_empty(): _target = ids[(ids.find(_target) + 1) % ids.size()]
-	elif event.keycode == KEY_ENTER:
-		var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
-		if me == null: return
-		if me.pending_card < 0: game.controller.request_card("pass")
-		else:
-			if _target == 0:
-				for player in state.players:
-					if player.peer_id != me.peer_id: _target = player.peer_id; break
-			game.controller.request_card("use", _target)
+	elif (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER) and me.pending_card >= 0:
+		var counter: bool = int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER
+		var active: MatchPlayer = state.active_player()
+		game.controller.request_card("use", _counter_target(state, me) if counter else (active.peer_id if active != null else 0))
+
+
+## Q(-1)·E(+1): 손패를 왼쪽·오른쪽으로 넘기며 꺼내 든다. 끝에서는 반대쪽 끝으로 돈다. 아무것도 안 들었으면 E = 첫 장, Q = 마지막 장.
+func _browse_card(me: MatchPlayer, step: int) -> void:
+	if me.hand.is_empty(): return
+	var index: int = (0 if step > 0 else me.hand.size() - 1) if me.pending_slot < 0 else posmod(me.pending_slot + step, me.hand.size())
+	game.controller.request_card("select", index)
 
 
 func open_link() -> void:

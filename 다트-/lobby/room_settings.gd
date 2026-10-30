@@ -21,7 +21,6 @@ const DESCRIPTIONS: Array[String] = [
 @export var target_score: int = 300
 @export var rounds: int = 5
 @export var dart_seconds: float = 30.0
-@export var card_seconds: float = 20.0
 @export var cards_enabled: bool = true
 @export var special_cards: bool = false
 @export var special_chance: float = 30.0
@@ -35,7 +34,7 @@ const DESCRIPTIONS: Array[String] = [
 @export var card_weights: Dictionary = {}
 @export var disabled_cards: Array[String] = []
 
-const FIELDS: Array[String] = ["social_lobby", "solo", "capacity", "bot_count", "room_name", "private_room", "theme_id", "preset", "win_mode", "target_score", "rounds", "dart_seconds", "card_seconds", "cards_enabled", "special_cards", "special_chance", "alcohol", "intoxication", "drink_on_deal", "props_enabled", "hit_stun", "miss_cooldown", "object_volume", "card_weights", "disabled_cards"]
+const FIELDS: Array[String] = ["social_lobby", "solo", "capacity", "bot_count", "room_name", "private_room", "theme_id", "preset", "win_mode", "target_score", "rounds", "dart_seconds", "cards_enabled", "special_cards", "special_chance", "alcohol", "intoxication", "drink_on_deal", "props_enabled", "hit_stun", "miss_cooldown", "object_volume", "card_weights", "disabled_cards"]
 
 func _init() -> void:
 	for entry: Dictionary in Catalog.CARDS: card_weights[str(entry.id)] = 1.0
@@ -64,7 +63,6 @@ func sanitize() -> void:
 	target_score = clampi(target_score, 50, 1000)
 	rounds = clampi(rounds, 1, 20)
 	dart_seconds = clampf(dart_seconds, 5, 120) if is_finite(dart_seconds) else 30.0
-	card_seconds = clampf(card_seconds, 3, 60) if is_finite(card_seconds) else 20.0
 	special_chance = clampf(special_chance, 0, 100) if is_finite(special_chance) else 30.0
 	intoxication = clampf(intoxication, 0, 3) if alcohol and is_finite(intoxication) else 0.0
 	drink_on_deal = drink_on_deal and alcohol

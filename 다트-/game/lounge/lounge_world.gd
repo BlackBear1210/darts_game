@@ -21,6 +21,8 @@ const Sfx = preload("res://art/audio/sfx.gd")
 const MONITOR := Vector3(-4.35, 1.35, 2.0)
 const JUKEBOX := Vector3(7.8, 0, 1.1)
 const REACH: float = 2.2
+## 주크박스 볼륨 버튼 한 번에 오르는 양(0 → 25 → 50 → 75 → 100 → 0%).
+const VOLUME_STEP: float = 0.25
 const GRAVITY: float = 9.8
 ## 깨짐 기준(병·큐대). 숫자는 "세게 던지면 벽에서 깨지고, 서서 툭 놓으면 안 깨지는" 정도로 맞춘 임시값.
 const BREAK_SPEED: float = 8.0
@@ -137,7 +139,7 @@ func _build_jukebox() -> void:
 		Kit.box(self, "JukeboxTube", Vector3(0.07, 1.3, 0.07), JUKEBOX + Vector3(side * 0.66, 0.7, 0.3), _jukebox_lights[0 if side < 0 else 4])
 	Kit.label(self, "JukeboxTitle", "DARTY / JUKEBOX", JUKEBOX + Vector3(0, 2.0, 0.32), 30, Color("ffd34d"), 0.003)
 	var buttons := Kit.material("jukebox_button", "ff6b5b", 0.0, 0.6)
-	for spec in [["power", "전원", -0.48], ["volume", "Q − / E +", 0.0], ["link", "링크", 0.48]]:
+	for spec in [["power", "전원", -0.48], ["volume", "볼륨", 0.0], ["link", "링크", 0.48]]:
 		var at: Vector3 = JUKEBOX + Vector3(float(spec[2]), 1.2, 0.42)
 		Kit.cylinder(self, str(spec[0]), 0.08, 0.06, at, buttons, 14).rotation.x = PI / 2
 		Kit.box(self, str(spec[0]) + "Plate", Vector3(0.3, 0.2, 0.1), at + Vector3(0, 0, -0.08), chrome)
@@ -322,8 +324,9 @@ func _accept(sender: int, action: String, value: Variant) -> void:
 		if _theme_id != 1 or hit.get("kind") != action: return
 		if not _arcade.accept(sender, action, hit.get("index", 0)): return
 	elif action == "power" and hit.get("kind") == "power": music.playing = not music.playing
-	elif action == "volume" and hit.get("kind") == "volume" and value is int:
-		music.volume = clampf(float(music.volume) + clampi(value, -1, 1) * 0.05, 0, 1)
+	elif action == "volume" and hit.get("kind") == "volume":
+		# 상호작용 키 한 번 = 한 단계 올리기, 가장 크면 0 으로 돌아간다(2026-10-31: 볼륨도 상호작용 키 하나로).
+		music.volume = 0.0 if float(music.volume) >= 1.0 - 0.001 else minf(1.0, snappedf(float(music.volume), VOLUME_STEP) + VOLUME_STEP)
 	elif action == "link" and hit.get("kind") == "link" and value is String:
 		var id: String = Bridge.video_id(str(value).left(300))
 		if id.is_empty(): return

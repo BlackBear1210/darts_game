@@ -42,7 +42,6 @@ func _run() -> void:
 	options.bot_count = 0
 	options.win_mode = 1
 	options.target_score = 50
-	options.card_seconds = 10
 	options.theme_id = 1
 	main.session.host_room("테스터", 17629, options)
 	await process_frame
@@ -68,23 +67,50 @@ func _run() -> void:
 	main.session.set_ready(true)
 	await create_timer(0.25).timeout
 	game = main._game
-	check(game.controller.state.phase == MatchState.Phase.CARDS, "seated Enter auto starts cards after load barrier")
+	check(game.controller.state.phase == MatchState.Phase.CARDS, "seated Enter auto starts card view after load barrier")
 	check(game.is_seated(1), "loading transition keeps participants seated for cards")
 	check(game.controller.state.players[0].hand.size() == 7, "seven cards dealt")
-	await capture("06_card_turn")
-	# 카드 턴 밖의 사용과 미등록 발신자는 거부된다.
-	var hand_count: int = game.controller.state.players[0].hand.size()
+	await capture("06_card_view")
+	# 2026-10-31: 카드 턴은 없다. 카드 확인 동안은 못 쓰고, 확인이 끝나면 바로 다트다.
+	var me: MatchPlayer = game.controller.state.players[0]
+	game.controller.request_card("select", 0)
+	check(me.pending_card == -1, "cards locked while viewing")
+	game.controller._phase_end = game.controller._now()
+	await process_frame
+	await process_frame
+	me = game.controller.state.players[0]
+	check(game.controller.state.phase == MatchState.Phase.AIMING, "card view leads straight to darts")
+	# 다트 턴 중 카드: 미등록 발신자 거부 → 꺼내 들고 1.2초 전 사용 거부 → 사용하면 던지는 사람에게 바로 걸린다.
+	var cards: RefCounted = game.controller.cards
+	var catalog = cards.Catalog
+	cards.rules.seats[0].slots[0] = cards.rules.new_card(catalog.type_of("number_shuffle"))
+	cards.rules.seats[0].slots[1] = cards.rules.new_card(catalog.type_of("heavy_dart"))
+	cards._sync()
 	game.controller.cards.action(999, "select", 0)
-	check(game.controller.state.players[0].hand.size() == hand_count, "unregistered card sender rejected")
-	game.controller.request_card("pass")
-	check(game.controller.state.phase == MatchState.Phase.AIMING, "pass advances to dart")
+	check(me.pending_card == -1, "unregistered card sender rejected")
+	game.controller.request_card("select", 0)
+	game.controller.request_card("use", 1)
+	check(me.hand.size() == 7, "card needs the ready wait")
+	await create_timer(1.3).timeout
+	game.controller.request_card("use", 1)
+	check(me.hand.size() == 6 and me.layout.numbers != BoardLayout.DEFAULT_NUMBERS, "shuffle card applies to the thrower at once")
 	game.actors[1].seated = false
 	game.actors[1].position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.6)
 	await physics_frame
+	# 날아가는 다트에 쓴 궤적 카드(무거운 다트)는 꽂히는 자리를 바꾼다.
+	game.controller.request_card("select", 0)
+	await create_timer(1.3).timeout
+	game.controller.submit_throw(Vector2.ZERO, 1.0)
+	var aimed_y: float = float(game.controller._pending_hit.y)
+	game.controller.request_card("use", 1)
+	check(game.controller.state.phase == MatchState.Phase.FLIGHT and float(game.controller._pending_hit.y) < aimed_y - 0.3, "trajectory card redirects the flying dart")
+	await create_timer(0.8).timeout
+	var first: int = game.controller.state.players[0].score
+	check(first < 50 and game.controller.state.phase == MatchState.Phase.AIMING, "redirected dart scores where it lands")
 	game.controller.submit_throw(Vector2.ZERO, 1.0)
 	await create_timer(0.8).timeout
 	check(game.controller.state.phase == MatchState.Phase.FINISHED, "target score win ends game")
-	check(game.controller.state.players[0].score == 50, "bull score")
+	check(game.controller.state.players[0].score == first + 50, "bull score")
 	await capture("07_result")
 	game.controller.restart()
 	await create_timer(0.1).timeout

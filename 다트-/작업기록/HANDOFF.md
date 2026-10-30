@@ -1,3 +1,14 @@
+# 최신 인수인계 — 다트 턴 카드 사용 (2026-10-31)
+
+- 규칙 연결은 `game/match/match_cards.gd` 한 곳. F6 시연과 함께 쓰는 `round_rules.gd`는 건드리지 않았고, 안쪽 클래스 `MatchRules`가 `valid_targets`만 "지금 던지는 사람"으로 바꾼다.
+- 점수는 꽂힐 때 `MatchCards.landing_points`로 다시 센다(섞기·가림판 반영). 비행 중 궤적 카드는 `MatchController.redirect_flight` → `redirect` 게임 이벤트 → `DartView.redirect`로 모든 화면의 다트가 휜다.
+- `MatchState.card_peer`(카드 턴 차례)와 방 설정 `RoomSettings.card_seconds`는 지웠다. `MatchConfig.card_seconds`는 개발자 F5 예시 경기용으로 남아 있다.
+- 봇 카드: `MatchCards.tick_bots`(방장 매 프레임, 조준·비행 중). 확률 `BOT_USE_CHANCE`·시간 `BOT_THINK_SECONDS`는 시연값. 검사: `tests/test_bot_cards.gd`.
+- 키 설정 파일에 예전 E가 저장돼 있으면 불러올 때 F로 바꾼다(`ui/player_preferences.gd`).
+- 남이 카드를 꺼내 든 알림이 없어서 사람은 무효 ×0을 쓸 때를 알기 어렵다(봇은 상태를 보고 막는다) — 다음 작업 후보.
+
+---
+
 # 최신 인수인계 — 네온 오락실 · 깨지는 소품 · UI 개편 (2026-10-30 오후)
 
 - 상세: [2026-10-30_오락실_깨지는소품_UI개편.md](2026-10-30_오락실_깨지는소품_UI개편.md).

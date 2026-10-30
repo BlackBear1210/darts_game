@@ -14,7 +14,6 @@ var turn_id: int = 0
 var darts_left: int = 0
 var players: Array[MatchPlayer] = []
 var last_hit: Dictionary = {}
-var card_peer: int = 0
 var feed: Array[String] = []
 
 
@@ -33,7 +32,7 @@ func to_snapshot() -> Dictionary:
 	for player in players: roster.append(player.to_snapshot())
 	return {"match_id": match_id, "revision": revision, "phase": phase,
 		"round": round_number, "turn_index": turn_index, "turn_id": turn_id,
-		"card_peer": card_peer, "feed": feed, "darts_left": darts_left, "players": roster, "last_hit": last_hit}
+		"feed": feed, "darts_left": darts_left, "players": roster, "last_hit": last_hit}
 
 
 static func from_snapshot(data: Dictionary) -> MatchState:
@@ -46,7 +45,6 @@ static func from_snapshot(data: Dictionary) -> MatchState:
 	state.turn_id = data.turn_id
 	state.darts_left = data.darts_left
 	state.last_hit = data.last_hit
-	state.card_peer = int(data.get("card_peer", 0))
 	state.feed.assign(data.get("feed", []))
 	for player: Dictionary in data.players: state.players.append(MatchPlayer.from_snapshot(player))
 	return state

@@ -1,4 +1,4 @@
-"""실제 ENet 3프로세스: 초대/암호/정원/착석/호스트 권한/카드 턴/재준비 검증."""
+"""실제 ENet 3프로세스: 초대/암호/정원/착석/호스트 권한/다트 턴 카드/재준비 검증."""
 import argparse,time
 from pathlib import Path
 from run_multiplayer import Peer,free_port,wait_for,PROJECT
@@ -41,23 +41,24 @@ def main():
         wait_for([host,client],lambda ss:all(s['room']['settings']['rounds']==6 and all(not p['ready'] for p in s['room']['players']) for s in ss),'rules update resets ready')
         assert host.status()['room']['settings']['hit_stun']==1.0
         host.command('ready',True);client.command('ready',True)
-        states=wait_for([host,client],lambda ss:all(s['room']['phase']==2 and s['match']['phase']==5 and s['match']['card_peer']==1 for s in ss),'all ready loads card turn')
-        # 현재 손패/턴을 다시 시작하지 않고 다음 카드 턴·다트 턴부터 시간을 적용한다.
+        states=wait_for([host,client],lambda ss:all(s['room']['phase']==2 and s['match']['phase']==5 for s in ss),'all ready loads card view')
+        # 현재 손패를 다시 시작하지 않고 다음 다트 턴부터 시간을 적용한다.
         live=states[0]['room']['settings'].copy()
         original_theme=live['theme_id']
-        live.update(rounds=2,dart_seconds=15.0,card_seconds=12.0,special_chance=85.0,theme_id=1-original_theme)
+        live.update(rounds=2,dart_seconds=15.0,special_chance=85.0,theme_id=1-original_theme)
         host.command('settings',live)
-        states=wait_for([host,client],lambda ss:all(s['room']['settings']['rounds']==2 and s['room']['settings']['card_seconds']==12 for s in ss),'live rules replicated')
-        assert all(s['room']['settings']['theme_id']==original_theme and s['room']['settings']['special_chance']==85 and s['match']['card_peer']==1 for s in states)
+        states=wait_for([host,client],lambda ss:all(s['room']['settings']['rounds']==2 and s['room']['settings']['dart_seconds']==15 for s in ss),'live rules replicated')
+        assert all(s['room']['settings']['theme_id']==original_theme and s['room']['settings']['special_chance']==85 and s['match']['phase']==5 for s in states)
+        # 2026-10-31: 카드 턴은 없다. 카드 확인(5초) 동안은 못 쓰고, 다트 턴에 누구나 쓴다.
         client.command('card',['select',0]);time.sleep(.25)
         assert all(p['pending_card']==-1 for p in host.status()['match']['players'])
-        host.command('card',['select',0]);time.sleep(1.5);host.command('card',['use',0])
-        states=wait_for([host,client],lambda ss:all(s['match']['card_peer']==client_id and len(s['match']['players'][0]['hand'])==6 for s in ss),'host card use replicated')
-        assert all(0<s['remaining']<=12.5 for s in states)
-        client.command('card',['select',0]);time.sleep(1.5);client.command('card',['use',0])
-        states=wait_for([host,client],lambda ss:all(s['match']['phase']==2 and len(s['match']['players'][1]['hand'])==6 for s in ss),'remote card use advances darts')
+        states=wait_for([host,client],lambda ss:all(s['match']['phase']==2 for s in ss),'card view leads straight to darts',timeout=8)
+        assert all(12<s['remaining']<=15.5 for s in states)
+        host.command('card',['select',0]);time.sleep(1.5);host.command('card',['use',1])
+        wait_for([host,client],lambda ss:all(len(s['match']['players'][0]['hand'])==6 for s in ss),'thrower card use replicated')
+        client.command('card',['select',0]);time.sleep(1.5);client.command('card',['use',1])
+        states=wait_for([host,client],lambda ss:all(len(s['match']['players'][1]['hand'])==6 and s['match']['phase']==2 for s in ss),'remote card use during dart turn')
         assert states[0]['match']['players']==states[1]['match']['players']
-        assert all(10<s['remaining']<=15.5 for s in states)
         host.command('lobby')
         wait_for([host,client],lambda ss:all(s['room']['phase']==0 and s['match']['phase']==0 and all(not p['ready'] for p in s['room']['players']) for s in ss),'back to map and re-ready')
         print('PASS: invite/password/capacity, host-only settings, seated readiness, setting consent reset, real remote card use, map return',flush=True)

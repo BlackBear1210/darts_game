@@ -131,19 +131,19 @@ func _run() -> void:
 	_key(KEY_F4)
 	assert(_game.controller.state.active_player().display_name == "봇 2")
 	await _capture("07_f4_bot_turn")
-	# E로 착석하면 라운지 투척은 잠긴다. 다트 홀로 나와 실제 마우스 입력을 검사한다.
+	# 상호작용 키(F)로 착석하면 라운지 투척은 잠긴다. 다트 홀로 나와 실제 마우스 입력을 검사한다.
 	local.position = TableView.SEATS[0] + Vector3(0, 0.01, 0.6)
 	_game.controller.state.turn_index = 0
 	_game.controller._begin_turn()
 	_game.set_process_unhandled_input(true)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_key(KEY_E)
+	_key(KEY_F)
 	await create_timer(0.15).timeout
 	assert(local.seated and not _game.throw_input.enabled)
 	# 요청 제한은 실제 단조 시계다. 저속 렌더 프레임의 SceneTreeTimer와 구분한다.
 	while _game.controller._now() - float(_game._last_seat_request.get(1, 0)) < 0.25:
 		await process_frame
-	_key(KEY_E)
+	_key(KEY_F)
 	await process_frame
 	assert(not local.seated)
 	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)

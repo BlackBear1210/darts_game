@@ -129,9 +129,8 @@ func _personal() -> void:
 	Style.label(_body, "시각 효과를 꺼도 카드의 게임 판정은 유지돼요.", 16, Style.MUTED)
 	Style.section(_body, "게임 · 조작", Style.GOLD)
 	Style.row(_body, "마우스 감도", Style.number(Preferences.sensitivity, 0.3, 2.0, 0.1, func(v: float) -> void: Preferences.sensitivity = v))
-	Style.row(_body, "상호작용 / 착석", Style.select(["E", "R"], 0 if Preferences.interact_key == KEY_E else 1, func(v: int) -> void: Preferences.interact_key = KEY_E if v == 0 else KEY_R))
-	Style.row(_body, "음료 마시기", Style.select(["F", "G"], 0 if Preferences.drink_key == KEY_F else 1, func(v: int) -> void: Preferences.drink_key = KEY_F if v == 0 else KEY_G))
-	Style.label(_body, "WASD 이동 · Enter 참여 · A/D 훔쳐보기 · S 의자 회전\n1–7 카드 선택 · Tab 대상 변경 · Enter 사용 / 패스", 17, Style.MUTED)
+	Style.row(_body, "상호작용 / 착석", Style.select(["F", "R"], 0 if Preferences.interact_key == KEY_F else 1, func(v: int) -> void: Preferences.interact_key = KEY_F if v == 0 else KEY_R))
+	Style.label(_body, "WASD 이동 · Enter 참여 · A/D 훔쳐보기 · S 의자 회전 · 병·캡슐 들고 좌클릭 = 마시기·열기\n다트 턴 중 Q·E / 1–7 카드 꺼내기 · Enter 사용 · Tab 무효 대상", 17, Style.MUTED)
 
 func _room() -> void:
 	Style.section(_body, "이 방의 플레이 규칙", Style.MINT)
@@ -153,7 +152,6 @@ func _room() -> void:
 	Style.row(_body, "목표 / 시작 점수", Style.number(_draft.target_score, 50, 1000, 10, func(v: float) -> void: _draft.target_score = int(v)))
 	Style.row(_body, "최대 라운드", Style.number(_draft.rounds, 1, 20, 1, func(v: float) -> void: _draft.rounds = int(v)))
 	Style.row(_body, "다트 턴 · 초", Style.number(_draft.dart_seconds, 5, 120, 5, func(v: float) -> void: _draft.dart_seconds = v))
-	Style.row(_body, "카드 턴 · 초 / 사람", Style.number(_draft.card_seconds, 3, 60, 1, func(v: float) -> void: _draft.card_seconds = v))
 	Style.section(_body, "카드", Style.PINK)
 	Style.row(_body, "카드 사용", Style.toggle(_draft.cards_enabled, func(v: bool) -> void: _draft.cards_enabled = v))
 	Style.row(_body, "특수 카드 포함", Style.toggle(_draft.special_cards, func(v: bool) -> void: _draft.special_cards = v))

@@ -38,7 +38,6 @@ func _boot() -> void:
 		rules.social_lobby = true
 		rules.private_room = true
 		rules.capacity = 2
-		rules.card_seconds = 30
 		for entry: Dictionary in preload("res://game/card_round/rules/card_catalog.gd").CARDS:
 			if entry.id != "plus_10": rules.disabled_cards.append(str(entry.id))
 		_session.host_room(_options.name, int(_options.port), rules, "test-password")

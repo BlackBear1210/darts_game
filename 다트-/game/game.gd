@@ -62,11 +62,14 @@ var _shown_hand: Array[int] = []
 var _hand_base: Transform3D
 var _throw_kick: float = 0.0
 var _board_shake: float = 0.0
+## 지금 날아가는 다트(궤적 카드로 꽂히는 자리가 바뀌면 이 다트를 휘게 한다).
+var _flying_dart: DartView
 
 
 func _ready() -> void:
 	controller.changed.connect(_apply_state)
 	controller.dart_thrown.connect(_show_throw)
+	controller.dart_redirected.connect(_redirect_throw)
 	throw_input.throw_requested.connect(controller.submit_throw)
 	throw_input.camera = camera
 	throw_input.board = table.board
@@ -137,21 +140,24 @@ func _prepare_hand_fan() -> void:
 	_sync_hand_fan()
 
 
-## 내 손패를 부채에 맞춘다. 스냅샷마다 부르지만 카드가 그대로면 아무것도 안 한다.
+## 내 손패를 부채에 맞추고 꺼내 든 카드를 위로 올린다. 스냅샷마다 부르지만 카드가 그대로면 다시 만들지 않는다.
 func _sync_hand_fan() -> void:
 	if _fan == null:
 		return
 	var me := controller.state.find_player(controller.local_peer_id)
 	var hand: Array[int] = []
 	if me != null: hand.assign(me.hand)
-	if hand == _shown_hand:
-		return
-	_shown_hand = hand.duplicate()
-	for slot in range(CardHandRules.HAND_LIMIT):
-		if slot < hand.size():
-			_fan.set_card(slot, hand[slot])
-		else:
-			_fan.remove_card(slot)
+	if hand != _shown_hand:
+		_shown_hand = hand.duplicate()
+		for slot in range(CardHandRules.HAND_LIMIT):
+			if slot < hand.size():
+				_fan.set_card(slot, hand[slot])
+			else:
+				_fan.remove_card(slot)
+	var pending_slot: int = me.pending_slot if me != null else -1
+	if pending_slot != _fan.lifted_slot:
+		if pending_slot >= 0: _fan.lift(pending_slot)
+		else: _fan.lower()
 
 
 ## 1인칭 손을 자기 자리 색 소매로 바꾸고, 손에 든 다트 깃도 자리 색으로 칠한다.
@@ -187,6 +193,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var id: int = controller.local_peer_id
 		var hit: Dictionary = lounge.focus(id)
 		if event is InputEventMouseButton and event.pressed:
+			# 병·캡슐을 든 채 좌클릭 = 한 모금 / 내가 열기(2026-10-31: 상호작용을 F 로 옮기며 마시기 키를 없앴다).
+			# 들고 있으면 다트 투척 입력이 꺼져 있어 겹치지 않는다 → 다트를 던지려면 먼저 내려놓는다.
+			if event.button_index == MOUSE_BUTTON_LEFT and lounge.held(id) >= 0:
+				lounge.request("drink")
+				get_viewport().set_input_as_handled()
+				return
 			if event.button_index == MOUSE_BUTTON_LEFT and hit.get("kind") == "prop":
 				lounge.request("take")
 				get_viewport().set_input_as_handled()
@@ -207,16 +219,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				if player != null and is_seated(id): session.set_ready(not player.is_ready)
 				get_viewport().set_input_as_handled()
 				return
-			if event.keycode == Preferences.drink_key: lounge.request("drink")
-			if hit.get("kind") == "volume" and event.keycode in [KEY_Q, KEY_E]:
-				lounge.request("volume", -1 if event.keycode == KEY_Q else 1)
-				get_viewport().set_input_as_handled()
-				return
 			if event.keycode == Preferences.interact_key and not hit.is_empty() and hit.get("kind") != "prop":
 				match str(hit.kind):
 					"monitor":
 						if session.is_room_host(): settings_requested.emit("room")
 					"power": lounge.request("power")
+					"volume": lounge.request("volume")
 					"link":
 						if lounge_hud != null: lounge_hud.open_link()
 					"claw", "gacha", "hoop": lounge.request(str(hit.kind), int(hit.get("index", 0)))
@@ -501,6 +509,7 @@ func _show_throw(data: Dictionary) -> void:
 	_darts.add_child(dart)
 	# 모든 화면은 방장의 시작점/종점/시간으로 같은 포물선을 재현한다.
 	dart.fly(data.start, data.target, data.duration, true, $Camera/Hand.position)
+	_flying_dart = dart
 	# 깃 = 던진 사람 자리 색, 그 캐릭터는 던지기 몸짓을 한다.
 	var thrower := actors.get(int(data.get("peer_id", 0))) as PlayerView
 	if thrower != null:
@@ -510,6 +519,11 @@ func _show_throw(data: Dictionary) -> void:
 			_throw_kick = 1.0
 	dart.landed.connect(_on_dart_landed)
 	Sfx.play_at(self, "whoosh", data.start, -8.0)
+
+
+func _redirect_throw(data: Dictionary) -> void:
+	if is_instance_valid(_flying_dart):
+		_flying_dart.redirect(data.target, float(data.remaining))
 
 
 ## 다트가 멈춘 순간의 손맛: 과녁이 움찔하고 코르크 가루가 튀며 "턱" 소리가 난다. 판정과 무관하다.
@@ -586,7 +600,6 @@ func sync_room(room: RoomState) -> void:
 	if room.settings.social_lobby:
 		controller.config.rounds = room.settings.rounds
 		controller.config.turn_seconds = room.settings.dart_seconds
-		controller.config.card_seconds = room.settings.card_seconds
 	controller.sync_roster(room)
 	if room.phase == RoomState.Phase.LOBBY:
 		for player in controller.state.players:

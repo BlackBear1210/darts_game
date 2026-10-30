@@ -63,6 +63,22 @@ func fly(start: Vector3, target: Vector3, duration: float, hit_board: bool = tru
 	set_physics_process(true)
 
 
+## 날아가는 중에 착탄점이 바뀌었다(궤적 카드, MatchController.redirect_flight). 지금 자리·지금 시각에서 출발해
+## 남은 시간 뒤 새 착탄점에 닿는 포물선으로 바꾼다. 경과 시간은 그대로라 커지기·깃 회전 연출이 끊기지 않는다.
+func redirect(target: Vector3, remaining: float) -> void:
+	if not is_physics_processing() or not _hit_board:
+		return
+	var now: float = _elapsed
+	var landing: float = now + remaining
+	var gravity := Vector3.DOWN * config.gravity
+	var from: Vector3 = global_position
+	# position_at(시작, 속도, t) = 시작 + 속도·t + 중력·t²/2 가 t = now 에서 지금 자리, t = landing 에서 착탄점이 되게 푼다.
+	_initial_velocity = (target - from - gravity * (landing * landing - now * now) * 0.5) / remaining
+	_start = from - _initial_velocity * now - gravity * now * now * 0.5
+	_target = target
+	_duration = landing
+
+
 func _physics_process(delta: float) -> void:
 	_elapsed += delta
 	var flight_time: float = minf(_elapsed, _duration) if _hit_board else _elapsed

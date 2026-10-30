@@ -495,7 +495,7 @@ func _accept_settings(sender: int, data: Dictionary) -> void:
 	updated.sanitize()
 	if room.phase != RoomState.Phase.LOBBY:
 		# 진행 중 점수/손패는 보존한다. 새 시간은 다음 턴, 새 확률은 다음 보충부터 쓴다.
-		for field in ["rounds", "dart_seconds", "card_seconds", "special_chance"]:
+		for field in ["rounds", "dart_seconds", "special_chance"]:
 			room.settings.set(field, updated.get(field))
 	else:
 		room.settings = updated

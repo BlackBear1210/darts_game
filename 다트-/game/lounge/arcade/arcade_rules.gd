@@ -105,7 +105,7 @@ static func focus_points() -> Array[Dictionary]:
 
 # ─────────────────────────────── 입력(방장) ───────────────────────────────
 
-## 기계 버튼(E). 같은 키가 상황에 따라 "시작 → 멈춤 → 내리기" 또는 "흔들어 방해"가 된다. 처리했으면 true.
+## 기계 버튼(상호작용 키, 기본 F). 같은 키가 상황에 따라 "시작 → 멈춤 → 내리기" 또는 "흔들어 방해"가 된다. 처리했으면 true.
 func accept(sender: int, kind: String, value: Variant) -> bool:
 	var actor: PlayerView = lounge.game.actors.get(sender)
 	if actor == null: return false

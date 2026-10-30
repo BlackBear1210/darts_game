@@ -83,13 +83,14 @@ func _run() -> void:
 	await wait_seconds(0.2)
 	actor.position.x = 7.8
 	aim(actor, lounge.JUKEBOX + Vector3(0, 1.2, 0.42))
-	lounge.request("volume", -1)
-	assert(is_equal_approx(lounge.music.volume, 0.45))
+	# 상호작용 키 한 번 = 한 단계(25%) 올리기.
+	lounge.request("volume")
+	assert(is_equal_approx(lounge.music.volume, 0.75))
 	# 시작 화면 전환에도 음악·손에 든 물체·취기 값은 유지된다.
 	game.force_seat(1)
 	main.session.set_ready(true)
 	await create_timer(0.3).timeout
-	assert(main._game.lounge.music.playing and is_equal_approx(main._game.lounge.music.volume, 0.45))
+	assert(main._game.lounge.music.playing and is_equal_approx(main._game.lounge.music.volume, 0.75))
 	assert(float(main._game.lounge.intoxication.get(1, 0)) > 0)
 	main.session.leave_room()
 	main.queue_free()

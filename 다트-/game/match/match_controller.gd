@@ -5,6 +5,8 @@ extends Node
 
 signal changed
 signal dart_thrown(data: Dictionary)
+## 날아가는 다트에 궤적 카드가 걸려 꽂히는 자리가 바뀌었다. {target, remaining}
+signal dart_redirected(data: Dictionary)
 
 @export var config: MatchConfig = preload("res://game/match/default_match.tres")
 
@@ -30,6 +32,8 @@ var _phase_end: float = 0.0
 var _received_at: float = 0.0
 var _remote_seconds: float = 0.0
 var _pending_hit: Dictionary = {}
+## 지금 날아가는 다트의 조준·충전. 날아가는 중에 궤적 카드가 걸리면 같은 값으로 다시 계산한다.
+var _flight_input: Dictionary = {}
 var _request_number: int = 0
 var _last_requests: Dictionary = {}
 ## 카드를 뽑는 난수. 방장만 돌리고 결과는 스냅샷으로 나간다.
@@ -46,7 +50,6 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 	if room_settings.social_lobby:
 		config.rounds = room_settings.rounds
 		config.turn_seconds = room_settings.dart_seconds
-		config.card_seconds = room_settings.card_seconds
 	local_peer_id = peer_id
 	state.match_id = room.match_id
 	for identity in room.players:
@@ -94,6 +97,8 @@ func _receive_event(kind: String, data: Dictionary) -> void:
 		_receive_state(data)
 	elif kind == "dart":
 		_play_throw(data)
+	elif kind == "redirect":
+		_play_redirect(data)
 
 
 func _accept_throw(sender: int, match_id: int, turn_id: int, request_id: int, aim: Vector2, charge: float) -> void:
@@ -134,14 +139,8 @@ func bot_throw(aim: Vector2, charge: float) -> void:
 
 ## 확정된 한 발을 비행으로 보낸다. 사람과 봇이 같은 경로를 쓴다.
 func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void:
-	var mods: Dictionary = cards.modifiers(peer_id) if cards != null else {}
-	var adjusted: Vector2 = aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
-	var data: Dictionary = solve_throw.call(adjusted, 1.0 if mods.get("power", false) else charge, peer_id)
-	if mods.get("triple", false):
-		for offset in [Vector2(-0.09, 0.03), Vector2(0.09, 0.03)]:
-			var alternate: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id)
-			if int(alternate.points) > int(data.points): data = alternate
-	if mods.get("cover", false) and float(data.x) < 0: data.points = 0
+	var data: Dictionary = _solve(peer_id, aim, charge)
+	_flight_input = {"aim": aim, "charge": charge}
 	_pending_hit = data.duplicate()
 	_pending_hit.merge({"peer_id": peer_id, "request_id": request_id})
 	state.darts_left -= 1
@@ -152,9 +151,39 @@ func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void
 	_play_throw(data)
 
 
+## 카드 궤적 효과(무거운 다트·바람·힘 증가·특수 다트)를 넣은 비행 계산. 가림판·숫자 섞기는 꽂힐 때 센다(MatchCards.landing_points).
+func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
+	var mods: Dictionary = cards.modifiers(peer_id) if cards != null else {}
+	var adjusted: Vector2 = aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
+	var data: Dictionary = solve_throw.call(adjusted, 1.0 if mods.get("power", false) else charge, peer_id)
+	if mods.get("triple", false):
+		for offset in [Vector2(-0.09, 0.03), Vector2(0.09, 0.03)]:
+			var alternate: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id)
+			if int(alternate.points) > int(data.points): data = alternate
+	return data
+
+
+## 날아가는 다트에 궤적 카드가 걸렸다(2026-10-31 사용자 결정: 비행 중에 써도 적용). 같은 조준으로 다시 계산해
+## 꽂히는 자리만 바꾸고, 꽂히는 시각은 그대로 둔다. 모든 화면의 다트가 남은 시간 동안 새 자리로 휘어 간다.
+func redirect_flight() -> void:
+	if state.phase != MatchState.Phase.FLIGHT or _pending_hit.is_empty():
+		return
+	var data: Dictionary = _solve(int(_pending_hit.peer_id), _flight_input.aim, _flight_input.charge)
+	_pending_hit.merge(data, true)
+	var event := {"match_id": state.match_id, "turn_id": state.turn_id, "target": data.target, "remaining": maxf(0.05, _phase_end - _now())}
+	if session != null:
+		session.receive_game_event.rpc("redirect", event)
+	_play_redirect(event)
+
+
 func _play_throw(data: Dictionary) -> void:
 	if data.match_id == state.match_id and data.turn_id == state.turn_id:
 		dart_thrown.emit(data)
+
+
+func _play_redirect(data: Dictionary) -> void:
+	if data.match_id == state.match_id and data.turn_id == state.turn_id:
+		dart_redirected.emit(data)
 
 
 func _process(_delta: float) -> void:
@@ -162,9 +191,13 @@ func _process(_delta: float) -> void:
 		return
 	match state.phase:
 		MatchState.Phase.AIMING:
+			if cards != null:
+				cards.tick_bots()
 			if _now() >= _turn_end:
 				_timeout_turn()
 		MatchState.Phase.FLIGHT:
+			if cards != null:
+				cards.tick_bots()
 			if _now() >= _phase_end:
 				_land_dart()
 		MatchState.Phase.SETTLING:
@@ -174,14 +207,13 @@ func _process(_delta: float) -> void:
 			if _everyone_seated() or _now() >= _phase_end:
 				_close_table()
 		MatchState.Phase.CARDS:
-			if cards != null:
-				cards.tick()
-			elif _now() >= _phase_end:
+			if _now() >= _phase_end:
 				_begin_turn()
 
 
 ## 라운드의 다트가 시작되기 전 카드 나눠 주기(2026-10-28 사용자 요청).
 ## 쓴 만큼만 7장까지 채운다 — 한 장도 안 썼으면 한 장도 받지 않는다(CardHandRules 확정 규칙).
+## 라운지 경기는 받은 카드를 MatchCards.VIEW_SECONDS 동안 확인만 하고 바로 다트로 간다(카드는 다트 턴에 쓴다).
 ## before 는 이 단계로 넘어오며 알릴 말(집합 지각 같은 것). 카드 알림이 그것을 덮지 않게 앞에 붙인다.
 func _begin_cards(before: String = "") -> void:
 	if room_settings.social_lobby and not room_settings.cards_enabled:
@@ -197,9 +229,9 @@ func _begin_cards(before: String = "") -> void:
 	var text: String = "카드 나눠 주기 — 각자 %d장" % CardHandRules.HAND_LIMIT if dealt > 0 else "모두 %d장 그대로" % CardHandRules.HAND_LIMIT
 	notice = text if before.is_empty() else "%s · %s" % [before, text]
 	if cards != null:
+		notice += " · %d초 뒤 다트" % roundi(MatchCards.VIEW_SECONDS)
 		cards.begin_round()
-	else:
-		_set_phase(MatchState.Phase.CARDS, config.card_seconds)
+	_set_phase(MatchState.Phase.CARDS, MatchCards.VIEW_SECONDS if cards != null else config.card_seconds)
 
 
 func _begin_turn() -> void:
@@ -225,7 +257,7 @@ func _land_dart() -> void:
 		return
 	var won: bool = false
 	if cards != null:
-		var result: Dictionary = cards.score(int(_pending_hit.points))
+		var result: Dictionary = cards.score(cards.landing_points(_pending_hit))
 		_pending_hit.points = result.points
 		_pending_hit.reason = "버스트 · 차례 시작 점수로 복귀" if result.bust else str(result.formula) + "점"
 		if result.bust: state.darts_left = 0
@@ -328,9 +360,9 @@ func sync_roster(room: RoomState) -> void:
 		state.turn_index = mini(state.turn_index, state.players.size() - 1)
 		_publish()
 		return
-	if state.phase == MatchState.Phase.CARDS and cards != null:
-		cards.rules.order = cards.rules.order.filter(func(index: int) -> bool: return state.find_player(cards.peers[index]) != null)
-		if state.find_player(state.card_peer) == null: cards.advance()
+	if cards != null:
+		cards.drop_missing()
+	if state.phase == MatchState.Phase.CARDS:
 		_publish()
 		return
 	if state.phase == MatchState.Phase.TABLE:

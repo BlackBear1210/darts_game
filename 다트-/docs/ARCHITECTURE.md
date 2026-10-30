@@ -36,7 +36,7 @@ F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `Player
 - `lobby/room_settings.gd`: 공개 설정 Resource. 비밀번호·개발자 권한은 포함하지 않는다. sanitize/허용 카드 풀/상대 가중치가 여기 있다.
 - `network/network_session.gd`: 초대/암호 도전 응답, 정원, 설정 발신자 검증, 준비와 자동 시작. 개발자 값은 local server host+debug 개발 플래그 조건을 별도로 확인한다.
 - `ui/settings_panel.gd`, `player_preferences.gd`: ESC 개인 설정과 모니터 방장/개발자 설정. 개인 설정은 ConfigFile, 공유 설정은 server 승인만 사용한다.
-- `game/match/match_cards.gd`: 실제 peer ID와 기존 순수 RoundRules 자리 인덱스를 변환한다. 카드 턴·선택·사용·대응·패스 및 카드 효과/승리를 MatchController로 연결한다. 스냅샷은 hand/pending_card/card_effects/card_peer/feed를 포함한다.
+- `game/match/match_cards.gd`: 실제 peer ID와 기존 순수 RoundRules 자리 인덱스를 변환한다. 다트 턴(조준·비행) 중 누구나 쓰는 카드 선택·사용·대응과 카드 효과/승리를 MatchController로 연결한다. 효과 대상은 무효 ×0 말고는 늘 지금 던지는 사람이다(내부 `MatchRules`가 RoundRules의 대상 검사만 바꾼다). 점수·과녁 효과는 꽂힐 때 `landing_points`로, 비행 중 궤적 효과는 `MatchController.redirect_flight`로 반영한다. 봇 카드는 방장이 다트 턴마다 `tick_bots`로 정한다. 스냅샷은 hand/pending_card/pending_slot/card_effects/feed를 포함한다.
 - `game/lounge/lounge_world.gd`: 모니터·주크박스·소품과 테마. 방장만 물체 소유권/거리/요청 제한/병 궤적/적중/취기·스턴을 갱신한다. 시계는 남은 시간으로 보내 서로 다른 PC의 단조 시계 차이를 피한다. 과거 match_id 이벤트는 무시한다.
 - `game/lounge/youtube_bridge.gd`, `youtube_player.html`: 외부 브라우저 공식 임베드. 루프백에 /player·/state 읽기 전용 경로만 제공하고 헤더 크기·시간·동시 요청 수를 제한한다. 영상·전원·볼륨을 전달하고 파일/명령 실행 엔드포인트는 제공하지 않는다.
 - `ui/lounge_hud.gd`: 짧은 효과 피드·준비 인원·카드 키·상호작용·공동 순위. 기존 `GameHUD`는 legacy 예시/서버 검증 경로에 남긴다.
@@ -100,8 +100,8 @@ BackendConnection은 MatchController의 변경을 관찰하며 정상 완주 결
 - 이탈: 활성 투척자의 미완료 비행은 취소하고 다음 차례로 간다. 마지막 차례 이탈은 라운드를 넘긴다. 종료 상태의 이탈은 경기를 재개하지 않는다.
 - 카드 나눠 주기(CARDS): 경기 시작과 매 라운드의 다트 전에 방장이 `MatchPlayer.hand`(카드 종류 번호)를 `CardHandRules.HAND_LIMIT`(7장)까지 채운다.
   쓴 만큼만 채우므로 한 장도 안 썼으면 한 장도 받지 않는다. 카드 목록은 `game/card_round/rules/card_catalog.gd` 하나만 쓴다(시연 장면과 같은 카드).
-  손패는 기존 경기 스냅샷에 실려 모든 화면이 같은 값을 본다. 단계 길이는 `MatchConfig.card_seconds`다.
-  순서: 시작 → CARDS → AIMING …, 라운드가 넘어가면 TABLE → CARDS → AIMING. 카드를 쓰는 규칙은 아직 없다(나눠 주기까지).
+  손패는 기존 경기 스냅샷에 실려 모든 화면이 같은 값을 본다. 라운지 경기의 CARDS는 받은 카드를 보는 `MatchCards.VIEW_SECONDS`(5초)이고, 그 밖은 `MatchConfig.card_seconds`다.
+  순서: 시작 → CARDS → AIMING …, 라운드가 넘어가면 TABLE → CARDS → AIMING. 카드는 CARDS가 아니라 다트 턴(AIMING·FLIGHT)에 쓴다.
 - 테이블 집합(TABLE): 라운드가 넘어갈 때(마지막 라운드 제외) MatchController가 `TABLE` 단계를 `table_seconds`(기본 10초) 동안 연다. 집합이 시작되면 모든 `MatchPlayer.speed_scale`을 1.0으로 되돌린다. 사람 전원이 앉으면 즉시, 아니면 시간이 끝날 때 닫는다. 못 앉은 사람은 `force_seat`로 자기 자리에 앉히고 `speed_scale = slow_speed_scale`(기본 0.5)을 걸어 다음 라운드 동안 이동이 느려진다. 봇은 검사하지 않는다.
 - MatchController는 씬을 모른다. 착석 확인·강제 착석은 GameView가 주입하는 Callable(`check_seated` = `GameView.is_seated`, `force_seat` = `GameView.force_seat`)로 한다(`solve_throw`와 같은 방식). 주입이 없으면 전원 착석으로 보고 바로 다음 라운드로 간다.
 - `speed_scale`은 MatchState 스냅샷에 실려 모든 화면이 같은 값을 본다. 이동 시뮬레이션은 방장만 하므로 실제 속도 적용은 방장 쪽 `PlayerView.simulate`(SPEED × 숙이기 × speed_scale)다.
