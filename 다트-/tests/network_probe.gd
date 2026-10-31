@@ -113,6 +113,10 @@ func _read_command() -> void:
 		"exit":
 			_session.leave_room()
 			get_tree().quit()
+		"shot":
+			# 화면이 있는 손님 창을 그대로 찍는다(<output>_<이름>.png).
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(_options.output + "_" + str(command.value) + ".png")
 		"throw":
 			var controller := (_main.get_node("Game") as GameView).controller
 			controller.submit_throw(Vector2(float(command.value[0]), float(command.value[1])), float(command.value[2]))
@@ -196,5 +200,11 @@ func _write_status() -> void:
 		status["poses"] = poses
 		status["remaining"] = view.controller.remaining_seconds()
 		status["table_ready"] = view.table.is_ready
+		# 카드 충전 라운드 덱 섞기·나눠 주기 연출(화면이 있는 손님만 — run_deck_show_remote.py, 2026-10-31 늦은 밤).
+		if view.deck_show != null:
+			var hidden: int = 0
+			for card in view.seat_cards.get_children():
+				if card is Node3D and not (card as Node3D).visible: hidden += 1
+			status["deck_show"] = {"played": view.deck_show.played, "playing": view.deck_show.is_playing(), "hidden": hidden}
 	var file := FileAccess.open(_options.output + ".status.json", FileAccess.WRITE)
 	file.store_string(JSON.stringify(status))

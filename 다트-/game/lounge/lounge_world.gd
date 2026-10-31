@@ -10,6 +10,12 @@ extends Node3D
 ## [네온 오락실 — 테마 1]
 ## 펍의 바·NPC 자리·당구대·럼주통 그림을 빼고 오락실 물건을 세운다(arcade/arcade_room.gd).
 ## 인형뽑기·가챠·농구 오락기 규칙은 arcade/arcade_rules.gd. 뽑은 인형·캡슐·농구공은 모두 소품이다.
+##
+## [도면 v3 — 2026-10-31 밤, 에셋 소품]
+## 맥주잔(mug): 바 위 컵받침에 놓인 나무 잔(RG Poly). 병처럼 한 모금 마신다. 세게 던지면 깨지지 않고 "쏟아진다"
+##   (맥주 웅덩이 + 툭 소리) → 빈 잔은 치워지고 RESPAWN 초 뒤 새로 채운 잔이 바 컵받침에 다시 놓인다.
+## 건드리기(touch): 바 종 · 럼주통 · 생맥주 통 · 연습 과녁 · 축음기에 다가가 상호작용 키(F) → 소리 + 그 물건이 흔들린다.
+##   모든 화면에서 같은 소리·흔들림(방장이 fx 이벤트로 알린다). 점수·규칙에는 영향이 없는 "만지는 재미"용이다.
 const Kit = preload("res://art/mesh_kit.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
 const Bridge = preload("res://game/lounge/youtube_bridge.gd")
@@ -31,14 +37,34 @@ const BREAK_FALL: float = 1.7
 const BREAK_DISTANCE: float = 5.0
 const RESPAWN: float = 6.0
 const CAPSULE_BURST: float = 4.0
+## 마시기 몸짓(2026-10-31 사용자 요청 — 예전엔 킬로그만 뜨고 아무 동작이 없었다).
+## 한 모금 = DRINK_SECONDS 동안 병을 입으로 올려(HOLD → MOUTH) 병목이 얼굴 쪽으로 DRINK_TIP 만큼 기울었다가 내려온다.
+## 박자는 CharacterRig.drink_curve 하나로 맞춘다(팔·고개·1인칭 카메라·병이 같이 움직인다). 마시기 쿨다운(1.5초)보다 짧아야 한다.
+const DRINK_SECONDS: float = 1.3
+## 든 소품 자리(눈 기준, 몸 방향): 평소 = 오른손 앞 아래, 마실 때 = 입 앞.
+const HOLD_OFFSET := Vector3(0.3, -0.25, -0.55)
+const MOUTH_OFFSET := Vector3(0.05, -0.1, -0.27)
+## 내 화면(1인칭)에서 마실 때 병 자리. 남이 보는 입 앞(MOUTH_OFFSET)을 그대로 쓰면 카메라에 너무 붙어
+## 병이 화면 오른쪽 아래를 다 가렸다(2026-10-31 화면 확인) → 조금 더 앞·아래·오른쪽에서 병목만 화면에 들어오게 한다.
+const FIRST_PERSON_MOUTH := Vector3(0.12, -0.17, -0.42)
+## 병을 기울이는 최대 각도(라디안, 약 110도 — 병 바닥이 하늘로). +X 축으로 돌리면 병목이 얼굴(+Z) 쪽으로 온다.
+const DRINK_TIP: float = 1.9
 ## 튕김 계수(1 = 그대로 튕김). 없는 종류는 튕기지 않고 바로 멈춘다.
 const BOUNCE := {"ball": 0.62, "hoop_ball": 0.66, "capsule": 0.45, "plush": 0.25}
 ## 누운 소품의 바닥 높이(병·큐대는 떨어지면 눕는다).
 const LYING_REST := {"bottle": 0.07, "cue": 0.02}
+## 마실 수 있는 소품(한 모금 · 마시는 몸짓 · 취기). 맥주잔은 2026-10-31 밤에 더했다.
+const DRINKS: Array[String] = ["bottle", "mug"]
+## 세게 부딪히면 깨지거나(병·큐대) 쏟아지는(맥주잔) 소품.
+const FRAGILE: Array[String] = ["bottle", "cue", "mug"]
+## 건드리면 흔들리는 시간(초)과 흔들림 크기(라디안).
+const WOBBLE_SECONDS: float = 0.7
+const WOBBLE_ANGLE: float = 0.12
 ## 오락실 테마에서 펍 그림에서 빼는 묶음(같은 자리에 기계를 세운다).
-const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels"]
+## Windows(2026-10-31 늦은 밤): 오락실은 창 없는 방 — 창을 빼고 그 벽에 네온 간판을 단다(간판이 창에 겹쳐 잘리던 문제).
+const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows"]
 ## 소품 → 킬로그 아이콘.
-const FEED_ICONS := {"bottle": "bottle", "ball": "hoop", "cue": "cue", "hoop_ball": "hoop", "plush": "plush", "capsule": "capsule"}
+const FEED_ICONS := {"bottle": "bottle", "mug": "bottle", "ball": "hoop", "cue": "cue", "hoop_ball": "hoop", "plush": "plush", "capsule": "capsule"}
 
 var game: GameView
 var session: NetworkSession
@@ -66,6 +92,9 @@ var _audio: AudioStreamPlayer3D
 var _sfx: AudioStreamPlayer
 var _jukebox_lights: Array[StandardMaterial3D] = []
 var _time: float = 0.0
+## 흔들리는 물건: 노드 → 흔들기 시작 시각(_time 기준). 원래 회전은 _wobble_base 에.
+var _wobbles: Dictionary = {}
+var _wobble_base: Dictionary = {}
 
 func configure(owner: GameView) -> void:
 	game = owner
@@ -94,10 +123,15 @@ func _build() -> void:
 	var dark: Material = Kit.material("lounge_dark", "162039", 0.2)
 	Kit.box(self, "MonitorStand", Vector3(0.14, 1.2, 0.2), MONITOR - Vector3(0, 0.55, 0), dark)
 	Kit.box(self, "MonitorScreen", Vector3(1.0, 0.64, 0.12), MONITOR, dark)
-	Kit.label(self, "MonitorText", "DARTY / ROOM\n[E] 방장 설정", MONITOR + Vector3(0, 0, 0.08), 26, Color("79f2ce"), 0.004)
+	# 상호작용 키는 2026-10-31 부터 F(설정에서 바꿀 수 있다) — 예전 글자 "[E]" 가 남아 있었다.
+	Kit.label(self, "MonitorText", "DARTY / ROOM\n[%s] 방장 설정" % OS.get_keycode_string(Preferences.interact_key), MONITOR + Vector3(0, 0, 0.08), 26, Color("79f2ce"), 0.004)
 	_build_jukebox()
-	for index in range(5):
-		_add_prop("bottle", Vector3(-4.76, 1.3, 3.1 + index * 0.48), -1, index)
+	# 2026-10-31 밤: 예전 자리(x -4.76, 높이 1.3)는 카운터 앞면(x -4.9) 밖 허공이라 병이 떠 보였다 → 바 윗면 위로.
+	for index in range(TableView.BAR_BOTTLES_Z.size()):
+		_add_prop("bottle", Vector3(TableView.BAR_BOX.end.x - 0.25, TableView.BAR_TOP_Y + float(Looks.REST.bottle), TableView.BAR_BOTTLES_Z[index]), -1, index)
+	# 맥주잔: 바 컵받침 위(펍 테마 — 오락실에서는 바 그림이 빠진다).
+	for index in range(TableView.BAR_MUGS.size()):
+		_add_prop("mug", TableView.BAR_MUGS[index] + Vector3(0, float(Looks.REST.mug), 0), 0, index)
 	for index in range(3):
 		_add_prop("ball", Vector3(10.65, 0.91, 3.5 + index * 0.15), 0, index)
 	_add_prop("cue", Vector3(10.28, 0.78, 4.7), 0, 0)
@@ -176,6 +210,8 @@ func apply_theme() -> void:
 		game.table.rebuild_pub(skip, _trim_arcade if next == 1 else Callable())
 	_base_materials.clear()
 	_base_lights.clear()
+	_wobbles.clear()
+	_wobble_base.clear()
 	var pub: Node = game.table.get_node("Pub")
 	_recolor(pub, next == 1)
 	_set_glow(pub, next == 1)
@@ -239,6 +275,10 @@ func focus(peer_id: int) -> Dictionary:
 		{"kind": "link", "at": JUKEBOX + Vector3(0.48, 1.2, 0.42)}]
 	if _theme_id == 1:
 		candidates.append_array(Rules.focus_points())
+	var spots: Array[Dictionary] = touch_spots()
+	for index in range(spots.size()):
+		if int(spots[index].theme) == -1 or int(spots[index].theme) == _theme_id:
+			candidates.append({"kind": "touch", "index": index, "at": spots[index].at})
 	if session.room.settings.props_enabled:
 		for index in range(objects.size()):
 			if _usable(index):
@@ -273,6 +313,7 @@ func prop_name(index: int) -> String:
 	if index < 0 or index >= objects.size(): return "소품"
 	var kind: String = objects[index].kind
 	if kind == "bottle" and session.room.settings.alcohol: return "술병"
+	if kind == "mug": return "맥주잔" if session.room.settings.alcohol else "음료잔"
 	return str(Looks.NAMES.get(kind, "소품"))
 
 func machine_prompt(peer_id: int, kind: String) -> String:
@@ -309,12 +350,14 @@ func _accept(sender: int, action: String, value: Variant) -> void:
 		index = int(hit.index)
 		objects[index].holder = sender
 		objects[index].lying = false
-	elif action == "drink" and index >= 0 and objects[index].kind == "bottle":
+	elif action == "drink" and index >= 0 and objects[index].kind in DRINKS:
 		if time - float(objects[index].get("drank", -10.0)) < 1.5: return
 		objects[index].drank = time
 		if session.room.settings.alcohol:
 			intoxication[sender] = minf(5, float(intoxication.get(sender, 0)) + 1.0)
 		feed("drink", actor, "한 모금")
+		# 꿀꺽 소리는 병이 입에 닿는 박자(진행 약 0.3)에 맞춰 조금 늦게 낸다.
+		get_tree().create_timer(DRINK_SECONDS * 0.3).timeout.connect(_gulp.bind(sender))
 	elif action == "drink" and index >= 0 and objects[index].kind == "capsule":
 		# 손에 든 캡슐을 직접 연다(라이어스 바처럼 운에 맡기기). 결과는 나에게.
 		_burst_capsule(index, actor.eye_position(), sender, sender)
@@ -323,6 +366,14 @@ func _accept(sender: int, action: String, value: Variant) -> void:
 	elif action in ["claw", "gacha", "hoop"]:
 		if _theme_id != 1 or hit.get("kind") != action: return
 		if not _arcade.accept(sender, action, hit.get("index", 0)): return
+	elif action == "touch" and hit.get("kind") == "touch" and int(hit.get("index", -1)) == int(value):
+		# 건드리기: 소리 + 흔들림을 모두에게(fx 이벤트). 딸깍 소리는 내지 않는다(물건 소리만).
+		var spot: Dictionary = touch_spots()[int(value)]
+		var data := {"match_id": game.controller.state.match_id, "kind": "sound", "at": spot.at, "push": Vector3.ZERO,
+			"tint": Color.WHITE, "sound": spot.sound, "wobble": spot.node}
+		_play_fx(data)
+		session.receive_game_event.rpc("lounge_fx", data)
+		return
 	elif action == "power" and hit.get("kind") == "power": music.playing = not music.playing
 	elif action == "volume" and hit.get("kind") == "volume":
 		# 상호작용 키 한 번 = 한 단계 올리기, 가장 크면 0 으로 돌아간다(2026-10-31: 볼륨도 상호작용 키 하나로).
@@ -338,6 +389,11 @@ func _accept(sender: int, action: String, value: Variant) -> void:
 	_publish()
 	game.controller._publish()
 	_feed_dirty = false
+
+## 꿀꺽 소리(방장이 정하고 모든 화면에서 그 사람 머리 자리에서 난다).
+func _gulp(peer_id: int) -> void:
+	var actor: PlayerView = game.actors.get(peer_id)
+	if actor != null: fx("sound", actor.eye_position(), Vector3.ZERO, Color.WHITE, "gulp")
 
 ## 던지기. value = 힘(0~1, 우클릭을 누른 시간). 숫자가 아니면 예전 기본 던지기(시험·구버전 호환).
 func _throw(actor: PlayerView, index: int, value: Variant) -> void:
@@ -453,7 +509,7 @@ func _hit_world(projectile: Dictionary, at: Vector3, normal: Vector3) -> void:
 	var origin: Vector3 = projectile.origin
 	var powered: bool = projectile.powered
 	var owner: int = projectile.owner
-	if kind in ["bottle", "cue"] and (powered or speed > BREAK_SPEED or fall > BREAK_FALL or origin.distance_to(at) > BREAK_DISTANCE):
+	if kind in FRAGILE and (powered or speed > BREAK_SPEED or fall > BREAK_FALL or origin.distance_to(at) > BREAK_DISTANCE):
 		var reason: String = "파워 카드" if powered else ("세게 던짐" if speed > BREAK_SPEED else ("높은 곳에서 떨어짐" if fall > BREAK_FALL else "멀리 날아감"))
 		_break(index, at, velocity, owner, null, reason)
 		_projectiles.erase(projectile)
@@ -515,7 +571,7 @@ func _hit_player(projectile: Dictionary, victim: PlayerView, at: Vector3) -> voi
 	# 임시 밸런스: 맞히면 스턴 시간만큼 소품 회수도 더 늦어진다. 점수 벌점은 팀 확정 전이다.
 	object.available = time + session.room.settings.miss_cooldown + session.room.settings.hit_stun
 	fx("stars", victim.eye_position() + Vector3.UP * 0.25, Vector3.UP, Color.WHITE, "thunk")
-	if kind in ["bottle", "cue"] and (bool(projectile.powered) or speed > BREAK_HIT_SPEED):
+	if kind in FRAGILE and (bool(projectile.powered) or speed > BREAK_HIT_SPEED):
 		_break(index, at, velocity, owner, victim, "")
 		_projectiles.erase(projectile)
 		return
@@ -550,6 +606,12 @@ func _break(index: int, at: Vector3, velocity: Vector3, owner: int, victim: Play
 		var tint: Color = [Color("3f9e5a"), Color("8a5a2b"), Color("4fa3c7")][int(object.slot) % 3]
 		fx("glass", at, velocity * 0.3, tint, "glass")
 		fx("splash", at, velocity * 0.2, Color("e8b84a") if session.room.settings.alcohol else Color("7fd8ff"), "")
+	elif kind == "mug":
+		# 나무 맥주잔은 깨지지 않는다 — 내용물만 쏟아지고(웅덩이) 툭 소리. 빈 잔은 치워졌다가 RESPAWN 초 뒤 채워져 돌아온다(위 broken 시각).
+		fx("splash", at, velocity * 0.25, Color("e8b84a") if session.room.settings.alcohol else Color("7fd8ff"), "thunk")
+		if victim != null: feed("broken", thrower, "맥주 세례!", victim)
+		else: feed("broken", thrower, "맥주 와르르! · %s" % reason)
+		return
 	else:
 		fx("wood", at, velocity * 0.3, Color.WHITE, "crack")
 	var name: String = "병" if kind == "bottle" else "큐대"
@@ -618,6 +680,14 @@ func _play_fx(data: Dictionary) -> void:
 	var at: Vector3 = data.get("at", Vector3.ZERO)
 	var kind: String = str(data.get("kind", ""))
 	if kind != "sound": BurstFx.spawn(self, kind, at, data.get("push", Vector3.ZERO), data.get("tint", Color.WHITE))
+	# 건드리기: 이름이 같은 방 노드를 찾아 흔든다(_shake). 묶음 그리기로 숨은 도형은 못 흔든다 — static_batch.gd NO_BATCH.
+	var wobble: String = str(data.get("wobble", ""))
+	if not wobble.is_empty():
+		var pub: Node = game.table.get_node_or_null("Pub")
+		var target := pub.find_child(wobble, true, false) as Node3D if pub != null else null
+		if target != null:
+			if not _wobble_base.has(target): _wobble_base[target] = target.rotation
+			_wobbles[target] = _time
 	var sound: String = str(data.get("sound", ""))
 	if not sound.is_empty() and Preferences.sfx > 0.0:
 		Sfx.play_at(self, sound, at, linear_to_db(maxf(0.0001, Preferences.sfx * session.room.settings.object_volume)) - 2.0, randf_range(0.92, 1.08))
@@ -632,6 +702,8 @@ func _publish() -> void:
 		object.broken = maxf(0, float(object.get("broken", 0.0)) - time)
 		object.rest_at = time - float(object.get("rest_at", time))
 		object.erase("return_at")
+		# 마신 시각도 "몇 초 전"으로 보낸다(컴퓨터마다 시계가 달라 그대로 보내면 다른 화면에서 마시는 몸짓이 안 나온다).
+		if object.has("drank"): object.drank = time - float(object.drank)
 	var data := {"match_id": game.controller.state.match_id, "objects": public_objects, "music": music, "intoxication": intoxication,
 		"stun": {}, "effects": {}, "arcade": _arcade.to_public()}
 	# 시각/스턴 시간은 남은 초로 전달한다. 컴퓨터마다 다른 단조 시계를 공유하지 않는다.
@@ -657,6 +729,7 @@ func _receive_event(kind: String, data: Dictionary) -> void:
 		object.available = time + float(object.available)
 		object.broken = time + float(object.broken) if float(object.get("broken", 0.0)) > 0.0 else 0.0
 		object.rest_at = time - float(object.get("rest_at", 0.0))
+		if object.has("drank"): object.drank = time - float(object.drank)
 	music = data.music
 	intoxication = data.intoxication
 	for id in data.stun: stun_until[int(id)] = time + float(data.stun[id])
@@ -673,6 +746,8 @@ func _process(delta: float) -> void:
 	if game == null: return
 	_time += delta
 	var time: float = now()
+	# 마시는 몸짓은 병을 든 사람에게만 아래에서 다시 넣는다.
+	for view: PlayerView in game.actors.values(): view.drink_pose = 0.0
 	for index in range(mini(objects.size(), visuals.size())):
 		var object: Dictionary = objects[index]
 		var visual: Node3D = visuals[index]
@@ -680,8 +755,9 @@ func _process(delta: float) -> void:
 		if not visual.visible: continue
 		var actor: PlayerView = game.actors.get(int(object.holder))
 		if actor != null:
-			visual.position = actor.eye_position() + actor.basis * Vector3(0.3, -0.25, -0.55)
-			visual.rotation = Vector3(0, actor.rotation.y, 0)
+			var progress: float = drink_progress(object, time)
+			actor.drink_pose = progress
+			visual.transform = _held_transform(actor, progress)
 			continue
 		var target: Vector3 = object.position
 		visual.position = target if visual.position.distance_to(target) > 1.5 else visual.position.lerp(target, minf(1.0, delta * 20.0))
@@ -697,6 +773,7 @@ func _process(delta: float) -> void:
 		var view: PlayerView = game.actors[peer_id]
 		view.head_scale = 1.9 if effect_left(int(peer_id), "bighead") > 0.0 else 1.0
 	if _arcade_room != null: _arcade_room.show_state(_arcade, time, delta)
+	_shake()
 	for index in range(_jukebox_lights.size()):
 		var color := Color.from_hsv(fmod(_time * 0.12 + index * 0.18, 1.0), 0.75, 1.0)
 		_jukebox_lights[index].albedo_color = color
@@ -710,6 +787,61 @@ func _process(delta: float) -> void:
 	if bridge != null:
 		bridge.state = music.duplicate()
 		bridge.state.volume = float(music.volume) * Preferences.music * Preferences.master
+
+## 건드린 물건 흔들기: 점점 줄어드는 사인(종은 딸랑, 통은 덜컹). 끝나면 원래 회전으로 돌아간다.
+func _shake() -> void:
+	# 테마를 바꾸면 방이 다시 만들어져 예전 노드가 지워진다 → 타입 없이 꺼내 살아 있는지 먼저 본다.
+	for key: Variant in _wobbles.keys():
+		if not is_instance_valid(key):
+			_wobbles.erase(key)
+			_wobble_base.erase(key)
+			continue
+		var target := key as Node3D
+		var age: float = _time - float(_wobbles[target])
+		var base: Vector3 = _wobble_base[target]
+		if age >= WOBBLE_SECONDS:
+			target.rotation = base
+			_wobbles.erase(target)
+			continue
+		var fade: float = 1.0 - age / WOBBLE_SECONDS
+		target.rotation = base + Vector3(sin(age * 31.0), 0, cos(age * 27.0)) * WOBBLE_ANGLE * fade * fade
+
+
+## 건드리면 소리 나고 흔들리는 물건(도면 v3). node = 방(pub_game.tscn) 안 노드 이름(game_room_builder.gd 가 붙인 이름).
+## theme: -1 = 두 테마 모두, 0 = 펍만(오락실에서는 바·럼주통 그림이 빠진다). at = 바라봐야 하는 자리(손 닿는 높이).
+static func touch_spots() -> Array[Dictionary]:
+	var bar: AABB = TableView.BAR_BOX
+	var spots: Array[Dictionary] = [
+		{"node": "Bell", "at": Vector3(bar.end.x - 0.25, 1.2, bar.position.z + 0.55), "sound": "ding", "text": "종 울리기 · 딩!", "theme": 0},
+		{"node": "Keg", "at": TableView.KEG_AT + Vector3(0.5, 0.75, 0), "sound": "thunk", "text": "생맥주 통 두드리기", "theme": 0},
+		{"node": "PracticeTarget", "at": TableView.PRACTICE_TARGET_AT + Vector3(0, 1.0, 0), "sound": "thunk", "text": "연습 과녁 툭 치기", "theme": -1},
+		{"node": "Gramophone", "at": TableView.SIDE_TABLE_AT + Vector3(0, 0.8, 0), "sound": "pop_up", "text": "축음기 나팔 톡 건드리기", "theme": -1},
+	]
+	for i in range(TableView.BARRELS.size()):
+		spots.append({"node": "RumBarrel_%d" % (i + 1), "at": TableView.BARRELS[i] + Vector3(0, 0.75, 0),
+			"sound": "thunk", "text": "럼주통 두드리기 · 통통", "theme": 0})
+	return spots
+
+
+## 병 마시기 진행(0~1). 마지막 한 모금에서 DRINK_SECONDS 가 지났거나 병이 아니면 0.
+func drink_progress(object: Dictionary, time: float) -> float:
+	if object.kind not in DRINKS or not object.has("drank"): return 0.0
+	var progress: float = (time - float(object.drank)) / DRINK_SECONDS
+	return progress if progress > 0.0 and progress < 1.0 else 0.0
+
+
+## 손에 든 소품 자리. 평소엔 오른손 앞(몸 방향만 따른다).
+## 마시는 중엔 입 앞으로 올라오며 고개 각도를 따라가고, 병목이 얼굴 쪽으로 기울며 꿀꺽할 때 살짝 흔들린다.
+func _held_transform(actor: PlayerView, progress: float) -> Transform3D:
+	var curve: Vector2 = CharacterRig.drink_curve(progress)
+	var look: float = (actor.pitch + curve.y * PlayerView.DRINK_LOOK_UP) * curve.x
+	var frame := Basis(Vector3.UP, actor.rotation.y) * Basis(Vector3.RIGHT, look)
+	var tip: float = curve.x * 0.6 + curve.y * (DRINK_TIP - 0.6) + sin(progress * 38.0) * 0.05 * curve.y
+	# 내 캐릭터면 1인칭 카메라 기준 자리(FIRST_PERSON_MOUTH), 남이면 3인칭으로 보기 좋은 입 앞.
+	var mine: bool = actor.identity != null and actor.identity.peer_id == game.controller.local_peer_id
+	var mouth: Vector3 = FIRST_PERSON_MOUTH if mine else MOUTH_OFFSET
+	return Transform3D(frame * Basis(Vector3.RIGHT, tip), actor.eye_position() + frame * HOLD_OFFSET.lerp(mouth, curve.x))
+
 
 func intoxication_amount(peer_id: int) -> float:
 	return minf(1, float(intoxication.get(peer_id, 0)) / 5.0) * session.room.settings.intoxication if session.room.settings.alcohol else 0.0

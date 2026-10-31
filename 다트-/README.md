@@ -95,6 +95,7 @@ $godot = 'C:/Users/김도형/Desktop/Godot_v4.6.3-stable_win64.exe'
 python tests/run_multiplayer.py --godot $godot
 python tests/run_first_idea.py --godot $godot
 python tests/run_lounge.py --godot $godot
+python tests/run_deck_show_remote.py --godot $godot
 & $godot --headless --path . --script res://tests/test_rules.gd
 & $godot --headless --path . --script res://tests/test_throwing.gd
 & $godot --headless --path . --script res://tests/test_lounge.gd
@@ -104,12 +105,16 @@ python tests/run_lounge.py --godot $godot
 & $godot --headless --path . --script res://tests/test_prototype.gd
 & $godot --headless --path . --script res://tests/test_arcade.gd
 & $godot --headless --path . --script res://tests/test_script_load.gd
+& $godot --headless --path . --script res://tests/test_nullify_limit.gd
 & $godot --path . --script res://tests/render_lobby_tour.gd
 & $godot --path . --script res://tests/render_first_idea.gd
 & $godot --path . --script res://tests/test_lounge.gd -- --render
 & $godot --path . --script res://tests/render_lounge_tour.gd
+& $godot --path . --script res://tests/render_seat_peek.gd
+& $godot --path . --script res://tests/render_match_ui.gd
+& $godot --path . --script res://tests/render_map_tour.gd
 ```
 
 `test_prototype`, `render_first_idea`, `render_game_look`은 7000 포트를 사용하므로 동시에 실행하지 않는다. 새 로비 검사는 17629~17632를 사용한다. 네트워크 Python 실행기는 빈 포트를 고른다. 화면·로그는 `.godot/`에 저장하고 Git에서 제외한다.
 
-최근 변경과 실제 검증 결과는 [오락실·깨지는 소품·UI 개편](작업기록/2026-10-30_오락실_깨지는소품_UI개편.md)과 [로비·라운지·게임 설정](작업기록/2026-10-30_로비_라운지_게임설정_고도화.md), 개발 연결 정보는 [HANDOFF](작업기록/HANDOFF.md), 구조는 [ARCHITECTURE](docs/ARCHITECTURE.md)에 있다.
+최근 변경과 실제 검증 결과는 [카드 섞기 복원·방 넓히기 v4·네온 오락실 개편](작업기록/2026-10-31_카드섞기복원_방넓히기_네온오락실.md), [경기 UI·감정표현·맵 도면 v3](작업기록/2026-10-31_경기UI_감정표현_맵도면v3.md)(도면: [MAP_PLAN](docs/MAP_PLAN_2026-10-31.md)), [앉은 시점·엿보기·마시기·유리 파편](작업기록/2026-10-31_앉은시점_엿보기_마시기_유리파편.md), [오락실·깨지는 소품·UI 개편](작업기록/2026-10-30_오락실_깨지는소품_UI개편.md)과 [로비·라운지·게임 설정](작업기록/2026-10-30_로비_라운지_게임설정_고도화.md), 개발 연결 정보는 [HANDOFF](작업기록/HANDOFF.md), 구조는 [ARCHITECTURE](docs/ARCHITECTURE.md)에 있다.

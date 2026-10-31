@@ -4,6 +4,26 @@ extends RefCounted
 ## 모든 함수는 parent 기준 로컬 좌표(m)를 받는다. 메시만 만들고 충돌은 만들지 않는다(충돌은 game/table/table.gd 담당).
 
 const MeshKit = preload("res://art/mesh_kit.gd")
+## RG Poly 에셋(CC0) 구운 메시 목록(2026-10-31 밤). 구운 메시가 없으면 아래 도형 소품을 그대로 쓴다.
+const RgPoly = preload("res://art/vendor/rg_poly/rg_poly_catalog.gd")
+
+
+## RG Poly 구운 모델 하나를 놓는다(art/vendor/rg_poly/meshes/<mesh_name>.res). 없으면 null — 부르는 쪽이 도형으로 대신한다.
+## pos = 놓을 면(바닥·탁자) 위 자리. 원점이 가운데인 모델도 있어서 on_floor 면 모델 바닥이 pos 높이에 닿게 올린다.
+## size = 축마다 배율(TableView 충돌 크기에 맞출 때 가로·높이를 따로 줄 수 있다). yaw = Y축 회전(라디안).
+## 정점 색 재질을 메시가 들고 있어 static_batch.gd 가 묶지 않는다(material_override 가 없어서) → 흔들기 연출도 그대로 보인다.
+static func asset(parent: Node3D, mesh_name: String, pos: Vector3, yaw := 0.0, size := Vector3.ONE, node_name := "", on_floor := true) -> MeshInstance3D:
+	var mesh: Mesh = RgPoly.mesh(mesh_name)
+	if mesh == null:
+		return null
+	var node := MeshInstance3D.new()
+	node.name = node_name if not node_name.is_empty() else mesh_name.to_pascal_case()
+	node.mesh = mesh
+	parent.add_child(node)
+	node.position = pos - Vector3(0, mesh.get_aabb().position.y * size.y, 0) if on_floor else pos
+	node.rotation.y = yaw
+	node.scale = size
+	return node
 
 
 # --- 공용 재질(기획 2-6 환경 팔레트를 펍 조명 아래에서 조금 어둡게 맞춘 값) ---
@@ -170,6 +190,17 @@ static func bottle_shelf(parent: Node3D, pos: Vector3, rot_y: float, width := 4.
 		for j in range(count):
 			var x := -0.365 * (count - 1) / 2.0 + j * 0.365
 			var y := 1.30 + row * 0.68
+			# 2026-10-31 밤: RG Poly 병(코르크 마개·라벨 모양 2종 × 4색)을 먼저 쓴다. 0.21m → 1.5배 = 원래 병 높이(약 0.32m).
+			# 몇 칸은 비우거나 병조림 단지를 섞어 "줄 맞춘 도형" 느낌을 줄인다.
+			var pick: int = (j * 7 + row * 3) % 11
+			if pick == 4:
+				continue
+			# 선반 판 윗면 = y - 0.015 (판 가운데 y - 0.05, 두께 0.07).
+			var spot := Vector3(x + (0.04 if pick % 3 == 0 else -0.03), y - 0.015, 0.14)
+			var bottle := asset(shelf, "jar" if pick == 7 else "shelf_bottle_%d" % ((j + row) % 4), spot,
+				0.4 * (pick % 5) - 0.8, Vector3.ONE * (0.85 if pick == 7 else 1.5))
+			if bottle != null:
+				continue
 			var col: String = ["3c695b", "af7948", "516a77", "7b4641"][(j + row) % 4]
 			var mat := MeshKit.material("Bottle_" + str((j + row) % 4), col, 0.15)
 			MeshKit.cylinder(shelf, "Bottle", 0.067, 0.26, Vector3(x, y + 0.13, 0.14), mat, 8, 0.052)

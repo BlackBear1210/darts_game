@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## 몸짓 목록: 서기(숨쉬기) · 걷기(팔다리 흔들기) · 앉기(다리 앞으로) · 숙이기(몸 낮추고 구부정) ·
 ##           점프(다리 접기) · 조준(오른팔 들기) · 던지기(팔 휘두르기) · 눈 깜빡임 · 카드 들기(왼팔, holding_cards) ·
-##           손가락으로 가리키기(오른팔, pointing).
+##           손가락으로 가리키기(오른팔, pointing) · 마시기(오른손을 입으로·고개 젖히기, drinking).
 ## 사용법: PlayerView 가 매 프레임 animate() 를 부른다. 던질 때 play_throw() 한 번.
 ## 나중에 블렌더 리깅 + Mixamo 애니메이션(.glb)으로 바꾸면 이 파일 대신 AnimationPlayer/AnimationTree 를 쓴다.
 ## 그때도 PlayerView 가 넘겨주는 값(속도·자세·조준 중·던지기)은 그대로 쓰면 된다.
@@ -39,6 +39,11 @@ const HOLD_ARM_ANGLE := -1.35
 const HOLD_ARM_INWARD := -0.35
 ## 가리키기(카드 라운드 시연, 왼클릭): 오른팔을 앞으로 뻗는다. 위를 보면 조금 더 든다.
 const POINT_ARM_ANGLE := -1.45
+## 마시기(2026-10-31): 오른팔을 입 앞까지 올리고(앞-위) 안쪽으로 모은 뒤 고개를 뒤로 젖힌다.
+## 진행 0~0.25 = 병 들어 올리기, 0.25~0.8 = 꿀꺽(고개 젖힘), 0.8~1 = 내리기. 병 그림은 LoungeWorld 가 손 자리에 띄운다.
+const DRINK_ARM_ANGLE := -2.45
+const DRINK_ARM_INWARD := 0.4
+const DRINK_HEAD_BACK := 0.45
 
 ## 왼손에 카드를 들고 있는지. 켜면 걷거나 앉아도 왼팔은 카드 든 자세를 유지한다.
 var holding_cards := false
@@ -47,6 +52,8 @@ var holding_cards := false
 var pointing := false
 ## 대기실 참여 동의. 양팔의 목표를 여기서 정해 걷기/앉기 보간과 싸우지 않게 한다.
 var cheering: bool = false
+## 마시는 몸짓 진행(0 = 안 마심, 0~1 = 진행). PlayerView 가 매 프레임 넣는다. 조준·던지기가 먼저다.
+var drinking: float = 0.0
 
 var leg_l: Node3D
 var leg_r: Node3D
@@ -145,6 +152,15 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 		arm_l_angle = -2.95
 		arm_r_angle = -2.95
 		arm_spread = 0.25
+	# 마시기: 들어 올리는 동안(lift) 팔이 입으로 오고, 꿀꺽하는 동안(gulp) 고개가 뒤로 젖혀진다.
+	var drink_lift: float = 0.0
+	var drink_gulp: float = 0.0
+	if drinking > 0.0 and not aiming:
+		var curve: Vector2 = drink_curve(drinking)
+		drink_lift = curve.x
+		drink_gulp = curve.y
+		arm_r_angle = lerpf(arm_r_angle, DRINK_ARM_ANGLE, drink_lift)
+		lean -= drink_gulp * 0.08
 	if _throw_age >= 0.0:
 		_throw_age += delta
 		var t := clampf(_throw_age / THROW_SECONDS, 0.0, 1.0)
@@ -166,10 +182,21 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	arm_l.rotation.z = lerpf(arm_l.rotation.z, arm_spread, weight)
 	arm_l.rotation.y = lerpf(arm_l.rotation.y, HOLD_ARM_INWARD if holding_cards else 0.0, weight)
 	arm_r.rotation.z = lerpf(arm_r.rotation.z, -arm_spread, weight)
+	arm_r.rotation.y = lerpf(arm_r.rotation.y, DRINK_ARM_INWARD * drink_lift, weight)
 	var arm_weight := 1.0 if _throw_age >= 0.0 else weight
 	arm_r.rotation.x = lerpf(arm_r.rotation.x, arm_r_angle, arm_weight)
-	neck.rotation.x = lerpf(neck.rotation.x, clampf(-look_pitch * 0.6, -0.5, 0.45) - lean * 0.5, weight)
+	neck.rotation.x = lerpf(neck.rotation.x, clampf(-look_pitch * 0.6, -0.5, 0.45) - lean * 0.5 - drink_gulp * DRINK_HEAD_BACK, weight)
 	_blink()
+
+
+## 마시기 진행(0~1) → (x = 병을 입으로 든 정도, y = 고개를 젖힌 정도), 둘 다 0~1.
+## 몸짓·1인칭 카메라·병 그림이 같은 박자로 움직이도록 이 한 곳에서 계산한다.
+static func drink_curve(progress: float) -> Vector2:
+	if progress <= 0.0 or progress >= 1.0:
+		return Vector2.ZERO
+	var lift: float = smoothstep(0.0, 0.25, progress) * (1.0 - smoothstep(0.8, 1.0, progress))
+	var gulp: float = smoothstep(0.2, 0.4, progress) * (1.0 - smoothstep(0.7, 0.9, progress))
+	return Vector2(lift, gulp)
 
 
 ## 몇 초마다 눈(흰자·눈동자)을 세로로 납작하게 눌렀다 편다.

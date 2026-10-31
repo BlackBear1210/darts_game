@@ -14,6 +14,9 @@ const PIXELS: int = 256
 var index: int = 0
 ## 그릴 레이어(캐릭터와 같게).
 var layer_mask: int = 1
+## 화면 오른쪽으로 비킬 거리(m). 빌보드라 어느 방향에서 봐도 머리 오른쪽 옆에 뜬다(F5 경기 화면 — lounge/emotes.gd).
+## 0 이면 시연(F6)처럼 머리 바로 위.
+var side: float = 0.0
 
 var _sprite: Sprite3D
 var _age: float = 0.0
@@ -44,6 +47,8 @@ func _ready() -> void:
 	_sprite.render_priority = 2
 	_sprite.layers = layer_mask
 	_sprite.scale = Vector3.ONE * 0.01
+	# offset 은 그림 면 기준 픽셀이라 빌보드면 늘 화면 가로 방향이다.
+	_sprite.offset.x = side / _sprite.pixel_size
 	add_child(_sprite)
 	var sound := AudioStreamPlayer3D.new()
 	sound.stream = EmoteArt.sound(index)

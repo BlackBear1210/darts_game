@@ -1,3 +1,38 @@
+# 최신 인수인계 — 카드 섞기 복원 · 방 넓히기 v4 · 네온 오락실 (2026-10-31 늦은 밤)
+
+- 상세: [2026-10-31_카드섞기복원_방넓히기_네온오락실.md](2026-10-31_카드섞기복원_방넓히기_네온오락실.md) · 도면 6장: `docs/MAP_PLAN_2026-10-31.md`.
+- 덱 연출 `game/table/deck_show.gd` 는 `GameView._apply_state` 에서 `sync(state)` 로만 움직인다(스냅샷 CARDS 진입 + 키 `match_id:round`). 화면 없는 실행(서버·헤드리스 시험)에는 노드가 없다. 섞기 속도는 `ShuffleMotions` 의 host 메타 `shuffle_speed`(F6 시연은 메타가 없어 1배).
+- 매트 카드 숨기기/보이기: `SeatCards.hold(seat, 칸들)` · `release(seat, 칸)` · `release_all()`. 손님 화면 확인: `tests/run_deck_show_remote.py`(`network_probe.gd` 상태에 `deck_show`, 명령 `shot`).
+- 방 크기 상수는 `TableView`(`DART_HALL`·`LOUNGE`·`CEILING_HEIGHT`) — 바꾸면 `pub_builder.gd` 를 다시 돌린다. 새 장식 충돌 `BAR_FRIDGE_AT`/`BAR_FRIDGE_SIZE`(바 끝 냉장고).
+- 펍 생성물 묶음에 `Windows` 가 생겼다. 오락실은 `ARCADE_SKIP` 에 `Windows` 를 넣어 창 없는 방이 된다. 다트 홀 벽 선반·옷걸이 고리·뒤 구석 화분은 `PubOnly`.
+- 오락실 그림 `game/lounge/arcade/arcade_room.gd`: 정적 메시는 `Static` 아래(화면 있을 때 `StaticBatch`), 움직이는 것(진짜 인형뽑기·가챠·농구·오락기 화면·직원)은 자기 아래. 간판은 `_neon_sign`(글자 크기 = 판 크기). `_bear(..., shared)` 의 shared 는 장식용만.
+- 에셋 굽기: Cartoon City 는 zip 안의 zip. `v/city/Models/<분류>/*.glb` + `v/city/Textures/` 로 풀어야 한다(glb 가 `../../Textures` 를 본다). `--sheet --only=a,b,c`.
+
+---
+
+# 최신 인수인계 — 경기 UI · 감정표현 · 맵 도면 v3 (2026-10-31 저녁~밤)
+
+- 상세: [2026-10-31_경기UI_감정표현_맵도면v3.md](2026-10-31_경기UI_감정표현_맵도면v3.md) · 도면·에셋 측정표: `docs/MAP_PLAN_2026-10-31.md`.
+- F 키 순서(`GameView._unhandled_input`): 꺼내 든 카드가 있고 다트 턴이면 `LoungeHUD.use_lifted_card()` → 아니면 기계·건드리기·착석.
+- 봇 손 부채·매트 카드·라운드 표시·감정은 모두 보이기만 하는 노드다(스냅샷의 hand/pending_slot/phase 를 읽음). 감정만 새 RPC 액션 `"emote"`(손님 → 방장)와 이벤트 `"emote"` 를 쓴다.
+- 건드리기는 `lounge.request("touch", 번호)` → 방장 `_accept` → `lounge_fx` 이벤트의 `"wobble": 노드 이름`. 자리 목록은 `LoungeWorld.touch_spots()`.
+- 에셋 메시는 `art/vendor/rg_poly/meshes/*.res`(원본 `.glb` 는 저장소 밖). 새 모델: `rg_poly_catalog.gd used()` 에 한 줄 → `rg_poly_baker.gd --bake --source=<푼 폴더>` → `game_room_builder.gd` 에서 `PubParts.asset()` → `pub_builder.gd`.
+- 새 가구 충돌은 `TableView.decor_blocks()`. 자리 상수를 바꾸면 `pub_builder.gd` 다시 실행. 오락실과 겹치는 가구는 `PubOnly` 묶음(`LoungeWorld.ARCADE_SKIP`).
+- 창 모드 시험: `render_match_ui.gd`(포트 17642) · `render_map_tour.gd`(포트 17652). 펍 가구를 보려면 `theme_id = 0`.
+
+---
+
+# 최신 인수인계 — 앉은 시점 · 엿보기 · 무효 한 장 · 마시기 · 유리 파편 (2026-10-31 오후)
+
+- 상세: [2026-10-31_앉은시점_엿보기_마시기_유리파편.md](2026-10-31_앉은시점_엿보기_마시기_유리파편.md).
+- 엿보기는 보이기만 하는 것이다: 손패는 원래 모든 스냅샷(`MatchPlayer.hand`)에 있고 `seat_lean` 도 원래 20Hz 로 간다. 규칙·RPC 는 그대로.
+- 엿보기 판정은 자리 위치 기준(`SeatCards.peeked_seat`). 눈 위치로 재면 기울였을 때 옆 매트가 정면에 놓여 실패한다.
+- 무효 한 장은 `MatchController._draw_card`·`_deal_single_nullify`. 경기마다 컨트롤러를 새로 만들므로 재경기 때 다시 한 장 들어간다. F6 `round_rules.gd` 는 그대로.
+- 펍 매트의 크림색 가짜 카드를 `game_room_builder.gd` 에서 지우고 `pub_builder.gd` 로 `pub_game.tscn` 을 다시 만들었다(큰 diff 는 생성물).
+- 창 모드 시험 `tests/render_seat_peek.gd` 는 포트 17641 · 화면 `.godot/seat_peek_render/`.
+
+---
+
 # 최신 인수인계 — 다트 턴 카드 사용 (2026-10-31)
 
 - 규칙 연결은 `game/match/match_cards.gd` 한 곳. F6 시연과 함께 쓰는 `round_rules.gd`는 건드리지 않았고, 안쪽 클래스 `MatchRules`가 `valid_targets`만 "지금 던지는 사람"으로 바꾼다.

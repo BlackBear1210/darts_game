@@ -107,6 +107,7 @@ static func _dealer(host: Node, cards: Array, center: Vector3, yaw: float) -> vo
 		move(host, cards[i], _wash_transform(center, angles[i], radii[i], i), 0.3, i * 0.006, 0.02)
 	await wait(host, count * 0.006 + 0.35)
 	var wash := host.create_tween()
+	wash.set_speed_scale(_speed(host))
 	wash.tween_method(func(t: float) -> void:
 		for i in range(count):
 			var card: Node3D = cards[i]
@@ -163,9 +164,16 @@ static func _wash_transform(center: Vector3, angle: float, radius: float, index:
 	return Transform3D(Basis(Vector3.UP, angle * 1.7), center + Vector3(cos(angle) * radius, index * 0.0011, sin(angle) * radius))
 
 
+## 빠르기 배율. host 노드에 메타 "shuffle_speed" 가 있으면 모든 시간(이동·뒤집기·기다리기)을 그만큼 줄인다.
+## F5 경기(game/table/deck_show.gd)는 카드 확인 5초 안에 섞기·나눠 주기를 끝내야 해서 1.7~2.4배로 돈다. 시연(F6)은 메타가 없어 1배.
+static func _speed(host: Node) -> float:
+	return maxf(0.1, float(host.get_meta("shuffle_speed", 1.0)))
+
+
 ## 카드를 to 로 옮긴다. arc 만큼 위로 포물선을 그리고 가는 동안 방향이 따라 돈다.
 static func move(host: Node, card: Node3D, to: Transform3D, duration: float, delay: float = 0.0, arc: float = 0.0) -> Tween:
 	var tween := host.create_tween()
+	tween.set_speed_scale(_speed(host))
 	if delay > 0.0:
 		tween.tween_interval(delay)
 	var from_holder: Array[Transform3D] = []
@@ -182,6 +190,7 @@ static func move(host: Node, card: Node3D, to: Transform3D, duration: float, del
 ## 카드를 제자리에서 뒤집는다(Body 만 돈다). 도는 동안 살짝 떠오른다.
 static func flip(host: Node, card: Node3D, up: bool, duration: float, delay: float = 0.0) -> Tween:
 	var tween := host.create_tween()
+	tween.set_speed_scale(_speed(host))
 	if delay > 0.0:
 		tween.tween_interval(delay)
 	var body: Node3D = card.get("body")
@@ -197,4 +206,4 @@ static func flip(host: Node, card: Node3D, up: bool, duration: float, delay: flo
 
 ## seconds 초 기다린다(게임 일시정지 중에는 멈춘다).
 static func wait(host: Node, seconds: float) -> void:
-	await host.get_tree().create_timer(seconds, false).timeout
+	await host.get_tree().create_timer(seconds / _speed(host), false).timeout

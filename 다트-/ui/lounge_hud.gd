@@ -5,7 +5,8 @@ extends CanvasLayer
 ##   오른쪽 위  방 정보 칩 + 초대 코드 복사, 그 아래 킬로그(배틀그라운드처럼 "누가 [아이콘] 누구를")
 ##   가운데     조준점 + 충전 막대(다트·소품 던지기)
 ##   아래 가운데 키 안내 칩(키캡 + 할 일), 대기실이면 준비 현황 칩
-##   가운데 위  카드 턴의 고른 카드·대상 한 줄(카드 그림은 왼쪽 아래 3D 손패 부채가 보여 준다)
+##   가운데 위  라운드 칸(◆ 카드 충전 · ● 다트) · 지금 단계 → 다음 단계 · 남은 초(큰 숫자 + 막대) — ui/round_banner.gd
+##   아래 가운데 키 안내 칩 위: 카드 쓰는 법 · 고른 카드와 대상 한 줄(카드 그림은 왼쪽 아래 3D 손패 부채가 보여 준다)
 ##   오른쪽 아래 꺼내 든 카드 설명(그림 · 이름 · 효과 · 대상 · 준비 막대) — 카드 라운드 시연과 같은 자리
 ##   화면 전체  장난 효과(인형에 얼굴 가림 · 가챠 먹물)
 ## 글자 크기·색·카드 모양은 ui/lounge_style.gd 한 곳에서 온다.
@@ -16,6 +17,8 @@ const UiIcon = preload("res://ui/ui_icon.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
 const MatchCards = preload("res://game/match/match_cards.gd")
+## 위 가운데 라운드·남은 시간 표시(2026-10-31 저녁 — 다트 라운드 → 다음 카드 충전 라운드).
+const RoundBanner = preload("res://ui/round_banner.gd")
 ## 자리 표식(색약이어도 모양으로 구분 — 기획 2-4).
 const SEAT_GLYPHS: Array[String] = ["●", "▲", "■", "◆"]
 ## 킬로그 한 줄이 떠 있는 시간(초)과 사라지는 시간.
@@ -29,6 +32,7 @@ var _round_chip: Label
 var _phase_title: Label
 var _phase_detail: Label
 var _timer_bar: ProgressBar
+var _banner: RoundBanner
 var _room: Label
 var _copy: Button
 var _feed_box: VBoxContainer
@@ -78,6 +82,9 @@ func _ready() -> void:
 	_overlay.draw.connect(_draw_overlay)
 	_root.add_child(_overlay)
 	_build_scoreboard()
+	_banner = RoundBanner.new()
+	_banner.name = "RoundBanner"
+	_root.add_child(_banner)
 	_build_room_corner()
 	_build_bottom()
 	_build_result()
@@ -264,7 +271,8 @@ func _process(delta: float) -> void:
 	var waiting: bool = room.phase == RoomState.Phase.LOBBY
 	var finished: bool = state.phase == MatchState.Phase.FINISHED
 	_update_scores(state, waiting)
-	_update_phase(state, room, waiting, finished)
+	_update_phase(state, room, waiting, finished, delta)
+	_banner.position = Vector2((width - _banner.size.x) / 2, 18)
 	# 오른쪽 위: 방 정보 → 초대 버튼 → 킬로그.
 	_room.text = "%s\n%s  ·  %s  ·  %d/%d명" % [room.settings.room_name, "초대 전용" if room.settings.private_room else "공개 접속",
 		"암호 있음" if room.has_password else "암호 없음", room.players.size(), room.settings.capacity]
@@ -274,7 +282,6 @@ func _process(delta: float) -> void:
 	_feed_box.position = Vector2(width - 28 - _feed_box.size.x, 26 + _room.size.y + (72 if _copy.visible else 14))
 	_update_feed(state)
 	_update_cards(state, waiting, finished)
-	_card_hint.position = Vector2((width - _card_hint.size.x) / 2, 30)
 	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
 	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
@@ -283,6 +290,9 @@ func _process(delta: float) -> void:
 	var fan_open: bool = me != null and not me.hand.is_empty() and not waiting
 	var prompt_center: float = maxf(width * 0.5, 900.0 + _prompt_box.size.x * 0.5) if fan_open else width * 0.5
 	_prompt_box.position = Vector2(prompt_center - _prompt_box.size.x / 2, height - 92)
+	# 카드 한 줄 안내는 위 가운데(라운드 표시 자리)에서 키 안내 칩 바로 위로 옮겼다. 부채가 열리면 같이 오른쪽으로 비킨다.
+	var hint_center: float = maxf(width * 0.5, 900.0 + _card_hint.size.x * 0.5) if fan_open else width * 0.5
+	_card_hint.position = Vector2(hint_center - _card_hint.size.x / 2, height - 150)
 	_update_ready(room, waiting)
 	_ready_box.position = Vector2((width - _ready_box.size.x) / 2, height - 170)
 	_result.visible = finished
@@ -335,33 +345,42 @@ func _score_row(player: MatchPlayer, active: bool, me: bool) -> Control:
 	return row
 
 
-func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: bool) -> void:
+func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: bool, delta: float) -> void:
 	var seconds: float = game.controller.remaining_seconds()
 	var limit: float = 1.0
-	_timer_bar.visible = not waiting and not finished
+	# 남은 초·막대는 위 가운데 라운드 표시(_banner)로 옮겼다(2026-10-31 저녁). 왼쪽 단계 카드는 설명만 한다.
+	_timer_bar.visible = false
+	var stage: int = RoundBanner.Stage.CARDS
+	var sub: String = ""
+	# 설명 줄은 340px 칸에 들어가도록 뜻이 끊기는 곳에서 직접 줄을 바꾼다(2026-10-31).
+	# 자동 줄바꿈만 두면 한글이 글자 사이에서 끊겨 "써\n요." "사\n람에게" 처럼 보였다.
 	if waiting:
 		_phase_title.text = "준비 시간"
-		_phase_detail.text = "자기 색 의자에 %s 로 앉고 Enter 로 참여" % OS.get_keycode_string(Preferences.interact_key)
+		_phase_detail.text = "자기 색 의자에 %s 로 앉고\nEnter 로 참여" % OS.get_keycode_string(Preferences.interact_key)
 		if not room.settings.solo and room.players.size() < 2: _phase_detail.text += "\n친구가 들어오기를 기다리는 중…"
 	elif finished:
 		_phase_title.text = "경기 종료"
 		_phase_detail.text = "결과를 확인하세요."
 	elif state.phase == MatchState.Phase.CARDS:
 		_phase_title.text = "카드 확인"
-		_phase_detail.text = "받은 카드를 확인하세요. 카드는 다트 턴에 써요."
+		_phase_detail.text = "받은 카드를 확인하세요.\n카드는 다트 턴에 써요."
 		limit = MatchCards.VIEW_SECONDS
+		sub = "받은 카드 확인 · 쓴 만큼만 7장까지 다시 채운다"
 	elif state.phase == MatchState.Phase.TABLE:
 		_phase_title.text = "테이블 집합!"
-		_phase_detail.text = "자기 자리로 돌아와 앉으세요. 늦으면 슬로우!"
+		_phase_detail.text = "자기 자리로 돌아와 앉으세요.\n늦으면 슬로우!"
 		limit = game.controller.config.table_seconds
+		sub = "테이블 집합! 자리에 앉으세요 · 늦으면 슬로우"
 	else:
 		var active: MatchPlayer = state.active_player()
 		_phase_title.text = "%s의 다트" % (active.display_name if active != null else "대기")
-		_phase_detail.text = "%d발 남음 · 누구나 카드 사용 (효과는 던지는 사람에게)" % state.darts_left
+		_phase_detail.text = "%d발 남음 · 누구나 카드 사용\n효과는 지금 던지는 사람에게" % state.darts_left
 		limit = game.controller.config.turn_seconds
-	_timer_bar.max_value = maxf(1.0, limit)
-	_timer_bar.value = clampf(seconds, 0.0, _timer_bar.max_value)
-	_phase_title.text += "   %.0f초" % seconds if _timer_bar.visible else ""
+		stage = RoundBanner.Stage.DARTS
+		sub = "%s 차례 · %d발 남음" % [active.display_name if active != null else "대기", state.darts_left]
+	_banner.visible = not waiting and not finished
+	if _banner.visible:
+		_banner.show_state(state.round_number, game.controller.config.rounds, stage, sub, seconds, limit, delta)
 
 
 ## 킬로그: 새 줄이 들어오면 위에서 칩으로 쌓이고 몇 초 뒤 흐려져 사라진다.
@@ -426,12 +445,10 @@ func _update_cards(state: MatchState, waiting: bool, finished: bool) -> void:
 	_card_panel.visible = false
 	if waiting or finished or me == null or not _card_phase(state): return
 	if me.pending_card >= 0:
-		var target: String = _target_name(state, me)
-		_card_hint.text = "고른 카드 · %s   →   %s      Enter 사용" % [Catalog.card(me.pending_card).name, target]
-		_card_hint.visible = true
-		_show_card_panel(me, target)
+		# 카드를 꺼내 들면 오른쪽 아래 카드 패널이 이름·대상·"F 로 쓰기"를 다 보여 준다 → 아래 한 줄 안내는 숨긴다(겹침 방지).
+		_show_card_panel(me, _target_name(state, me))
 	else:
-		_card_hint.text = "Q·E 카드 넘기기 (1–7 바로 고르기) · 효과는 지금 던지는 사람에게"
+		_card_hint.text = "Q·E 로 카드 꺼내기 (1–7 바로) → %s 로 쓰기 · 효과는 지금 던지는 사람에게" % OS.get_keycode_string(Preferences.interact_key)
 		_card_hint.visible = true
 
 
@@ -480,7 +497,7 @@ func _show_card_panel(me: MatchPlayer, target: String) -> void:
 	_card_target.text = "대상 · " + target
 	var ratio: float = clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
 	_card_bar.value = ratio * 100.0
-	_card_status.text = "준비 중…" if ratio < 1.0 else "Enter 로 쓰기"
+	_card_status.text = "준비 중…" if ratio < 1.0 else "%s 로 쓰기" % OS.get_keycode_string(Preferences.interact_key)
 	_card_status.add_theme_color_override("font_color", Style.GOLD if ratio < 1.0 else Style.MINT)
 
 
@@ -490,7 +507,7 @@ func _update_prompt() -> void:
 	if game.throw_input.charging:
 		pairs = [["놓기", "다트 발사 %d%%" % roundi(game.throw_input.timing * 100)], ["우클릭", "취소"]]
 	if room.phase == RoomState.Phase.LOBBY and game.is_seated(game.controller.local_peer_id):
-		pairs = [["Enter", "게임 참여"], ["A / D", "훔쳐보기"], ["S", "빙글빙글"]]
+		pairs = [["Enter", "게임 참여"], ["A / D", "훔쳐보기"], ["S", "빙글빙글"], ["Space", "일어서기"], ["T", "감정표현"]]
 	if game.lounge != null and game.lounge.is_stunned(game.controller.local_peer_id):
 		pairs = [["✦", "잠깐 어질어질…"]]
 	var key := str(pairs)
@@ -599,13 +616,26 @@ func _prompt_for(focus: Dictionary) -> Array:
 		"link": return [[key, "YouTube 링크 넣기"], ["B", "음악 플레이어 열기"]]
 		"prop": return [["좌클릭", "%s 잡기" % lounge.prop_name(int(focus.get("index", 0)))]]
 		"claw", "gacha", "hoop": return [[key, lounge.machine_prompt(game.controller.local_peer_id, str(focus.kind))]]
+		# 도면 v3 건드리기(종·통·과녁·축음기): 소리 + 흔들림.
+		"touch": return [[key, str(lounge.touch_spots()[int(focus.get("index", 0))].text)]]
 	if lounge != null and lounge.held(game.controller.local_peer_id) >= 0:
 		var index: int = lounge.held(game.controller.local_peer_id)
 		var pairs: Array = [["우클릭 꾹", "%s 던지기 (짧게 = 살짝 놓기)" % lounge.prop_name(index)]]
-		if lounge.objects[index].kind == "bottle": pairs.push_front(["좌클릭", "한 모금"])
+		if lounge.objects[index].kind in lounge.DRINKS: pairs.push_front(["좌클릭", "한 모금"])
 		if lounge.objects[index].kind == "capsule": pairs.push_front(["좌클릭", "내가 열어 보기"])
 		return pairs
-	return [["WASD", "이동"], [key, "착석 · 기계"], ["좌클릭 꾹", "다트"], ["Esc", "설정"]]
+	# 키 배치(2026-10-31 저녁 정리): 카드 = Q·E 로 꺼내고 F 로 쓴다 · 앉으면 A·D 엿보기 · Space 일어서기 · T 감정표현.
+	# 카드 칩은 다트 턴(카드를 쓸 수 있을 때)에만 보인다. 꺼내 든 카드가 있으면 F 가 카드 쓰기다.
+	var state: MatchState = game.controller.state
+	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
+	var card_keys: Array = []
+	if me != null and _card_phase(state) and not me.hand.is_empty():
+		card_keys = [[key, "카드 쓰기"]] if me.pending_card >= 0 else [["Q · E", "카드 꺼내기"]]
+	if game.is_seated(game.controller.local_peer_id):
+		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]]
+	# 카드를 들고 있으면 F 는 카드 쓰기라 "착석 · 기계" 칩은 뺀다(한 키에 두 안내가 겹치지 않게).
+	var interact: Array = [] if me != null and me.pending_card >= 0 and _card_phase(state) else [[key, "착석 · 기계"]]
+	return card_keys + [["WASD", "이동"]] + interact + [["좌클릭 꾹", "다트"], ["T", "감정표현"]]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -627,10 +657,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		# 대상을 고르는 건 무효(×0)뿐이다. 나머지 카드는 언제나 지금 던지는 사람에게 걸린다.
 		var ids: Array[int] = _counter_targets(state, me)
 		if not ids.is_empty(): _target = ids[(ids.find(_target) + 1) % ids.size()]
-	elif (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER) and me.pending_card >= 0:
-		var counter: bool = int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER
-		var active: MatchPlayer = state.active_player()
-		game.controller.request_card("use", _counter_target(state, me) if counter else (active.peer_id if active != null else 0))
+	elif event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+		# Enter 는 예전 습관용 예비 키로만 남긴다(화면 안내는 F).
+		use_lifted_card()
+
+
+## 꺼내 든 카드를 쓴다(F · Enter). 다트 턴이 아니거나 든 카드가 없으면 false → GameView 가 F 를 착석·기계로 넘긴다.
+## 무효(×0)는 Tab 으로 고른 "카드를 꺼내 든 사람"에게, 나머지는 지금 던지는 사람에게 건다.
+func use_lifted_card() -> bool:
+	if game == null: return false
+	var state: MatchState = game.controller.state
+	if not _card_phase(state): return false
+	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
+	if me == null or me.pending_card < 0: return false
+	var counter: bool = int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER
+	var active: MatchPlayer = state.active_player()
+	game.controller.request_card("use", _counter_target(state, me) if counter else (active.peer_id if active != null else 0))
+	return true
 
 
 ## Q(-1)·E(+1): 손패를 왼쪽·오른쪽으로 넘기며 꺼내 든다. 끝에서는 반대쪽 끝으로 돈다. 아무것도 안 들었으면 E = 첫 장, Q = 마지막 장.

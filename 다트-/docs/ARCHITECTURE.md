@@ -40,6 +40,10 @@ F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `Player
 - `game/lounge/lounge_world.gd`: 모니터·주크박스·소품과 테마. 방장만 물체 소유권/거리/요청 제한/병 궤적/적중/취기·스턴을 갱신한다. 시계는 남은 시간으로 보내 서로 다른 PC의 단조 시계 차이를 피한다. 과거 match_id 이벤트는 무시한다.
 - `game/lounge/youtube_bridge.gd`, `youtube_player.html`: 외부 브라우저 공식 임베드. 루프백에 /player·/state 읽기 전용 경로만 제공하고 헤더 크기·시간·동시 요청 수를 제한한다. 영상·전원·볼륨을 전달하고 파일/명령 실행 엔드포인트는 제공하지 않는다.
 - `ui/lounge_hud.gd`: 짧은 효과 피드·준비 인원·카드 키·상호작용·공동 순위. 기존 `GameHUD`는 legacy 예시/서버 검증 경로에 남긴다.
+- `ui/round_banner.gd`: 화면 위 가운데 라운드 칸(카드 충전·다트)·지금 → 다음 단계·남은 초. `MatchState` 를 읽기만 한다.
+- `game/table/seat_cards.gd`, `held_cards.gd`: 매트 위 앞면 카드와 다른 캐릭터 왼손 카드 부채. 스냅샷의 hand/pending_slot 을 보여 주기만 한다.
+- `game/lounge/emotes.gd`: T 감정표현. 손님 → 방장 `"emote"` 액션, 방장이 간격 확인 후 `"emote"` 이벤트. 봇 반응은 방장이 킬로그로 정한다.
+- 방 가구(도면 v3): 보이는 가구는 `art/vendor/rg_poly/`(구운 메시)를 `GameRoomBuilder._furnish` 가 놓고, 충돌은 `TableView.decor_blocks()` 가 만든다. 건드리기 자리는 `LoungeWorld.touch_spots()`.
 
 원형 테이블은 `TableView` 원통 충돌과 `GameRoomBuilder` 생성기의 원형 상판을 같이 바꿨다. `pub_game.tscn`은 생성기로 다시 저장했다. 기존 renderer/physics/project.godot/큰 조립 씬 파일은 유지했다. 이후 절의 자동 호스트·카드 배부만 설명은 기존 legacy 실행 경로의 구조이며 새 기본 경로에서는 위 설명이 우선한다.
 
@@ -162,6 +166,8 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 - **과녁**: `BoardView`가 `BoardArt.build(Face, layout.numbers, BoardLayout.RADIUS, …)`로 그린다. 카드로 숫자 배치가 바뀌면 `show_layout()`이 다시 그린다. 채점은 그대로 `BoardScorer`.
 - **캐릭터**: `PlayerView._dress()`가 `PlayerLook.character(seat)`를 `Model`로 붙이고 180° 돌린다(캐릭터 +Z 정면). `CharacterRig`가 피벗(LegL/LegR/Body/ArmL/ArmR/Neck)을 돌려 서기·걷기·숙이기·앉기·점프·조준·던지기를 만든다. 몸짓은 각 화면에서 위치·자세·속도로 계산하며 네트워크로 보내지 않는다. 충돌 캡슐·눈높이·속도는 바뀌지 않았다.
 - **다트·손**: 비행 다트 깃은 던진 사람 색(`Dart.paint`), 꽂힌 뒤 `Visual`만 2.2배(과녁 2.5배와 맞춤, 채점 무관). 1인칭 손은 `CharacterFactory.create_hand(자리 색)`.
+- **카드 충전 라운드 연출(2026-10-31 늦은 밤)**: `game/table/deck_show.gd`(`GameView.deck_show`)가 스냅샷이 CARDS 단계로 들어올 때마다 테이블 가운데 덱으로 돌아옴 → 섞기(`ShuffleMotions`, 방식 = `match_id + 라운드`) → 한 바퀴씩 나눠 주기를 재생한다. 새 카드는 `SeatCards.hold()`로 숨겼다가 날아와 닿을 때 `release()`로 뒤집혀 나타난다. 화면이 있을 때만 만들고(헤드리스 서버엔 없음) 규칙·네트워크는 건드리지 않는다. 손님 화면 확인 = `tests/run_deck_show_remote.py`.
+- **방 크기(방 넓히기 v4)**: 다트 홀 13.2×7.5 m, 라운지 22×9 m, 층고 4.8 m(`TableView` 상수). 바 끝 냉장고는 `BAR_FRIDGE_AT`(장식 충돌 `decor_blocks()`). 네온 오락실(`game/lounge/arcade/arcade_room.gd`)은 펍 그림에서 `Bar·NpcCorner·PoolTable·Barrels·PubOnly·Windows` 묶음을 빼고(`LoungeWorld.ARCADE_SKIP`) 같은 자리에 주스 가게·가챠·농구·인형뽑기 코너를 세운다. 움직이지 않는 오락실 메시는 `Static` 아래 모아 `StaticBatch`로 묶는다.
 - **칠판·HUD**: `GameView._chalk_text()` → `TableView.set_chalk_scores()`가 과녁 왼쪽 칠판에 점수를 쓴다. HUD·대기실은 `PubTheme.build()`를 쓴다.
 
 ## 유지한 기존 파일 (실제 경기)

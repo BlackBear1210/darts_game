@@ -26,7 +26,7 @@ func _run() -> void:
 func _check_room_matches_rules() -> void:
 	var room := (load(PUB_GAME_SCENE) as PackedScene).instantiate() as Node3D
 	assert(str(room.get_meta("layout_signature", "")) == TableView.layout_signature(), "pub_game.tscn 이 TableView 상수와 다릅니다 → pub_builder.gd 재실행")
-	for group in ["Shell", "BoardWall", "Lane", "Barrels", "TableAndSeats", "Bar", "NpcCorner", "PoolTable", "Decor", "Lights"]:
+	for group in ["Shell", "BoardWall", "Lane", "Barrels", "TableAndSeats", "Bar", "NpcCorner", "PoolTable", "Decor", "Windows", "Furnishings", "PubOnly", "Lights"]:
 		assert(room.get_node_or_null(group) != null, "방 묶음 없음: " + group)
 	# 방 그림에는 충돌이 없어야 한다(충돌은 TableView 만 소유).
 	assert(room.find_children("*", "CollisionObject3D", true, false).is_empty())
@@ -53,7 +53,8 @@ func _check_table_scene() -> void:
 			bodies += 1
 			assert(child.find_children("*", "MeshInstance3D", true, false).is_empty())
 	# 바닥2·천장2·벽8·레인 벽3(앞+양옆)·테이블·바·NPC 테이블·당구대·럼주통4·작은 통4·NPC 스툴2 = 29
-	assert(bodies == 29, "충돌 몸체 수 %d" % bodies)
+	# + 도면 v3 가구 상자 9개(TableView.decor_blocks: 생맥주 통·뒤 조리대·연습 과녁·양동이·소파·안락의자·낮은 탁자·상자·자루) = 38
+	assert(bodies == 29 + TableView.decor_blocks().size(), "충돌 몸체 수 %d" % bodies)
 	table.set_chalk_scores("점 수\n\n● 시험  42")
 	assert((table.find_child("ChalkScores", true, false) as Label3D).text.contains("42"))
 	table.queue_free()

@@ -1,13 +1,15 @@
 extends RefCounted
 ## 집어 던지는 소품의 겉모습(코드로 만든 임시안). 디자이너 모델이 오면 res://art/props/<kind>.tscn 을 먼저 쓴다.
 ## 소품의 원점 = 바닥에 놓였을 때의 무게중심. REST 만큼 바닥에서 띄워 놓는다(LoungeWorld 가 쓴다).
-##   bottle 병 · ball 당구공 · cue 큐대 · hoop_ball 농구공 · plush 곰 인형 · capsule 가챠 캡슐
+##   bottle 병 · mug 맥주잔 · ball 당구공 · cue 큐대 · hoop_ball 농구공 · plush 곰 인형 · capsule 가챠 캡슐
+## 맥주잔(2026-10-31 밤)은 RG Poly 에셋 구운 메시(art/vendor/rg_poly/meshes/mug.res)를 쓴다. 없으면 도형 잔.
 
 const Kit = preload("res://art/mesh_kit.gd")
+const RgPoly = preload("res://art/vendor/rg_poly/rg_poly_catalog.gd")
 const ArcadeRoom = preload("res://game/lounge/arcade/arcade_room.gd")
 ## 바닥(또는 탁자) 면에서 원점까지 높이(m).
-const REST := {"bottle": 0.13, "ball": 0.06, "cue": 0.03, "hoop_ball": 0.12, "plush": 0.1, "capsule": 0.07}
-const NAMES := {"bottle": "병", "ball": "당구공", "cue": "큐대", "hoop_ball": "농구공", "plush": "인형", "capsule": "캡슐"}
+const REST := {"bottle": 0.13, "mug": 0.075, "ball": 0.06, "cue": 0.03, "hoop_ball": 0.12, "plush": 0.1, "capsule": 0.07}
+const NAMES := {"bottle": "병", "mug": "맥주잔", "ball": "당구공", "cue": "큐대", "hoop_ball": "농구공", "plush": "인형", "capsule": "캡슐"}
 const POOL_COLORS: Array[Color] = [Color("f2c230"), Color("c7372f"), Color("2c55b8")]
 const PLUSH_COLORS: Array[Color] = [Color("ff8fc6"), Color("7fe3d1"), Color("ffd36b")]
 const CAPSULE_COLORS: Array[Color] = [Color("ff5a7a"), Color("3fb7ff"), Color("ffd34d"), Color("9b6bff")]
@@ -26,6 +28,7 @@ static func make(kind: String, variant: int) -> Node3D:
 	var node := Node3D.new()
 	match kind:
 		"bottle": _bottle(node, variant)
+		"mug": _mug(node)
 		"ball": _pool_ball(node, variant)
 		"cue": _cue(node)
 		"hoop_ball": _basketball(node)
@@ -81,6 +84,22 @@ static func _bottle(node: Node3D, variant: int) -> void:
 	Kit.cylinder(node, "Neck", 0.026, 0.09, Vector3(0, 0.175, 0), glass, 10)
 	Kit.cylinder(node, "Cap", 0.03, 0.022, Vector3(0, 0.23, 0), _solid(Color("e8c34a"), 0.3, 0.7), 10)
 	Kit.cylinder(node, "LabelBand", 0.072, 0.08, Vector3(0, -0.02, 0), _solid(Color("fff3dc"), 0.7), 12)
+
+
+## 맥주잔: 나무 잔 모델(0.25m → 0.6배 ≈ 높이 0.15m). 원점이 무게중심이 되게 반 높이만큼 내린다.
+## 위에 맥주 거품 원판을 얹어 "채운 잔"으로 보이게 한다(쏟으면 잔이 치워졌다가 다시 채워져 나온다).
+static func _mug(node: Node3D) -> void:
+	var mesh: Mesh = RgPoly.mesh("mug")
+	if mesh == null:
+		Kit.cylinder(node, "Mug", 0.06, 0.15, Vector3.ZERO, _solid(Color("7d5034"), 0.8), 12)
+		return
+	var model := MeshInstance3D.new()
+	model.name = "Mug"
+	model.mesh = mesh
+	model.scale = Vector3.ONE * 0.6
+	model.position = Vector3(0, -REST.mug - mesh.get_aabb().position.y * 0.6, 0)
+	node.add_child(model)
+	Kit.cylinder(node, "Foam", 0.055, 0.012, Vector3(0, REST.mug - 0.02, 0), _solid(Color("f4ecd6"), 0.9), 10)
 
 
 static func _pool_ball(node: Node3D, variant: int) -> void:

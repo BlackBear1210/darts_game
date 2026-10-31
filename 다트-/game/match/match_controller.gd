@@ -38,6 +38,14 @@ var _request_number: int = 0
 var _last_requests: Dictionary = {}
 ## 카드를 뽑는 난수. 방장만 돌리고 결과는 스냅샷으로 나간다.
 var _random := RandomNumberGenerator.new()
+## 무효(×0)는 한 경기에 딱 한 장(2026-10-31 사용자 요청). 기본 방 설정은 거의 연산 카드만 뽑혀서 무효가 다섯 장에 한 장꼴로
+## 나왔다(첫 나눠 주기 28장 중 평균 5~6장) → 막기 카드가 너무 흔했다. 이제 첫 나눠 주기에서 무작위 한 사람에게만 한 장 넣고,
+## 나머지 모든 뽑기에서는 무효가 나오면 다시 뽑는다. 방 설정에서 무효를 꺼 두었으면 한 장도 넣지 않는다.
+const NULLIFY_ID := "times_0"
+## 무효를 빼고 다시 뽑는 최대 횟수. 방 설정에 무효 말고 고를 카드가 없으면 그만 뽑는다(무한 반복 방지).
+const REDRAW_LIMIT: int = 12
+## 이번 경기에 무효 한 장을 이미 넣었는지(첫 나눠 주기에서 켜진다).
+var _nullify_dealt: bool = false
 
 
 func configure(room: RoomState, peer_id: int, connection: NetworkSession = null) -> void:
@@ -222,16 +230,46 @@ func _begin_cards(before: String = "") -> void:
 	var dealt: int = 0
 	for player in state.players:
 		while player.hand.size() < CardHandRules.HAND_LIMIT:
-			var type: int = room_settings.draw_card(_random) if room_settings.social_lobby else CardCatalog.random_type(_random)
+			var type: int = _draw_card()
 			if type < 0: break
 			player.hand.append(type)
 			dealt += 1
+	_deal_single_nullify()
 	var text: String = "카드 나눠 주기 — 각자 %d장" % CardHandRules.HAND_LIMIT if dealt > 0 else "모두 %d장 그대로" % CardHandRules.HAND_LIMIT
 	notice = text if before.is_empty() else "%s · %s" % [before, text]
 	if cards != null:
 		notice += " · %d초 뒤 다트" % roundi(MatchCards.VIEW_SECONDS)
 		cards.begin_round()
 	_set_phase(MatchState.Phase.CARDS, MatchCards.VIEW_SECONDS if cards != null else config.card_seconds)
+
+
+## 카드 한 장 뽑기(방 설정 비율). 무효(×0)가 나오면 다시 뽑는다 — 무효는 _deal_single_nullify 로만 들어온다. 못 뽑으면 -1.
+func _draw_card() -> int:
+	var nullify: int = CardCatalog.type_of(NULLIFY_ID)
+	for attempt in range(REDRAW_LIMIT):
+		var type: int = room_settings.draw_card(_random) if room_settings.social_lobby else CardCatalog.random_type(_random)
+		if type != nullify:
+			return type
+	return -1
+
+
+## 경기의 첫 나눠 주기에서 한 번만: 카드를 받은 사람 중 무작위 한 명의 무작위 한 칸을 무효(×0)로 바꾼다.
+## 그 뒤로는 다시 넣지 않는다 → 누가 쓰든 버리든 경기 전체에 무효는 딱 한 장이다.
+func _deal_single_nullify() -> void:
+	if _nullify_dealt:
+		return
+	_nullify_dealt = true
+	var nullify: int = CardCatalog.type_of(NULLIFY_ID)
+	if nullify < 0 or (room_settings.social_lobby and room_settings.disabled_cards.has(NULLIFY_ID)):
+		return
+	var holders: Array[MatchPlayer] = []
+	for player in state.players:
+		if not player.hand.is_empty():
+			holders.append(player)
+	if holders.is_empty():
+		return
+	var lucky: MatchPlayer = holders[_random.randi_range(0, holders.size() - 1)]
+	lucky.hand[_random.randi_range(0, lucky.hand.size() - 1)] = nullify
 
 
 func _begin_turn() -> void:

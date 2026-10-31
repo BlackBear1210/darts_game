@@ -28,6 +28,16 @@ const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
 const INPUT_TIMEOUT: float = 0.35
 const MOUSE_SENSITIVITY: float = 0.0025
+## 자리에 앉는 순간 시선을 테이블 가운데로 돌리고 이만큼 내려다본다(라디안, 약 -27도).
+## 2026-10-31: 앉으면 테이블이 아래로 보여 내 매트·옆자리 매트 카드가 한눈에 들어오게(사용자 요청). 그 뒤로는 마우스로 자유롭게 본다.
+const SEATED_LOOK_PITCH: float = -0.47
+const SeatCards = preload("res://game/table/seat_cards.gd")
+## 다른 사람 캐릭터의 왼손 카드 부채(2026-10-31 저녁). 굽기 뒤에 seat_cards 와 같이 만든다.
+const HeldCards = preload("res://game/table/held_cards.gd")
+## T 감정표현(2026-10-31 저녁 — F6 시연에만 있던 것을 F5 에 연결).
+const Emotes = preload("res://game/lounge/emotes.gd")
+## 카드 충전 라운드의 덱 섞기·나눠 주기 연출(2026-10-31 늦은 밤 — F6 시연에만 있던 것을 F5 에 연결). 보이기만 한다.
+const DeckShow = preload("res://game/table/deck_show.gd")
 
 @onready var controller: MatchController = $MatchController
 @onready var throw_input: DartThrowController = $ThrowController
@@ -64,6 +74,13 @@ var _throw_kick: float = 0.0
 var _board_shake: float = 0.0
 ## 지금 날아가는 다트(궤적 카드로 꽂히는 자리가 바뀌면 이 다트를 휘게 한다).
 var _flying_dart: DartView
+## 테이블 자리 매트 위 카드(각자 손패를 앞면으로 깐다 — 2026-10-31 저녁 결정, 엿보면 옆자리 카드가 내 화면에서 크게 펼쳐진다). 화면이 없으면 만들지 않는다.
+var seat_cards: Node3D
+var held_cards: Node
+var emotes: Node
+var deck_show: Node3D
+## 지난 프레임에 내가 앉아 있었는지. 앉는 순간만 시선을 테이블로 돌린다(_face_table_on_sit).
+var _was_seated: bool = false
 
 
 func _ready() -> void:
@@ -90,6 +107,10 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	controller.check_seated = is_seated
 	controller.force_seat = force_seat
 	controller.in_throw_zone = can_throw_from
+	emotes = Emotes.new()
+	emotes.name = "Emotes"
+	add_child(emotes)
+	emotes.setup(self)
 	for player in controller.state.players:
 		var view := PLAYER_SCENE.instantiate() as PlayerView
 		view.name = "Player_%d" % player.peer_id
@@ -138,6 +159,20 @@ func _prepare_hand_fan() -> void:
 	# 카드 라운드 시연의 1인칭 부채와 같은 자리(화면 왼쪽 아래).
 	_fan.transform = Transform3D(Vector3(0.995, -0.0998, 0), Vector3(0.0998, 0.995, 0), Vector3(0, 0, 1), Vector3(-0.22, -0.4, -0.42))
 	_sync_hand_fan()
+	# 테이블 매트 카드도 카드 그림을 쓰므로 굽기 뒤에 만든다(굽기 전에 그림을 부르면 단색 그림으로 굳는다).
+	seat_cards = SeatCards.new()
+	seat_cards.name = "SeatCards"
+	add_child(seat_cards)
+	seat_cards.show_hands(controller.state.players)
+	deck_show = DeckShow.new()
+	deck_show.name = "DeckShow"
+	deck_show.seat_cards = seat_cards
+	add_child(deck_show)
+	deck_show.sync(controller.state)
+	held_cards = HeldCards.new()
+	held_cards.name = "HeldCards"
+	add_child(held_cards)
+	held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 
 
 ## 내 손패를 부채에 맞추고 꺼내 든 카드를 위로 올린다. 스냅샷마다 부르지만 카드가 그대로면 다시 만들지 않는다.
@@ -189,6 +224,10 @@ func _notification(what: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# T 감정표현 피자판이 먼저 받는다(열려 있으면 마우스 클릭·Esc 도 피자판 것).
+	if emotes != null and emotes.handle(event):
+		get_viewport().set_input_as_handled()
+		return
 	if lounge != null and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var id: int = controller.local_peer_id
 		var hit: Dictionary = lounge.focus(id)
@@ -214,6 +253,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if event is InputEventKey and event.pressed and not event.echo:
+			# F(상호작용 키) = 꺼내 든 카드 쓰기가 먼저다(2026-10-31 저녁 사용자 요청: Enter 대신 F 한 키로 빠르게).
+			# 카드를 꺼내 들지 않았을 때만 아래의 기계·착석으로 넘어간다 → 카드는 Q·E(1~7)로 들고 F 로 쓴다.
+			if event.keycode == Preferences.interact_key and lounge_hud != null and lounge_hud.use_lifted_card():
+				get_viewport().set_input_as_handled()
+				return
 			if event.keycode == KEY_ENTER and session.room.phase == RoomState.Phase.LOBBY:
 				var player: RoomPlayer = session.room.find_player(id)
 				if player != null and is_seated(id): session.set_ready(not player.is_ready)
@@ -228,6 +272,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					"link":
 						if lounge_hud != null: lounge_hud.open_link()
 					"claw", "gacha", "hoop": lounge.request(str(hit.kind), int(hit.get("index", 0)))
+					# 도면 v3: 종·럼주통·생맥주 통·연습 과녁·축음기 건드리기(소리 + 흔들림).
+					"touch": lounge.request("touch", int(hit.get("index", 0)))
 				get_viewport().set_input_as_handled()
 				return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -241,7 +287,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == Preferences.interact_key and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			request_seat()
 		if event.keycode == KEY_SPACE and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			_jump = true
+			# 앉아 있으면 Space = 일어서기(점프 대신). F 가 카드 쓰기로 바쁠 때도 언제든 일어날 수 있다.
+			if is_seated(controller.local_peer_id): request_seat()
+			else: _jump = true
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_yaw -= event.relative.x * MOUSE_SENSITIVITY * Preferences.sensitivity
 		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENSITIVITY * Preferences.sensitivity, -1.25, 1.25)
@@ -408,6 +456,17 @@ func _sit(actor: PlayerView) -> void:
 	actor.update_posture()
 
 
+## 내가 앉는 순간 한 번: 테이블 가운데를 보고 SEATED_LOOK_PITCH 만큼 내려다본다(매트 카드가 화면에 들어온다).
+## 앉아 있는 동안에는 건드리지 않는다 — 고개는 마우스로 자유롭게 돌린다.
+func _face_table_on_sit(local: PlayerView) -> void:
+	if local.seated and not _was_seated:
+		var toward: Vector3 = TableView.TABLE_CENTER - local.global_position
+		# 이 노드들의 정면은 -Z 다 → 정면이 toward 를 보게 하는 yaw = atan2(-x, -z).
+		_yaw = atan2(-toward.x, -toward.z)
+		_pitch = SEATED_LOOK_PITCH
+	_was_seated = local.seated
+
+
 func can_sit(id: int) -> bool:
 	var actor := actors.get(id) as PlayerView
 	if actor == null:
@@ -449,12 +508,16 @@ func _process(delta: float) -> void:
 		return
 	var state := controller.state
 	var own_turn: bool = state.active_player() != null and state.active_player().peer_id == controller.local_peer_id
+	_face_table_on_sit(local)
 	camera.position = local.eye_position()
-	camera.rotation = Vector3(_pitch, _yaw, 0)
+	# 엿보기(앉아서 A·D): 몸이 기운 쪽으로 화면도 기운다(레식 기울이기). 마시는 중이면 고개가 뒤로 젖혀진다.
+	camera.rotation = Vector3(_pitch + local.drink_pose_tilt() * PlayerView.DRINK_LOOK_UP, _yaw, local.peek_roll())
+	if seat_cards != null:
+		seat_cards.show_peek(local, delta)
 	if lounge != null:
 		var amount: float = lounge.intoxication_amount(controller.local_peer_id)
 		if Preferences.visual_effects and not Preferences.reduced_motion:
-			camera.rotation.z = sin(Time.get_ticks_msec() / 780.0) * amount * 0.025
+			camera.rotation.z += sin(Time.get_ticks_msec() / 780.0) * amount * 0.025
 		if _screen_fx != null:
 			_screen_fx.drowsy = Preferences.visual_effects and bool(local.identity.card_effects.get("drowsy", false))
 			_screen_fx.penalty = 3 if Preferences.visual_effects and amount > 1.4 else 0
@@ -498,6 +561,13 @@ func _apply_state() -> void:
 		else:
 			(actors[id] as PlayerView).show_state(player)
 	_sync_hand_fan()
+	if seat_cards != null:
+		seat_cards.show_hands(controller.state.players)
+	# 카드 충전 라운드로 들어오면 덱 섞기·나눠 주기를 각 화면에서 재생한다(새 카드는 닿을 때까지 매트에서 숨김).
+	if deck_show != null:
+		deck_show.sync(controller.state)
+	if held_cards != null:
+		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 	table.set_chalk_scores(_chalk_text())
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id

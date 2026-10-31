@@ -8,6 +8,8 @@ extends RefCounted
 const CELL_SIZE := Vector3(3.0, 2.0, 3.0)
 ## 표정·깜빡임용 얼굴 부품은 묶지 않는다.
 const FACE_PREFIXES: Array[String] = ["Eye", "Pupil", "Brow", "Mouth"]
+## 실행 중 움직이는 방 소품(2026-10-31 밤 "건드리기": 바 종이 흔들린다)은 묶지 않는다 — 묶이면 원본이 숨어 흔들림이 안 보인다.
+const NO_BATCH_NAMES: Array[String] = ["Bell"]
 
 
 ## root 아래 정적 메시를 묶어 RuntimeStaticBatches 노드에 넣는다. 반환값은 로그·검증용 개수.
@@ -61,6 +63,8 @@ static func optimize(root: Node3D) -> Dictionary:
 ## 묶을 후보를 "재질 + 격자 칸" 키로 모은다.
 static func collect(node: Node, root: Node3D, groups: Dictionary) -> void:
 	if node != root and (node.name == "Dartboard" or node.scene_file_path.contains("/characters/")):
+		return
+	if str(node.name) in NO_BATCH_NAMES:
 		return
 	if node is MeshInstance3D:
 		for prefix in FACE_PREFIXES:
