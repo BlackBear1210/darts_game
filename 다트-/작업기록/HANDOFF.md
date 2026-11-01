@@ -1,3 +1,16 @@
+# 최신 인수인계 — 음성 채팅 · Tab 플레이어 목록 · 싱글 봇 (2026-11-01)
+
+- 상세: [2026-11-01_음성채팅_Tab목록_싱글봇.md](2026-11-01_음성채팅_Tab목록_싱글봇.md).
+- `VoiceChat` 은 `NetworkSession` 이 `_ready` 에서 만든다(`session.voice`). `class_name` 이 없으니 쓰는 파일에서 `const VoiceChat = preload("res://network/voice_chat.gd")`.
+- 보내기 `_voice_up`(any_peer, unreliable_ordered, 채널 3) → 방장 `_relay` → `_voice_down`(authority). 방장 검사: 같은 방 사람·봇 아님·묶음 ≤ 1280 B·초당 양(`_within_budget`). 새 음성 기능도 이 길을 지나게 한다.
+- 마이크는 `project.godot` `[audio] driver/enable_input=true` 가 있어야 열린다. headless 실행은 마이크가 없으니 `VoiceChat.feed(frames, rate)` 로 소리를 넣어 시험한다.
+- 머리 옆 스피커: `PlayerView.set_speaking(level)`(음수 = 숨김). `GameView._process` 가 `voice.is_speaking/level` 로 매 프레임 부른다.
+- Tab 순서: `GameView._unhandled_input` 에서 감정표현 다음 `player_list.handle`. 무효 대상 고르기 조건은 `LoungeHUD.tab_picks_target()`(LoungeHUD 가 먼저 받는다).
+- 봇 어울리기 `BotSocial` 은 싱글(solo) 방장에서만 만든다. 차례 아닌 봇을 `GameView._drive_bot` 이 먼저 `bot_social.drive()` 에 맡긴다. 레인 벽 끝 돌아가기는 `BotDriver._around_lane`.
+- 개인 설정 `[voice]` 칸: enabled·mode·key·gain·sensitivity·volume·input/output 장치·people(표시 이름 → [볼륨, 음소거]).
+
+---
+
 # 최신 인수인계 — 카드 섞기 복원 · 방 넓히기 v4 · 네온 오락실 (2026-10-31 늦은 밤)
 
 - 상세: [2026-10-31_카드섞기복원_방넓히기_네온오락실.md](2026-10-31_카드섞기복원_방넓히기_네온오락실.md) · 도면 6장: `docs/MAP_PLAN_2026-10-31.md`.

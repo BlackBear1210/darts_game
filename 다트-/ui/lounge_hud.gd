@@ -13,6 +13,7 @@ extends CanvasLayer
 const Style = preload("res://ui/lounge_style.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
+const VoiceChat = preload("res://network/voice_chat.gd")
 const UiIcon = preload("res://ui/ui_icon.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
@@ -457,6 +458,15 @@ static func _card_phase(state: MatchState) -> bool:
 	return state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]
 
 
+## Tab 이 무효(×0) 대상 바꾸기인지: 다트 턴에 무효를 꺼내 들었고 막을 사람이 둘 이상일 때만. 아니면 Tab = 플레이어 목록.
+func tab_picks_target() -> bool:
+	if game == null or not _card_phase(game.controller.state): return false
+	var state: MatchState = game.controller.state
+	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
+	if me == null or me.pending_card < 0 or int(Catalog.card(me.pending_card).target) != Catalog.Target.COUNTER: return false
+	return _counter_targets(state, me).size() >= 2
+
+
 ## 무효(×0)로 막을 수 있는 사람 = 나 말고 카드를 꺼내 든 사람.
 func _counter_targets(state: MatchState, me: MatchPlayer) -> Array[int]:
 	var ids: Array[int] = []
@@ -507,7 +517,7 @@ func _update_prompt() -> void:
 	if game.throw_input.charging:
 		pairs = [["놓기", "다트 발사 %d%%" % roundi(game.throw_input.timing * 100)], ["우클릭", "취소"]]
 	if room.phase == RoomState.Phase.LOBBY and game.is_seated(game.controller.local_peer_id):
-		pairs = [["Enter", "게임 참여"], ["A / D", "훔쳐보기"], ["S", "빙글빙글"], ["Space", "일어서기"], ["T", "감정표현"]]
+		pairs = [["Enter", "게임 참여"], ["A / D", "훔쳐보기"], ["S", "빙글빙글"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
 	if game.lounge != null and game.lounge.is_stunned(game.controller.local_peer_id):
 		pairs = [["✦", "잠깐 어질어질…"]]
 	var key := str(pairs)
@@ -632,10 +642,20 @@ func _prompt_for(focus: Dictionary) -> Array:
 	if me != null and _card_phase(state) and not me.hand.is_empty():
 		card_keys = [[key, "카드 쓰기"]] if me.pending_card >= 0 else [["Q · E", "카드 꺼내기"]]
 	if game.is_seated(game.controller.local_peer_id):
-		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]]
+		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
 	# 카드를 들고 있으면 F 는 카드 쓰기라 "착석 · 기계" 칩은 뺀다(한 키에 두 안내가 겹치지 않게).
 	var interact: Array = [] if me != null and me.pending_card >= 0 and _card_phase(state) else [[key, "착석 · 기계"]]
-	return card_keys + [["WASD", "이동"]] + interact + [["좌클릭 꾹", "다트"], ["T", "감정표현"]]
+	return card_keys + [["WASD", "이동"]] + interact + [["좌클릭 꾹", "다트"], ["T", "감정표현"]] + _voice_keys()
+
+
+## 음성 채팅 칩(2026-11-01): 눌러서 말하기면 그 키, 말하는 중이면 "말하는 중". 함께하는 사람이 없으면(싱글) 뺀다.
+func _voice_keys() -> Array:
+	var voice: VoiceChat = game.session.voice if game.session != null else null
+	if voice == null or not Preferences.voice_enabled or not voice.has_listeners(): return [["Tab", "플레이어"]]
+	if voice.transmitting: return [["●", "말하는 중"], ["Tab", "플레이어"]]
+	if Preferences.voice_mode == Preferences.PUSH_TO_TALK:
+		return [[Preferences.VOICE_KEY_NAMES[Preferences.VOICE_KEYS.find(Preferences.voice_key)], "말하기"], ["Tab", "플레이어"]]
+	return [["Tab", "플레이어"]]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -653,10 +673,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.keycode in [KEY_Q, KEY_E]:
 		_browse_card(me, -1 if event.keycode == KEY_Q else 1)
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_TAB:
+	elif event.keycode == KEY_TAB and tab_picks_target():
 		# 대상을 고르는 건 무효(×0)뿐이다. 나머지 카드는 언제나 지금 던지는 사람에게 걸린다.
+		# 막을 사람이 둘 이상일 때만 Tab 이 대상 바꾸기다. 그 밖의 Tab 은 플레이어 목록(ui/player_list.gd, 2026-11-01).
 		var ids: Array[int] = _counter_targets(state, me)
-		if not ids.is_empty(): _target = ids[(ids.find(_target) + 1) % ids.size()]
+		_target = ids[(ids.find(_target) + 1) % ids.size()]
+		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
 		# Enter 는 예전 습관용 예비 키로만 남긴다(화면 안내는 F).
 		use_lifted_card()

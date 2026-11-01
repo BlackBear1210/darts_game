@@ -17,6 +17,10 @@ run/flush_stdout_on_print=true
 config/icon="res://icon.svg"
 run/main_scene.verification="res://tests/network_probe.tscn"
 
+[audio]
+
+driver/enable_input=true
+
 [debug]
 
 file_logging/enable_file_logging.pc=false

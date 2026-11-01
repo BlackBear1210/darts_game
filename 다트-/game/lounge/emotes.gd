@@ -19,6 +19,8 @@ const ANGRY: int = 2
 const CRY: int = 3
 const WOW: int = 4
 const TEASE: int = 5
+const LOVE: int = 6
+const GG: int = 7
 ## 봇이 반응할 확률과 봇마다 다시 반응하기까지의 시간(초) — 너무 시끄럽지 않게.
 const BOT_CHANCE: float = 0.45
 const BOT_COOLDOWN: float = 6.0
@@ -105,6 +107,14 @@ func _accept(sender: int, index: int) -> void:
 	if game.session != null and game.session.is_host() and game.multiplayer.has_multiplayer_peer():
 		game.session.receive_game_event.rpc("emote", data)
 	show_emote(sender, index)
+	# 싱글 플레이: 사람이 보낸 감정에 봇이 답한다(game/player/bot_social.gd, 2026-11-01).
+	if game.bot_social != null and not (game.actors[sender] as PlayerView).identity.is_bot:
+		game.bot_social.heard(sender, index)
+
+
+## 방장: 봇이 감정을 보낸다(싱글 플레이 봇 행동 bot_social.gd). 사람과 같은 간격 확인을 지난다.
+func bot_say(peer: int, index: int) -> void:
+	_accept(peer, index)
 
 
 func _receive_event(kind: String, data: Dictionary) -> void:
@@ -138,7 +148,8 @@ func show_emote(peer: int, index: int) -> void:
 
 ## 방장 매 프레임: 새 킬로그 줄을 보고 봇이 감정으로 반응한다.
 func _process(_delta: float) -> void:
-	if game == null or game.session == null or not game.session.is_host():
+	# 싱글 플레이는 bot_social.gd 가 봇 반응(놀리기·수다 포함)을 모두 맡는다.
+	if game == null or game.session == null or not game.session.is_host() or game.bot_social != null:
 		return
 	var state: MatchState = game.controller.state
 	for entry: String in state.feed:

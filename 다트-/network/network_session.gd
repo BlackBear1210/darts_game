@@ -31,6 +31,10 @@ var backend: BackendConnection
 var account_ids: Dictionary = {}
 var _registering: Dictionary = {}
 
+## 음성 채팅(자식 노드). 같은 경로라 모든 화면이 서로의 RPC 를 받는다 — network/voice_chat.gd.
+const VoiceChat = preload("res://network/voice_chat.gd")
+var voice: VoiceChat
+
 var _peer: ENetMultiplayerPeer
 var _local_name: String = ""
 var _timeout: Timer
@@ -48,6 +52,10 @@ func _ready() -> void:
 	_timeout.one_shot = true
 	_timeout.timeout.connect(_on_timeout)
 	add_child(_timeout)
+	voice = VoiceChat.new()
+	voice.name = "VoiceChat"
+	voice.session = self
+	add_child(voice)
 
 
 func is_host() -> bool:

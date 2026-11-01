@@ -43,6 +43,9 @@ F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `Player
 - `ui/round_banner.gd`: 화면 위 가운데 라운드 칸(카드 충전·다트)·지금 → 다음 단계·남은 초. `MatchState` 를 읽기만 한다.
 - `game/table/seat_cards.gd`, `held_cards.gd`: 매트 위 앞면 카드와 다른 캐릭터 왼손 카드 부채. 스냅샷의 hand/pending_slot 을 보여 주기만 한다.
 - `game/lounge/emotes.gd`: T 감정표현. 손님 → 방장 `"emote"` 액션, 방장이 간격 확인 후 `"emote"` 이벤트. 봇 반응은 방장이 킬로그로 정한다.
+- `network/voice_chat.gd`(2026-11-01): `NetworkSession/VoiceChat`. 마이크 → 16 kHz μ-law 40 ms 묶음 → 손님 `_voice_up`(채널 3) → 방장이 발신자·방·크기·초당 양 검사 후 `_voice_down` 으로 같은 방 사람에게 중계. 말하는 사람마다 AudioStreamGenerator 재생기(버스 `Voice`). `class_name` 없이 `preload` 로 쓴다.
+- `ui/player_list.gd`(2026-11-01): Tab 플레이어 목록 — 누르는 동안 보기·짧게 = 고정, 점수·핑·말하는 중, 사람마다 목소리 볼륨/음소거(`PlayerPreferences.voice_people`). 무효 대상 고르기가 필요할 때는 `LoungeHUD.tab_picks_target()` 이 Tab 을 가져간다.
+- `game/player/bot_social.gd`(2026-11-01): 싱글 플레이 방장 전용 봇 어울리기 — 사람 차례 레인 옆 방해, 카드 라운드 수다, 빗나감·당함 비틱, 감정 답장. `GameView._drive_bot` 이 차례 아닌 봇을 먼저 여기에 맡긴다. 감정은 `Emotes.bot_say` 로 보통 경로를 지난다.
 - 방 가구(도면 v3): 보이는 가구는 `art/vendor/rg_poly/`(구운 메시)를 `GameRoomBuilder._furnish` 가 놓고, 충돌은 `TableView.decor_blocks()` 가 만든다. 건드리기 자리는 `LoungeWorld.touch_spots()`.
 
 원형 테이블은 `TableView` 원통 충돌과 `GameRoomBuilder` 생성기의 원형 상판을 같이 바꿨다. `pub_game.tscn`은 생성기로 다시 저장했다. 기존 renderer/physics/project.godot/큰 조립 씬 파일은 유지했다. 이후 절의 자동 호스트·카드 배부만 설명은 기존 legacy 실행 경로의 구조이며 새 기본 경로에서는 위 설명이 우선한다.

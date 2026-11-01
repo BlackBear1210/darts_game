@@ -5,6 +5,7 @@ signal leave_requested
 const Style = preload("res://ui/lounge_style.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
+const VoiceChat = preload("res://network/voice_chat.gd")
 var session: NetworkSession
 var developer: bool = false
 var mode: String = "personal"
@@ -12,6 +13,29 @@ var _root: Control
 var _body: VBoxContainer
 var _draft: RoomSettings
 var _note: Label
+## 음성 채팅 마이크 테스트 막대(개인 설정 탭에 있을 때만).
+var _meter: VoiceMeter
+
+
+## 마이크 테스트 막대: 지금 마이크 크기(채움) + 음성 감지 문턱(금색 세로줄). 말하기 조건을 넘으면 청록, 아니면 회색.
+class VoiceMeter extends Control:
+	var voice: VoiceChat
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(300, 30)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var bar := Rect2(Vector2(0, 6), Vector2(size.x, size.y - 12))
+		draw_rect(bar, Color(Style.INK, 0.9))
+		if voice == null:
+			return
+		var fill := bar
+		fill.size.x *= voice.mic_level
+		draw_rect(fill, Style.MINT if voice.mic_open else Style.MUTED)
+		if Preferences.voice_mode == Preferences.VOICE_DETECT:
+			var x: float = bar.size.x * VoiceChat.meter(VoiceChat.vad_threshold_db())
+			draw_line(Vector2(x, 0), Vector2(x, size.y), Style.GOLD, 3.0)
 
 func _ready() -> void:
 	layer = 30
@@ -67,7 +91,17 @@ func _ready() -> void:
 	_draft = RoomSettings.from_snapshot(session.room.settings.to_snapshot()) if session != null else RoomSettings.new()
 	_root.add_child(preload("res://ui/dart_cursor.gd").new())
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# 설정 창이 열려 있는 동안은 방이 없어도 마이크를 열어 테스트 막대를 움직인다.
+	if _voice() != null: _voice().monitoring = true
 	_render()
+
+
+func _process(_delta: float) -> void:
+	if is_instance_valid(_meter): _meter.queue_redraw()
+
+
+func _voice() -> VoiceChat:
+	return session.voice if session != null else null
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -120,6 +154,7 @@ func _personal() -> void:
 	Style.row(_body, "전체 볼륨 %", _slider(Preferences.master * 100, 0, 100, 5, func(v: float) -> void: Preferences.master = v / 100; Preferences.apply()))
 	Style.row(_body, "주크박스 음악 %", _slider(Preferences.music * 100, 0, 100, 5, func(v: float) -> void: Preferences.music = v / 100))
 	Style.row(_body, "상호작용 효과음 %", _slider(Preferences.sfx * 100, 0, 100, 5, func(v: float) -> void: Preferences.sfx = v / 100))
+	_voice_section()
 	Style.section(_body, "그래픽 · UI", Style.MINT)
 	Style.row(_body, "전체 화면", Style.toggle(Preferences.fullscreen, func(v: bool) -> void: Preferences.fullscreen = v))
 	Style.row(_body, "그래픽 품질", Style.select(["가벼움", "기본", "높음"], Preferences.quality, func(v: int) -> void: Preferences.quality = v))
@@ -130,7 +165,49 @@ func _personal() -> void:
 	Style.section(_body, "게임 · 조작", Style.GOLD)
 	Style.row(_body, "마우스 감도", Style.number(Preferences.sensitivity, 0.3, 2.0, 0.1, func(v: float) -> void: Preferences.sensitivity = v))
 	Style.row(_body, "상호작용 / 착석", Style.select(["F", "R"], 0 if Preferences.interact_key == KEY_F else 1, func(v: int) -> void: Preferences.interact_key = KEY_F if v == 0 else KEY_R))
-	Style.label(_body, "WASD 이동 · Enter 참여 · A/D 훔쳐보기 · S 의자 회전 · 병·캡슐 들고 좌클릭 = 마시기·열기\n다트 턴 중 Q·E / 1–7 카드 꺼내기 · Enter 사용 · Tab 무효 대상", 17, Style.MUTED)
+	Style.label(_body, "WASD 이동 · Enter 참여 · A/D 훔쳐보기 · S 의자 회전 · 병·캡슐 들고 좌클릭 = 마시기·열기\n다트 턴 중 Q·E / 1–7 카드 꺼내기 · F 사용 · T 감정표현\nTab 플레이어 목록 · 사람마다 목소리 볼륨(무효 카드를 들었을 땐 Tab = 대상 바꾸기)", 17, Style.MUTED)
+
+## 음성 채팅(2026-11-01): 방식·키·장치·감도 + 마이크 테스트. 사람마다 볼륨은 경기 중 Tab 목록에서.
+func _voice_section() -> void:
+	Style.section(_body, "음성 채팅", Style.MINT)
+	Style.row(_body, "음성 채팅 사용", Style.toggle(Preferences.voice_enabled, func(v: bool) -> void: Preferences.voice_enabled = v))
+	Style.row(_body, "말하기 방식", Style.select(["눌러서 말하기", "음성 감지 · 자동"], Preferences.voice_mode, func(v: int) -> void:
+		Preferences.voice_mode = v
+		_render()))
+	if Preferences.voice_mode == Preferences.PUSH_TO_TALK:
+		Style.row(_body, "눌러서 말하기 키", Style.select(Preferences.VOICE_KEY_NAMES, Preferences.VOICE_KEYS.find(Preferences.voice_key), func(v: int) -> void: Preferences.voice_key = Preferences.VOICE_KEYS[v]))
+	else:
+		Style.row(_body, "음성 감지 감도 %", _slider(Preferences.voice_sensitivity * 100, 0, 100, 5, func(v: float) -> void: Preferences.voice_sensitivity = v / 100))
+	var inputs: Array[String] = []
+	inputs.assign(AudioServer.get_input_device_list())
+	Style.row(_body, "마이크 장치", _device_select(inputs, maxi(inputs.find(Preferences.input_device), 0), func(v: int) -> void:
+		Preferences.input_device = inputs[v]
+		Preferences.apply_devices()))
+	var outputs: Array[String] = []
+	outputs.assign(AudioServer.get_output_device_list())
+	Style.row(_body, "스피커 · 헤드셋", _device_select(outputs, maxi(outputs.find(Preferences.output_device), 0), func(v: int) -> void:
+		Preferences.output_device = outputs[v]
+		Preferences.apply_devices()))
+	Style.row(_body, "마이크 음량 %", _slider(Preferences.voice_gain * 100, 0, 200, 5, func(v: float) -> void: Preferences.voice_gain = v / 100))
+	Style.row(_body, "다른 사람 목소리 %", _slider(Preferences.voice_volume * 100, 0, 150, 5, func(v: float) -> void: Preferences.voice_volume = v / 100))
+	_meter = VoiceMeter.new()
+	_meter.voice = _voice()
+	Style.row(_body, "마이크 테스트", _meter)
+	Style.row(_body, "내 목소리 들어보기", Style.toggle(_voice() != null and _voice().loopback, func(v: bool) -> void:
+		if _voice() != null: _voice().loopback = v))
+	var how: String = "막대가 금색 줄을 넘으면 자동으로 목소리가 나가요(감도를 올리면 작은 소리도)."
+	if Preferences.voice_mode == Preferences.PUSH_TO_TALK:
+		how = "%s 를 누르고 있는 동안만 목소리가 나가요." % Preferences.VOICE_KEY_NAMES[Preferences.VOICE_KEYS.find(Preferences.voice_key)]
+	Style.label(_body, how + "\n사람마다 볼륨·음소거는 경기 중 Tab. 들어보기는 이어폰을 끼고 쓰세요(스피커면 소리가 울려요).", 16, Style.MUTED)
+
+
+## 장치 이름은 길 수 있다(예: "마이크 배열(디지털 마이크용 …)") → 칸 너비를 고정하고 넘치는 글자는 자른다.
+static func _device_select(items: Array[String], value: int, action: Callable) -> OptionButton:
+	var control := Style.select(items, value, action)
+	control.fit_to_longest_item = false
+	control.clip_text = true
+	control.custom_minimum_size.x = 300
+	return control
 
 func _room() -> void:
 	Style.section(_body, "이 방의 플레이 규칙", Style.MINT)
@@ -192,5 +269,8 @@ func _apply() -> void:
 	_close()
 
 func _close() -> void:
+	if _voice() != null:
+		_voice().monitoring = false
+		_voice().loopback = false
 	closed.emit()
 	queue_free()

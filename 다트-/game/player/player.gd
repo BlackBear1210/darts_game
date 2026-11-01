@@ -32,6 +32,13 @@ const DRINK_LOOK_UP: float = 0.3
 ## 머리 위 이름표 높이(m). 캐릭터 키(약 1.6~1.75m) 바로 위. 앉거나 숙이면 LOW_LABEL_RATIO 만큼 내린다.
 const LABEL_HEIGHT: float = 2.0
 const LOW_LABEL_RATIO: float = 0.72
+## 음성 채팅 스피커(말하는 중) 자리: 머리 왼쪽 옆. 감정 말풍선(lounge/emotes.gd, 머리 오른쪽 1.72 m)과 마주 보게 둔다.
+## 머리 위에 두면 테이블 건너편 사람 것이 위 가운데 라운드 표시에 가려진다(말풍선과 같은 이유).
+const SPEAKER_HEIGHT: float = 1.72
+const SPEAKER_SIDE: float = 0.46
+## 스피커 그림 크기(m/px)와 목소리가 클 때 커지는 비율.
+const SPEAKER_PIXEL: float = 0.0019
+const SPEAKER_PULSE: float = 0.35
 
 var identity: MatchPlayer
 var seated: bool = false
@@ -41,6 +48,8 @@ var color: Color
 ## 지금 이 사람이 조준 중인지. GameView 가 매 프레임 넣고, 몸짓이 오른팔을 든다(모든 화면에서 보인다).
 var aiming: bool = false
 var ready_pose: bool = false
+## 봇이 사람을 약 올리는 중(두 팔 번쩍). 싱글 플레이 봇 행동(game/player/bot_social.gd)이 넣는다 — 보이기만.
+var taunting: bool = false
 ## 앉아서 A·D 로 기울인 양(-1 = 왼쪽 끝, +1 = 오른쪽 끝). 방장이 정하고 위치와 함께 모두에게 보낸다.
 var seat_lean: float = 0.0
 ## 화면에 쓰는 기울기. seat_lean 은 초당 20번 오므로 그대로 쓰면 카메라가 계단처럼 튄다 → 매 프레임 부드럽게 따라간다.
@@ -57,6 +66,7 @@ var _model: Node3D
 var _rig: CharacterRig
 var _label: Label3D
 var _collision: CollisionShape3D
+var _speaker: Sprite3D
 
 
 func _ready() -> void:
@@ -114,7 +124,7 @@ func _process(delta: float) -> void:
 	var posture := CharacterRig.Posture.SEAT if seated else (CharacterRig.Posture.CROUCH if crouched else CharacterRig.Posture.STAND)
 	var ground_speed := Vector2(velocity.x, velocity.z).length() / SPEED
 	var airborne := not seated and position.y > 0.05
-	_rig.cheering = ready_pose
+	_rig.cheering = ready_pose or taunting
 	_rig.drinking = drink_pose
 	_rig.animate(delta, ground_speed, posture, airborne, pitch, aiming)
 	_shown_lean = lerpf(_shown_lean, seat_lean if seated else 0.0, 1.0 - exp(-18.0 * delta))
@@ -131,6 +141,30 @@ func _process(delta: float) -> void:
 	if tagged != _peek_tagged and identity != null:
 		_peek_tagged = tagged
 		_refresh_label()
+
+
+## 음성 채팅으로 말하는 중이면 머리 옆에 스피커를 띄운다(level 0~1 = 목소리 크기, 음수 = 숨김).
+## GameView 가 매 프레임 넣는다. 캐릭터와 같은 레이어라 내 스피커는 내 화면에 안 보인다(내 상태는 Tab 목록·HUD).
+func set_speaking(level: float) -> void:
+	if level < 0.0:
+		if _speaker != null: _speaker.visible = false
+		return
+	if _speaker == null:
+		_speaker = Sprite3D.new()
+		_speaker.name = "Speaking"
+		_speaker.texture = preload("res://ui/ui_icon.gd").speaker_texture()
+		_speaker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_speaker.pixel_size = SPEAKER_PIXEL
+		_speaker.shaded = false
+		_speaker.no_depth_test = true
+		_speaker.render_priority = 2
+		# offset 은 그림 면 기준 픽셀이라 빌보드면 늘 화면 가로 방향 = 어디서 봐도 머리 왼쪽 옆.
+		_speaker.offset.x = -SPEAKER_SIDE / SPEAKER_PIXEL
+		_speaker.layers = 1 << (identity.seat + 1) if identity != null else 1
+		add_child(_speaker)
+	_speaker.visible = true
+	_speaker.position.y = SPEAKER_HEIGHT * (LOW_LABEL_RATIO if crouched else 1.0)
+	_speaker.scale = Vector3.ONE * (1.0 + clampf(level, 0.0, 1.0) * SPEAKER_PULSE)
 
 
 ## 던지기 몸짓을 한 번 재생한다(GameView._show_throw 가 부른다).

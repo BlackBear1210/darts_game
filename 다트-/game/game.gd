@@ -38,6 +38,10 @@ const HeldCards = preload("res://game/table/held_cards.gd")
 const Emotes = preload("res://game/lounge/emotes.gd")
 ## 카드 충전 라운드의 덱 섞기·나눠 주기 연출(2026-10-31 늦은 밤 — F6 시연에만 있던 것을 F5 에 연결). 보이기만 한다.
 const DeckShow = preload("res://game/table/deck_show.gd")
+## Tab 플레이어 목록(누가 있는지 + 사람마다 목소리 볼륨)과 싱글 플레이 봇의 같이 노는 행동(2026-11-01).
+const PlayerList = preload("res://ui/player_list.gd")
+const BotSocial = preload("res://game/player/bot_social.gd")
+const VoiceChat = preload("res://network/voice_chat.gd")
 
 @onready var controller: MatchController = $MatchController
 @onready var throw_input: DartThrowController = $ThrowController
@@ -79,6 +83,9 @@ var seat_cards: Node3D
 var held_cards: Node
 var emotes: Node
 var deck_show: Node3D
+var player_list: CanvasLayer
+## 싱글 방에서만 있다(방장 = 혼자 하는 사람). 없으면 봇은 예전처럼 차례 행동·자기 반응만 한다.
+var bot_social: Node
 ## 지난 프레임에 내가 앉아 있었는지. 앉는 순간만 시선을 테이블로 돌린다(_face_table_on_sit).
 var _was_seated: bool = false
 
@@ -111,6 +118,16 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	emotes.name = "Emotes"
 	add_child(emotes)
 	emotes.setup(self)
+	if room.settings.solo and (session == null or session.is_host()):
+		bot_social = BotSocial.new()
+		bot_social.name = "BotSocial"
+		bot_social.game = self
+		add_child(bot_social)
+	if DisplayServer.get_name() != "headless":
+		player_list = PlayerList.new()
+		player_list.name = "PlayerList"
+		player_list.game = self
+		add_child(player_list)
 	for player in controller.state.players:
 		var view := PLAYER_SCENE.instantiate() as PlayerView
 		view.name = "Player_%d" % player.peer_id
@@ -226,6 +243,9 @@ func _notification(what: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# T 감정표현 피자판이 먼저 받는다(열려 있으면 마우스 클릭·Esc 도 피자판 것).
 	if emotes != null and emotes.handle(event):
+		get_viewport().set_input_as_handled()
+		return
+	if player_list != null and player_list.handle(event):
 		get_viewport().set_input_as_handled()
 		return
 	if lounge != null and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -344,6 +364,9 @@ func _drive_bot(actor: PlayerView, delta: float) -> void:
 	var mine: bool = active != null and active.peer_id == actor.identity.peer_id
 	var playing: bool = mine and state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]
 	if not playing:
+		# 싱글 플레이: 헤클링하러 나간 봇은 bot_social 이 움직인다(앉은 봇은 말 거는 쪽으로 몸만 돌린다).
+		if bot_social != null and bot_social.drive(actor, delta):
+			return
 		_walk_bot_home(actor, delta)
 		return
 	if actor.seated:
@@ -536,6 +559,10 @@ func _process(delta: float) -> void:
 	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
 	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (lounge == null or (lounge.held(controller.local_peer_id) < 0 and lounge.focus(controller.local_peer_id).is_empty()))
 	_animate_hand(delta)
+	# 음성 채팅으로 말하는 사람 머리 옆에 스피커(보이기만, 화면마다 따로).
+	var voice: VoiceChat = session.voice if session != null else null
+	for id: int in actors:
+		(actors[id] as PlayerView).set_speaking(voice.level(id) if voice != null and voice.is_speaking(id) else -1.0)
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
 	for actor: PlayerView in actors.values():

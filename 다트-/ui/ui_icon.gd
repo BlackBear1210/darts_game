@@ -12,6 +12,15 @@ const Style = preload("res://ui/lounge_style.gd")
 var icon_name: String = "single"
 var tint: Color = Style.INK
 var _texture: Texture2D
+## 음성 채팅 스피커 그림(머리 위 3D 표시와 Tab 목록이 같이 쓴다). 처음 부를 때 한 번 만든다.
+static var _speaker: Texture2D
+## 크림색 동그라미 + 검은 스피커 + 청록 소리 물결 두 줄. 64px 그림을 2배로 굽는다(가까이서 봐도 매끈하게).
+const SPEAKER_SVG := """<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="29" fill="#fff3dc" stroke="#120c12" stroke-width="4"/>
+<path d="M13 26 H21 L32 17 V47 L21 38 H13 Z" fill="#120c12"/>
+<path d="M38 25 Q43 32 38 39" fill="none" stroke="#1f9d88" stroke-width="5" stroke-linecap="round"/>
+<path d="M44 19 Q53 32 44 45" fill="none" stroke="#1f9d88" stroke-width="5" stroke-linecap="round"/>
+</svg>"""
 
 
 static func make(icon_id: String, side: float = 44.0, color: Color = Style.INK) -> Control:
@@ -20,6 +29,15 @@ static func make(icon_id: String, side: float = 44.0, color: Color = Style.INK) 
 	icon.tint = color
 	icon.custom_minimum_size = Vector2(side, side)
 	return icon
+
+
+## 말하는 중 스피커 그림(128px). 음성 채팅 2026-11-01.
+static func speaker_texture() -> Texture2D:
+	if _speaker == null:
+		var image := Image.new()
+		image.load_svg_from_string(SPEAKER_SVG, 2.0)
+		_speaker = ImageTexture.create_from_image(image)
+	return _speaker
 
 
 func _ready() -> void:

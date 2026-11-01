@@ -11,6 +11,8 @@ const LINE_MARGIN: float = 0.45
 const ARRIVE_RADIUS: float = 0.2
 ## 테이블을 감싸는 원에서 더 떨어져 지나갈 거리(몸 반지름 + 여유).
 const TABLE_MARGIN: float = 0.8
+## 레인 벽 끝을 돌아갈 때 벽에서 떨어질 거리(몸 반지름 + 여유).
+const LANE_CLEARANCE: float = 0.65
 ## 투척선에 선 뒤 한 발을 던지기까지 조준하는 시간(초). 시연값 — 팀 확정 필요.
 const AIM_SECONDS: float = 1.2
 ## 조준이 과녁 중심에서 흔들리는 정도(1.0 = 과녁 반지름). 시연값 — 팀 확정 필요.
@@ -57,7 +59,8 @@ static func random_charge() -> float:
 
 ## 테이블은 뚫고 갈 수 없다. 가는 길이 테이블에 걸리면 옆으로 비껴 선 지점을 먼저 본다.
 ## 매 프레임 다시 계산하므로 기억하는 경로가 없다 — 테이블을 지나면 바로 목표로 향한다.
-static func _steer(from: Vector3, target: Vector3) -> Vector3:
+static func _steer(from: Vector3, goal: Vector3) -> Vector3:
+	var target: Vector3 = _around_lane(from, goal)
 	var flat_from := Vector3(from.x, 0, from.z)
 	var to_target: Vector3 = Vector3(target.x, 0, target.z) - flat_from
 	var distance: float = to_target.length()
@@ -76,6 +79,23 @@ static func _steer(from: Vector3, target: Vector3) -> Vector3:
 	# 테이블 옆(지금 비껴 있는 쪽)으로 clearance 만큼 떨어진 지점을 본다.
 	var away: Vector3 = -side if side.length() > 0.01 else Vector3(to_target.z, 0, -to_target.x)
 	return center + away.normalized() * clearance - flat_from
+
+
+## 레인 옆(출입 금지 벽 바깥, 투척선보다 앞 — 헤클링 자리)을 드나들 때는 벽 끝을 돌아 지나간다(2026-11-01).
+## 레인 벽(TableView.LANE_HALF)은 출입 금지선(NO_ENTRY_Z)부터 과녁 벽까지라 곧장 가면 벽에 막혀 멈춘다.
+## 투척선·자리 사이를 오가는 원래 길은 레인 옆을 지나지 않아 그대로다.
+static func _around_lane(from: Vector3, target: Vector3) -> Vector3:
+	var corner_x: float = TableView.LANE_HALF + LANE_CLEARANCE
+	var corner_z: float = TableView.NO_ENTRY_Z + LANE_CLEARANCE
+	var beside_from: bool = from.z < TableView.NO_ENTRY_Z + 0.3 and absf(from.x) > TableView.LANE_HALF
+	var beside_target: bool = target.z < TableView.NO_ENTRY_Z and absf(target.x) > TableView.LANE_HALF
+	if beside_from and not (beside_target and signf(target.x) == signf(from.x)):
+		# 레인 옆에서 나간다: 같은 쪽 벽 끝 뒤(출입 금지선 뒤)로 먼저.
+		return Vector3(signf(from.x) * maxf(absf(from.x), corner_x), 0, corner_z)
+	if beside_target and not beside_from and absf(from.x) < corner_x - 0.05:
+		# 레인 옆으로 들어간다: 그쪽 벽 끝 바깥을 먼저 지난다.
+		return Vector3(signf(target.x) * corner_x, 0, corner_z)
+	return target
 
 
 ## 캐릭터의 정면은 -Z 다.
