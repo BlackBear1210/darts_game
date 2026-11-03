@@ -48,11 +48,15 @@ void fragment() {
 
 static var _plane: PlaneMesh
 static var _materials: Dictionary = {}
+## 조명을 받지 않는 짝(1인칭 부채). 같은 그림이라도 재질이 달라 따로 모은다.
+static var _unlit_materials: Dictionary = {}
 static var _glow_material: StandardMaterial3D
 static var _paint_material: StandardMaterial3D
 static var _burn_shader: Shader
 
 var type: int = -1
+## 조명을 받는가. 1인칭 부채만 false 로 두고 테이블·남의 손 카드는 그대로 조명을 받는다.
+var lit: bool = true
 var face_up: bool = false
 var mark_style: int = -1
 var body: Node3D
@@ -69,20 +73,27 @@ func _init() -> void:
 	_face = _sheet("Face", THICKNESS / 2.0)
 	_back = _sheet("Back", -THICKNESS / 2.0)
 	_back.rotation.z = PI
-	_back.material_override = material_for(CardFaces.back())
+	_back.material_override = material_for(CardFaces.back(), lit)
 	show_face(false)
 
 
 ## 카드 종류를 바꾸고 앞면 그림을 다시 입힌다.
 func set_type(card_type: int) -> void:
 	type = card_type
-	_face.material_override = material_for(CardFaces.face(type))
+	_face.material_override = material_for(CardFaces.face(type), lit)
 
 
 ## true = 앞면이 위, false = 뒤집어 뒷면이 위.
 func show_face(up: bool) -> void:
 	face_up = up
 	body.rotation.z = 0.0 if up else PI
+
+
+## 조명을 받을지(1인칭 부채는 안 받는다 — 2026-11-02 "내 왼손 카드가 어둡다").
+func set_lit(enabled: bool) -> void:
+	lit = enabled
+	_face.material_override = material_for(CardFaces.face(type), lit)
+	_back.material_override = material_for(CardFaces.back(), lit)
 
 
 ## 그림자를 끈다(1인칭 부채처럼 카메라 바로 앞의 카드).
@@ -241,9 +252,11 @@ static func plane_mesh() -> PlaneMesh:
 
 ## 같은 텍스처는 재질 하나를 같이 쓴다. 종이처럼 거칠고 반사가 약하다.
 ## 스스로 빛나게(발광) 하면 펍 조명·글로우와 겹쳐 색이 하얗게 바랜다(2026-10-28 화면 비교) → 발광은 쓰지 않는다.
-static func material_for(texture: Texture2D) -> StandardMaterial3D:
+## lit = false 면 조명을 받지 않는다(1인칭 부채 전용 — 방이 어두워도 글자가 읽힌다).
+static func material_for(texture: Texture2D, lit: bool = true) -> StandardMaterial3D:
+	var cache: Dictionary = _materials if lit else _unlit_materials
 	var key: int = texture.get_instance_id()
-	if not _materials.has(key):
+	if not cache.has(key):
 		var material := StandardMaterial3D.new()
 		material.albedo_texture = texture
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
@@ -251,8 +264,10 @@ static func material_for(texture: Texture2D) -> StandardMaterial3D:
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		material.roughness = 0.9
 		material.metallic_specular = 0.2
-		_materials[key] = material
-	return _materials[key]
+		if not lit:
+			material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		cache[key] = material
+	return cache[key]
 
 
 ## 꺼내 든 카드 테두리 빛 재질(모든 카드가 함께 쓴다).

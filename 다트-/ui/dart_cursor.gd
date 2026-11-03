@@ -22,6 +22,9 @@ const FLIGHT: float = 0.2
 const WIND_UP: float = 0.05
 const EMPTY_HIDE: float = 1.5
 const BUTTON_HIDE: float = 0.35
+## 이만큼(화면 픽셀) 마우스를 움직이면 숨어 있던 포인터가 바로 돌아온다.
+## 빈 곳을 연타하면 숨김이 계속 다시 시작돼 포인터가 안 보이던 문제(2026-11-02).
+const WAKE_PIXELS: float = 2.0
 const STUCK_LIFE_BUTTON: float = 0.75
 ## 오버레이 카메라 기준 깊이(m). 포인터는 가깝고 꽂히는 면은 멀다.
 const CURSOR_DEPTH: float = 1.1
@@ -149,6 +152,9 @@ func _process(delta: float) -> void:
 	var mouse := get_local_mouse_position()
 	# 마우스를 빨리 움직이면 꼬리가 뒤처지며 흔들린다(관성 느낌).
 	var velocity := (mouse - _last_mouse) / maxf(delta, 0.001)
+	# 던진 다트가 꽂힌 뒤에는 마우스를 조금만 움직여도 포인터가 바로 돌아온다.
+	if _hidden_left > 0.0 and _flights.is_empty() and (mouse - _last_mouse).length() > WAKE_PIXELS:
+		_hidden_left = 0.0
 	_last_mouse = mouse
 	_sway = _sway.lerp((velocity * 0.0009).limit_length(0.6), minf(1.0, delta * 10.0))
 	var hovered := get_viewport().gui_get_hovered_control() if active else null

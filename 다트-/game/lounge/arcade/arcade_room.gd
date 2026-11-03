@@ -18,6 +18,8 @@ const Kit = preload("res://art/mesh_kit.gd")
 const PubParts = preload("res://art/pub/pub_parts.gd")
 const Rules = preload("res://game/lounge/arcade/arcade_rules.gd")
 const StaticBatch = preload("res://art/static_batch.gd")
+## 천장 보 자리를 펍 생성기와 같이 쓴다(둘이 어긋나면 네온 관이 보에서 떨어진다).
+const RoomBuilder = preload("res://art/pub/game_room_builder.gd")
 const VENDOR_SCENE := "res://art/characters/chr_bartender.tscn"
 
 const CYAN := Color("3be5db")
@@ -261,9 +263,9 @@ func _ceiling_neon() -> void:
 	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, lounge.size.y), Vector3(f.lounge_x0 + 0.03, top, lounge.get_center().y), _neon_mat(CYAN))
 	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, lounge.size.y), Vector3(f.lounge_x1 - 0.03, top, lounge.get_center().y), _neon_mat(MAGENTA))
 	# 천장 보(펍 생성기 _shell 과 같은 자리) 바로 아래 네온 관.
-	var beams := [[hall, [-5.4, -2.1]], [lounge, [lounge.position.y + lounge.size.y * 0.22, lounge.get_center().y, lounge.position.y + lounge.size.y * 0.8]]]
+	# 2026-11-02: 자리를 여기 또 적어 두면 홀 길이가 바뀔 때 어긋나므로 생성기의 ceiling_beams() 를 같이 쓴다.
 	var index := 0
-	for entry: Array in beams:
+	for entry: Array in RoomBuilder.ceiling_beams():
 		var room: Rect2 = entry[0]
 		for z: float in entry[1]:
 			Kit.box(_static, "BeamNeon", Vector3(room.size.x - 0.8, 0.035, 0.05), Vector3(room.get_center().x, ceiling - 0.19, z), _neon_mat(CYAN if index % 2 == 0 else PINK, 2.0))

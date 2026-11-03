@@ -66,3 +66,5 @@ static func _setup_local_fan(fan: HandFan) -> void:
 	fan.radius = 0.2
 	fan.spread_degrees = 64.0
 	fan.cast_shadows = false
+	# 1인칭 부채는 조명을 받지 않는다(어두운 방에서도 글자가 읽히게, 2026-11-02).
+	fan.lit = false

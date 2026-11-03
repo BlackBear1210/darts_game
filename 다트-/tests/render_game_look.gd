@@ -107,7 +107,7 @@ func _run() -> void:
 	await _look(Vector3(4.4, 1.7, 9.0), Vector3(0, 0.8, 5.1), "05_table_and_seats")
 	await _look(Vector3(-2.1, 1.65, 2.1), Vector3(-7.0, 1.15, 6.0), "06_bar_and_bartender")
 	await _look(Vector3(7.0, 2.6, -3.5), Vector3(-0.9, 1.6, -7.0), "07_lane_and_fence")
-	await _look(Vector3(1.8, 3.6, -6.9), Vector3(0, 0.8, 4.5), "08_room_from_board")
+	await _look(Vector3(1.8, 3.6, TableView.BOARD_CENTER.z + 0.3), Vector3(0, 0.8, 4.5), "08_room_from_board")
 	# 봇 차례: 봇이 오른팔을 들고 조준하는 모습.
 	var bot := _game.actors.values().filter(func(actor: PlayerView) -> bool: return actor.identity.is_bot)[0] as PlayerView
 	_game.controller.developer_bot_turn(bot.identity.peer_id)

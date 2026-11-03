@@ -17,17 +17,32 @@ extends Node3D
 ##   다트 홀 양옆 +0.6m(가로 12 → 13.2), 라운지 오른쪽 +1.5m · 뒤쪽 +1.5m(20.5×7.5 → 22×9), 층고 4.25 → 4.8m.
 ##   과녁·투척선·레인·카드 테이블·자리·바·NPC 자리·당구대(오락실 기계 자리)는 한 칸도 안 옮겼다 — 규칙·봇 길·오락실 규칙 좌표가 그대로다.
 ##   벽에 붙어 있던 것(럼주통·양동이·소파·안락의자·짐)만 벽을 따라 같이 옮겼다. 왼쪽 벽(바 뒤)과 과녁 벽은 그대로다.
-const DART_HALL := Rect2(-6.6, -7.5, 13.2, 7.5)
+## 2026-11-02 사용자 요청 "다트와 던지는 곳 거리를 두 배는 늘리자":
+##   다트 홀을 과녁 쪽으로 3.6m 늘렸다(깊이 7.5 → 11.1). 투척선·레인 폭·라운지·테이블·자리·바는 한 칸도 안 옮겼다 —
+##   사람이 서는 곳과 봇 길, 규칙(in_throw_zone)이 그대로다. 과녁 벽과 거기 붙은 것(큰 통 둘·작은 통 하나·연습 과녁)만 벽을 따라갔다.
+const DART_HALL := Rect2(-6.6, -11.1, 13.2, 11.1)
 const LOUNGE := Rect2(-8.4, 0.0, 22.0, 9.0)
 
 ## 과녁은 다트 홀 끝 벽 가운데에 건다. 높이·크기는 바꾸지 않았다(팀 확정 대기).
-const BOARD_CENTER := Vector3(0, 2.9, -7.2)
+const BOARD_CENTER := Vector3(0, 2.9, -10.8)
 const BOARD_SCALE: float = 2.5
-## 투척선 위치(z)와 그 앞 보호 레인의 경계. 투척선에서 과녁 면까지 3.15m다.
-const NO_ENTRY_Z: float = -4.15
-const THROW_LINE_Z: float = -4.05
+## 투척선 위치(z)와 그 앞 보호 레인의 경계. 투척선에서 과녁 면까지 7.2m다
+## (2026-11-02 "두 배는 늘리자" — 3.6m 의 두 배. 투척선을 두는 대신 다트 홀을 그만큼 늘려 과녁 벽을 물렸다:
+##  투척선을 라운지 쪽으로 밀면 던지는 칸이 사라지고 카드 라운드 시연의 방해 구역과 겹친다).
+const NO_ENTRY_Z: float = -3.7
+const THROW_LINE_Z: float = -3.6
 ## 보호 레인 반폭. 다트가 날아가는 이 가운데 복도만 막고, 양옆은 지나다니며 구경·방해할 수 있다.
 const LANE_HALF: float = 1.2
+## 몸으로 막기 구역(2026-11-02 F6 이식): 레인 옆벽에 뚫어 둔 틈의 z 구간 (앞 끝, 뒤 끝).
+## 여기로 들어와 다트 앞을 몸으로 가로막는다. 이 칸 말고는 레인 안으로 못 들어간다
+## (투척선 바로 앞은 막아 둔다 — 던지는 사람 코앞에 서면 무엇을 던져도 막히기 때문이다).
+## 앞뒤 거리는 실제 궤적을 재서 골랐다(투척선에 선 사람 기준). 다트는 중력 보정 때문에 던진 직후 직선보다
+## 위로 떴다가 과녁으로 내려오므로 앞으로 갈수록 빠르게 높아진다 — 투척선에서
+##   0.9m 앞(구역 뒤 끝): 1.83m · 1.6m 앞(구역 앞 끝): 2.03m · 2.0m 앞: 2.18m
+## 몸 캡슐 윗끝이 1.75m(판정 반지름 0.3m)라 이 구역 안에서만 서서 가운데 조준을 막을 수 있다.
+## 더 앞은 서서는 안 닿고(점프해야 한다), 더 뒤는 던지는 사람 코앞이라 막아 두었다.
+## 위를 노린 다트는 서 있으면 머리 위로 지나간다 → 점프로 막는다(F6 과 같은 느낌).
+const BLOCK_ZONE := Vector2(-5.2, -4.5)
 ## 벽 안쪽 면에서 몸 중심이 더 들어오지 못하는 거리(벽 두께 절반 + 몸 반지름).
 const BODY_MARGIN: float = 0.45
 
@@ -45,11 +60,12 @@ const RAISED_HEIGHT: float = 1.6
 
 ## 도면의 럼주통. 큰 통 4개는 다트 홀 네 귀퉁이(둘은 투척 구역 안), 작은 통은 그 곁이다.
 ## 2026-10-31 늦은 밤: 다트 홀이 양옆으로 0.6m 넓어져 벽과의 거리를 유지하려고 통도 0.6m 바깥으로 옮겼다.
-const BARRELS: Array[Vector3] = [Vector3(-5.7, 0, -6.8), Vector3(5.6, 0, -7.2),
+## 2026-11-02: 과녁 벽이 3.6m 물러났으므로 그 벽 쪽 두 개도 같이 물렸다(투척선 쪽 두 개는 그대로).
+const BARRELS: Array[Vector3] = [Vector3(-5.7, 0, -10.4), Vector3(5.6, 0, -10.8),
 	Vector3(-5.7, 0, -3.1), Vector3(5.6, 0, -3.15)]
 const BARREL_RADIUS: float = 0.4
 const BARREL_HEIGHT: float = 0.9
-const SMALL_BARRELS: Array[Vector3] = [Vector3(6.0, 0, -6.15), Vector3(-6.15, 0, -2.4),
+const SMALL_BARRELS: Array[Vector3] = [Vector3(6.0, 0, -9.75), Vector3(-6.15, 0, -2.4),
 	Vector3(5.1, 0, -2.5), Vector3(6.0, 0, -2.3)]
 const SMALL_BARREL_RADIUS: float = 0.2
 const SMALL_BARREL_HEIGHT: float = 0.5
@@ -70,7 +86,7 @@ const POOL_TABLE_BOX := AABB(Vector3(10.4, 0, 2.8), Vector3(1.5, 0.8, 2.55))
 ##   라운지: 뒷벽 구경 소파 · 오른쪽 귀퉁이 안락의자 + 축음기 탁자 · 문 옆 짐(나무 상자·곡물 자루)
 const KEG_AT := Vector3(-7.5, 0, 0.95)
 const BACK_COUNTER_AT := Vector3(-7.8, 0, 6.3)
-const PRACTICE_TARGET_AT := Vector3(-3.4, 0, -6.6)
+const PRACTICE_TARGET_AT := Vector3(-3.4, 0, -10.2)
 const BUCKET_AT := Vector3(5.9, 0, -5.0)
 const SOFA_AT := Vector3(-3.1, 0, 8.35)
 const ARMCHAIR_AT := Vector3(12.75, 0, 1.0)
@@ -110,7 +126,7 @@ var is_ready: bool = true
 ## 방 배치 상수를 한 줄 글자로 만든다. 생성기가 방(pub_game.tscn)에 저장하고, 실행 때 같은지 비교한다.
 static func layout_signature() -> String:
 	return var_to_str(["round_table_v1", BOARD_CENTER, BOARD_SCALE, SEATS, DART_HALL, LOUNGE, WALL_THICKNESS, CEILING_HEIGHT,
-		NO_ENTRY_Z, THROW_LINE_Z, LANE_HALF, TABLE_CENTER, TABLE_SIZE, TABLE_HEIGHT,
+		NO_ENTRY_Z, THROW_LINE_Z, LANE_HALF, BLOCK_ZONE, TABLE_CENTER, TABLE_SIZE, TABLE_HEIGHT,
 		BARRELS, BARREL_RADIUS, SMALL_BARRELS, SMALL_BARREL_RADIUS,
 		BAR_BOX, NPC_TABLE_BOX, NPC_STOOLS, POOL_TABLE_BOX,
 		# 도면 v3(2026-10-31 밤): 에셋 가구 자리·바 위 물건 자리
@@ -129,6 +145,17 @@ static func walkable_halls() -> Array[Rect2]:
 		DART_HALL.size.x - BODY_MARGIN * 2, LOUNGE.end.y - BODY_MARGIN - front)
 	var lounge := LOUNGE.grow(-BODY_MARGIN)
 	return [hall, lounge]
+
+
+## 몸으로 막고 설 자리(레인 한가운데 = 다트가 지나는 x, 구역에서 던지는 사람과 가장 가까운 쪽).
+## 구역 안에서도 앞쪽 끝은 다트가 더 높이 지나가므로 서서 막으려면 뒤쪽 끝에 서야 한다.
+static func block_spot() -> Vector3:
+	return Vector3(0, 0, BLOCK_ZONE.y - 0.2)
+
+
+## 몸으로 막는 칸 안인가(레인 옆벽의 틈). 다트 앞을 가로막을 수 있는 유일한 자리다.
+static func in_block_zone(point: Vector3) -> bool:
+	return absf(point.x) <= LANE_HALF and point.z >= BLOCK_ZONE.x and point.z <= BLOCK_ZONE.y
 
 
 ## 여기서만 던질 수 있다. 라운지(테이블·바)에서는 못 던진다.
@@ -178,12 +205,13 @@ func _ready() -> void:
 	_wall_x(LOUNGE.end.x, LOUNGE.position.y, LOUNGE.end.y, wall_y, wall_height)
 	_wall_z(LOUNGE.end.y, LOUNGE.position.x, LOUNGE.end.x, wall_y, wall_height)
 	# 플레이어 마스크에만 포함되는 투명 벽(다트 레이는 통과한다): 가운데 보호 레인 복도.
-	# 앞(투척선)과 양옆만 막아 레인 안으로 못 들어오게 하고, 레인 바깥 양옆 통로는 열어 둔다.
-	var lane_depth: float = NO_ENTRY_Z - DART_HALL.position.y
-	var lane_middle: float = (NO_ENTRY_Z + DART_HALL.position.y) / 2.0
-	_box(Vector3(0, 2, NO_ENTRY_Z), Vector3(LANE_HALF * 2, 6, 0.1), 4)
-	for side: float in [-1.0, 1.0]:
-		_box(Vector3(side * LANE_HALF, 2, lane_middle), Vector3(0.1, 6, lane_depth), 4)
+	# 앞(투척선 쪽)과 몸막 구역 앞을 가로막고, 옆벽은 몸막 구역만큼 끊어 둔다 — 그 틈으로만 레인에 들어온다.
+	# 레인 바깥 양옆 통로는 그대로 열려 있다(구경·헤클링).
+	for cross: float in [NO_ENTRY_Z, BLOCK_ZONE.x]:
+		_box(Vector3(0, 2, cross), Vector3(LANE_HALF * 2, 6, 0.1), 4)
+	for segment: Vector2 in [Vector2(DART_HALL.position.y, BLOCK_ZONE.x), Vector2(BLOCK_ZONE.y, NO_ENTRY_Z)]:
+		for side: float in [-1.0, 1.0]:
+			_box(Vector3(side * LANE_HALF, 2, (segment.x + segment.y) / 2.0), Vector3(0.1, 6, segment.y - segment.x), 4)
 	# 사람이 부딪히는 가구.
 	_cylinder(TABLE_CENTER, TABLE_SIZE.x / 2.0, TABLE_HEIGHT)
 	_box(BAR_BOX.get_center(), BAR_BOX.size)

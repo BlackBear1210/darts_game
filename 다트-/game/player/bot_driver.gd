@@ -87,6 +87,10 @@ static func _steer(from: Vector3, goal: Vector3) -> Vector3:
 static func _around_lane(from: Vector3, target: Vector3) -> Vector3:
 	var corner_x: float = TableView.LANE_HALF + LANE_CLEARANCE
 	var corner_z: float = TableView.NO_ENTRY_Z + LANE_CLEARANCE
+	# 몸막 구역(레인 옆벽의 틈) 안에서 나갈 때: 앞뒤는 벽이므로 먼저 옆으로 빠진다(2026-11-02).
+	if TableView.in_block_zone(from) and not TableView.in_block_zone(target):
+		var out: float = signf(from.x) if absf(from.x) > 0.05 else signf(target.x)
+		return Vector3((out if out != 0.0 else 1.0) * corner_x, 0, from.z)
 	var beside_from: bool = from.z < TableView.NO_ENTRY_Z + 0.3 and absf(from.x) > TableView.LANE_HALF
 	var beside_target: bool = target.z < TableView.NO_ENTRY_Z and absf(target.x) > TableView.LANE_HALF
 	if beside_from and not (beside_target and signf(target.x) == signf(from.x)):

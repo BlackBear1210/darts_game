@@ -36,7 +36,7 @@ func _floor_plan() -> void:
 	var camera := game.camera
 	var old := [camera.projection, camera.near, camera.far]
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	# 방 넓히기 v4(2026-10-31 늦은 밤): 방 전체(x -8.4~13.6 · z -7.5~9.0)가 들어오게. 눈은 천장(4.8m) 아래.
+	# 방 전체가 들어오게 두 칸을 합친 테두리에서 계산한다(2026-11-02 다트 홀이 길어져 z -11.1~9.0). 눈은 천장(4.8m) 아래.
 	var bounds: Rect2 = TableView.DART_HALL.merge(TableView.LOUNGE)
 	camera.size = bounds.size.y + 1.0
 	camera.near = 1.3
@@ -47,7 +47,7 @@ func _floor_plan() -> void:
 	var labels := Control.new()
 	root.add_child(labels)
 	var zones := [["다트 홀 (투척 구역)", Vector3(0, 0, -2.0)], ["투척선", Vector3(3.2, 0, TableView.THROW_LINE_Z)],
-		["과녁", Vector3(0, 0, -6.9)], ["연습 과녁", TableView.PRACTICE_TARGET_AT], ["럼주통 탁자", TableView.BARRELS[2]],
+		["과녁", Vector3(0, 0, TableView.BOARD_CENTER.z + 0.3)], ["연습 과녁", TableView.PRACTICE_TARGET_AT], ["럼주통 탁자", TableView.BARRELS[2]],
 		["양동이·빗자루", TableView.BUCKET_AT], ["바 (맥주잔·병·종)", Vector3(-5.4, 0, 3.7)], ["바 끝 냉장고", TableView.BAR_FRIDGE_AT], ["바 뒤 (생맥주 통·조리대)", Vector3(-7.2, 0, 2.6)],
 		["카드 테이블", TableView.TABLE_CENTER], ["구경 소파", TableView.SOFA_AT], ["NPC 자리 (저녁상)", TableView.NPC_TABLE_BOX.get_center()],
 		["주크박스", Vector3(7.8, 0, 1.1)], ["당구대", TableView.POOL_TABLE_BOX.get_center()], ["안락의자·축음기", TableView.ARMCHAIR_AT],

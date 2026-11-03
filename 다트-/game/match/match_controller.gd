@@ -25,6 +25,8 @@ var check_seated: Callable
 ## 투척 위치 판정용 GameView 함수. in_throw_zone(peer_id) -> bool. 없으면 위치를 보지 않는다(씬 없는 시험).
 var in_throw_zone: Callable
 var force_seat: Callable
+## 몸으로 막혔을 때 맞은 사람을 못 움직이게 하는 GameView 함수. stun_player(peer_id, seconds). 없으면 보상만 준다.
+var stun_player: Callable
 var developer_enabled: bool = false
 var notice: String = ""
 var _turn_end: float = 0.0
@@ -46,6 +48,8 @@ const NULLIFY_ID := "times_0"
 const REDRAW_LIMIT: int = 12
 ## 이번 경기에 무효 한 장을 이미 넣었는지(첫 나눠 주기에서 켜진다).
 var _nullify_dealt: bool = false
+## 몸으로 막은 사람이 못 움직이는 시간(초). F6 카드 라운드 시연(Disruption.STUN_SECONDS)과 같은 시연값이다.
+const BODY_STUN_SECONDS: float = 3.0
 
 
 func configure(room: RoomState, peer_id: int, connection: NetworkSession = null) -> void:
@@ -294,17 +298,23 @@ func _land_dart() -> void:
 	if state.phase != MatchState.Phase.FLIGHT or _pending_hit.is_empty():
 		return
 	var won: bool = false
+	# 몸에 맞은 발은 "○○ 몸에 맞음!" 이라고 적힌 채로 둔다(점수 식으로 덮지 않는다).
+	var victim_id: int = int(_pending_hit.get("victim", 0))
 	if cards != null:
 		var result: Dictionary = cards.score(cards.landing_points(_pending_hit))
 		_pending_hit.points = result.points
-		_pending_hit.reason = "버스트 · 차례 시작 점수로 복귀" if result.bust else str(result.formula) + "점"
+		if victim_id == 0:
+			_pending_hit.reason = "버스트 · 차례 시작 점수로 복귀" if result.bust else str(result.formula) + "점"
 		if result.bust: state.darts_left = 0
 		won = result.win
 	else:
 		state.active_player().score += int(_pending_hit.points)
 	state.last_hit = _pending_hit.duplicate()
 	_pending_hit.clear()
-	add_feed(feed_entry("dart", state.active_player(), str(state.last_hit.reason)))
+	if victim_id != 0:
+		_body_blocked(victim_id)
+	else:
+		add_feed(feed_entry("dart", state.active_player(), str(state.last_hit.reason)))
 	if won:
 		_set_phase(MatchState.Phase.FINISHED, 0)
 		return
@@ -313,6 +323,19 @@ func _land_dart() -> void:
 	else:
 		state.darts_left = 0
 		_set_phase(MatchState.Phase.SETTLING, config.settle_seconds)
+
+
+## 몸으로 막혔다(2026-11-02 F6 이식). 다트는 0점이고, 맞은 사람은 스턴 + 방해 성공 보상을 받는다.
+## 보상 계산은 카드 규칙(RoundRules.disrupt) 한 곳에 둔다 — 지금 경기 보상은 점수다(라운드 한정 카드 보상은 F6 전용).
+## 던진 사람에게 주는 벌(취기·마우스·난시)은 아직 옮기지 않았다.
+func _body_blocked(victim_id: int) -> void:
+	var victim: MatchPlayer = state.find_player(victim_id)
+	if victim == null:
+		return
+	if stun_player.is_valid():
+		stun_player.call(victim_id, BODY_STUN_SECONDS)
+	var reward: String = cards.disrupt(victim_id) if cards != null else ""
+	add_feed(feed_entry("dizzy", state.active_player(), "몸에 막힘%s" % reward, victim))
 
 
 func _advance_turn() -> void:

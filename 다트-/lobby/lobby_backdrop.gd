@@ -14,7 +14,12 @@ const Sfx = preload("res://art/audio/sfx.gd")
 
 ## 카메라: 투척선 뒤 오른쪽 어깨 높이에서 과녁 왼쪽을 본다 → 과녁이 화면 오른쪽 1/3 에 크게 걸린다.
 const CAMERA_AT := Vector3(1.0, 2.25, -3.4)
-const LOOK_AT := Vector3(-2.0, 2.5, -7.0)
+## 보는 곳은 과녁 면 위의 한 점으로 둔다(과녁이 옮겨 가면 구도가 따라온다).
+const LOOK_OFFSET := Vector3(-2.0, -0.4, 0.2)
+## 구도 기준: 과녁이 3.8m 앞에 있을 때 시야각 52°. 2026-11-02 과녁이 7.2m 뒤로 가면서 멀어졌으므로
+## "거리 × tan(시야각/2)" 를 이 값과 같게 두어 과녁이 화면에서 차지하는 크기를 지킨다(멀리서 당겨 찍기).
+const FRAME_DISTANCE: float = 3.8
+const FRAME_FOV: float = 52.0
 ## 던지는 캐릭터(등을 보이며 과녁을 겨눈다).
 const THROWER_SEAT: int = 1
 const THROWER_AT := Vector3(-1.5, 0.0, -2.5)
@@ -47,16 +52,16 @@ func _ready() -> void:
 	_darts_root = Node3D.new()
 	_viewport.add_child(_darts_root)
 	_camera = Camera3D.new()
-	_camera.fov = 52.0
+	_camera.fov = _framed_fov()
 	_viewport.add_child(_camera)
 	_camera.position = CAMERA_AT
-	_camera.look_at(LOOK_AT)
+	_camera.look_at(_look_at())
 	_thrower = PlayerLook.character(THROWER_SEAT)
 	_viewport.add_child(_thrower)
 	_thrower.position = THROWER_AT
 	# 던지는 사람은 카메라 뒤쪽에 서 있다 → 다트만 화면 왼쪽에서 날아 들어온다(얼굴이 카메라를 보는 어색한 구도 방지).
 	# 캐릭터 정면은 +Z → 과녁 쪽을 보도록 돌린다.
-	var to_board := Vector3(0.0, 0.0, -7.2) - THROWER_AT
+	var to_board := Vector3(0.0, 0.0, TableView.BOARD_CENTER.z) - THROWER_AT
 	_thrower.rotation.y = atan2(to_board.x, to_board.z)
 	_rig = CharacterRig.new(_thrower, 0.4)
 	_rng.seed = 2026
@@ -70,7 +75,7 @@ func _process(delta: float) -> void:
 	_time += delta
 	# 손으로 든 카메라처럼 아주 천천히 흔들린다.
 	_camera.position = CAMERA_AT + Vector3(sin(_time * 0.31) * 0.06, sin(_time * 0.47) * 0.03, 0.0)
-	_camera.look_at(LOOK_AT + Vector3(sin(_time * 0.23) * 0.05, 0.0, 0.0))
+	_camera.look_at(_look_at() + Vector3(sin(_time * 0.23) * 0.05, 0.0, 0.0))
 	var aiming: bool = _next_attract - _time < 1.1
 	_rig.animate(delta, 0.0, CharacterRig.Posture.STAND, false, 0.12, aiming)
 	if _time >= _next_attract:
@@ -79,6 +84,17 @@ func _process(delta: float) -> void:
 		var hand := _thrower.global_position + Vector3(0.0, 1.72, 0.0) + _thrower.global_basis.z * 0.35
 		var aim := Vector2(_rng.randf_range(-0.55, 0.55), _rng.randf_range(-0.55, 0.55))
 		_throw(hand, aim, 0.5)
+
+
+## 카메라가 보는 곳(과녁 면 위의 한 점).
+static func _look_at() -> Vector3:
+	return TableView.BOARD_CENTER + LOOK_OFFSET
+
+
+## 과녁이 멀어진 만큼 좁힌 시야각.
+static func _framed_fov() -> float:
+	var distance: float = maxf(CAMERA_AT.z - TableView.BOARD_CENTER.z, 0.5)
+	return rad_to_deg(atan(tan(deg_to_rad(FRAME_FOV) / 2.0) * FRAME_DISTANCE / distance)) * 2.0
 
 
 ## 과녁 한가운데가 화면 어디에 보이는지(시험·안내 표시용).

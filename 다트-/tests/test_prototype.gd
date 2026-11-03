@@ -137,19 +137,26 @@ func _run() -> void:
 	# 아래 탄도 검사는 투척선 뒤에서 한다(라운지 구석에서는 단차 벽이 경로를 가린다).
 	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
 	await physics_frame
-	# 캐릭터가 경로에 있어도 레이 마스크 1은 캐릭터 레이어 2를 무시한다.
 	var result: Dictionary = _game.solve_dart(Vector2.ZERO, 1)
 	assert(result.points == 50 and result.target.is_equal_approx(TableView.BOARD_CENTER))
-	assert(result.start.is_equal_approx(local.eye_position()))
+	assert(result.start.is_equal_approx(local.eye_position()) and int(result.victim) == 0)
 	var remote_result: Dictionary = _game.solve_dart(Vector2.ZERO, 1, bots[0].identity.peer_id)
 	assert(remote_result.start.is_equal_approx(bots[0].eye_position()))
+	# 몸으로 막기(2026-11-02 F6 이식): 몸막 구역 한가운데 선 사람에게 맞으면 거기서 멈춰 0점이고,
+	# 레인 옆(구경 자리)에 서 있으면 다트가 그대로 지나간다. 자리는 바로 세우고 같은 프레임에 판정한다
+	# (몸 판정은 캡슐 계산이라 물리 프레임이 필요 없고, 기다리면 방장이 봇을 자리로 몰고 간다).
 	var blocker := bots[0]
+	var seated_before: bool = blocker.seated
 	var original: Vector3 = blocker.position
-	blocker.position = local.eye_position().lerp(TableView.BOARD_CENTER, 0.5)
-	await physics_frame
-	var with_blocker: Dictionary = _game.solve_dart(Vector2.ZERO, 1)
-	assert(with_blocker == result)
+	blocker.seated = false
+	blocker.position = TableView.block_spot()
+	var blocked: Dictionary = _game.solve_dart(Vector2.ZERO, 1)
+	assert(blocked.points == 0 and int(blocked.victim) == blocker.identity.peer_id, "몸막 구역의 사람에게 막혀야 합니다: %s" % blocked)
+	assert(blocked.target.z > TableView.BOARD_CENTER.z, "다트가 과녁까지 가면 안 됩니다: %s" % blocked)
+	blocker.position = Vector3(TableView.LANE_HALF + 0.65, 0, blocker.position.z)
+	assert(int(_game.solve_dart(Vector2.ZERO, 1).victim) == 0, "레인 옆은 다트가 지나는 길이 아닙니다.")
 	blocker.position = original
+	blocker.seated = seated_before
 	var weak: Dictionary = _game.solve_dart(Vector2.ZERO, 0)
 	assert(weak.points == 0)
 	var outside: Dictionary = _game.solve_dart(Vector2(2, 0), 1)
@@ -282,7 +289,7 @@ func _run() -> void:
 	_main.get_node("NetworkSession").leave_room()
 	await process_frame
 	assert(_main.get_node("FrontDoor").visible and _main.get_node_or_null("Game") == null)
-	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, blocker ignored, protected lane with open side aisles, seven cards dealt before the darts, bot walks to the oche and throws three darts then returns to its seat, lounge throw rejected, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
+	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, body block inside the block zone, protected lane with open side aisles, seven cards dealt before the darts, bot walks to the oche and throws three darts then returns to its seat, lounge throw rejected, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
 	_main.queue_free()
 	await process_frame
 	quit()

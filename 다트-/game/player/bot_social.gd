@@ -1,8 +1,10 @@
 extends Node
 ## 싱글 플레이 봇이 "같이 노는 느낌"을 주는 행동(2026-11-01 사용자 요청). 싱글 방의 방장(= 혼자 하는 사람의 화면)에서만 만든다.
 ##  1) 헤클링: 사람 차례에 봇 하나가 레인 옆(투척선 앞, 출입 금지 벽 바깥 — 도면이 "구경·방해"로 열어 둔 자리)까지 나와
-##     던지는 사람을 보고 두 팔을 흔들며 뛰고 놀린다. 위치만 바뀐다: 다트 비행 판정은 층 1 광선이라 캐릭터(층 2)에 막히지 않고,
-##     점수·카드·시간 규칙도 그대로다. 사람 차례가 끝나면 자리로 돌아간다.
+##     던지는 사람을 보고 두 팔을 흔들며 뛰고 놀린다. 점수·카드·시간 규칙은 그대로다.
+##     2026-11-02부터 BLOCK_CHANCE 로 옆 대신 레인 안 "몸막 구역"에 들어가 다트 앞을 몸으로 가로막는다
+##     (맞으면 그 봇이 스턴 + 방해 성공 보상, 다트는 0점 — 판정은 GameView.solve_dart).
+##     사람 차례가 끝나면 자리로 돌아간다.
 ##  2) 수다: 카드 충전 라운드·테이블 집합 때 봇끼리, 또는 사람에게 감정표현을 주고받는다(앉은 채 몸을 상대 쪽으로 돌린다).
 ##  3) 비틱·반응: 사람이 빗나가거나(0점) 카드·병·캡슐에 맞으면 봇들이 놀린다(ㅋㅋㅋ·메롱 + 팔 번쩍·뛰기).
 ##     사람이 잘 던지면 가끔 칭찬하고, 봇이 맞거나 잘해도 저마다 반응한다(싱글에서는 lounge/emotes.gd 의 봇 반응 대신 여기서).
@@ -17,6 +19,8 @@ const HECKLE_CHANCE: float = 0.6
 ## 헤클링 자리: 레인 벽(LANE_HALF) 바깥 0.65 m, 출입 금지선보다 1.15 m 앞(던지는 사람 화면 옆에 보이는 곳).
 const HECKLE_SIDE: float = TableView.LANE_HALF + 0.65
 const HECKLE_DEPTH: float = TableView.NO_ENTRY_Z - 1.15
+## 헤클링하러 나온 봇이 옆에서 놀리는 대신 다트 앞을 몸으로 막을 확률(2026-11-02 F6 이식). 시연값.
+const BLOCK_CHANCE: float = 0.35
 ## 헤클링 중 뛰는 간격과 놀리는 감정 간격(초, 매번 조금씩 흔든다).
 const HECKLE_JUMP_EVERY: float = 1.5
 const HECKLE_TEASE_EVERY: float = 3.4
@@ -53,6 +57,9 @@ var _heckler: int = 0
 var _heckle_turn: int = -1
 var _heckle_side: float = 1.0
 var _heckle_arrived: bool = false
+## 이번 헤클링이 "몸으로 막기"인지와, 레인 옆벽의 틈 앞까지 갔는지(거기서 안쪽으로 들어간다).
+var _heckle_block: bool = false
+var _heckle_at_gate: bool = false
 var _next_jump: float = 0.0
 var _next_tease: float = 0.0
 ## 예약된 감정: {"at", "peer", "index", "look", "gloat"}.
@@ -121,12 +128,14 @@ func _watch_heckle(state: MatchState, now: float) -> void:
 	if not human_turn:
 		_heckler = 0
 		_heckle_arrived = false
+		_heckle_at_gate = false
 		return
 	if state.turn_id == _heckle_turn:
 		return
 	_heckle_turn = state.turn_id
 	_heckler = 0
 	_heckle_arrived = false
+	_heckle_at_gate = false
 	var bots: Array[int] = _bot_ids()
 	if bots.is_empty() or _random.randf() > HECKLE_CHANCE:
 		return
@@ -134,6 +143,8 @@ func _watch_heckle(state: MatchState, now: float) -> void:
 	# 자기 자리 쪽 레인 옆으로 나온다(가운데 자리는 아무 쪽이나).
 	var seat_x: float = TableView.SEATS[(game.actors[_heckler] as PlayerView).identity.seat].x
 	_heckle_side = signf(seat_x) if absf(seat_x) > 0.1 else (1.0 if _random.randf() < 0.5 else -1.0)
+	# 가끔은 옆에서 놀리는 대신 레인 안(몸막 구역)으로 들어가 다트 앞을 몸으로 막는다.
+	_heckle_block = _random.randf() < BLOCK_CHANCE
 	_next_jump = now
 	_next_tease = now
 
@@ -143,7 +154,15 @@ func _heckle(actor: PlayerView, delta: float) -> void:
 		actor.seated = false
 		actor.position = TableView.standing_spot(actor.identity.seat)
 		actor.update_posture()
-	var spot := Vector3(_heckle_side * HECKLE_SIDE, 0, HECKLE_DEPTH)
+	# 몸으로 막으러 가는 길은 두 걸음이다: 레인 옆벽의 틈 앞까지 간 뒤 안쪽(다트가 지나는 한가운데)으로 들어간다.
+	var stand: Vector3 = TableView.block_spot()
+	var gate := Vector3(_heckle_side * HECKLE_SIDE, 0, stand.z if _heckle_block else HECKLE_DEPTH)
+	if not _heckle_at_gate:
+		if not BotDriver.arrived(actor.position, gate):
+			actor.simulate(delta, BotDriver.walk_controls(actor.position, gate))
+			return
+		_heckle_at_gate = true
+	var spot := stand if _heckle_block else gate
 	if not BotDriver.arrived(actor.position, spot):
 		actor.simulate(delta, BotDriver.walk_controls(actor.position, spot))
 		return

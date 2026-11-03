@@ -53,7 +53,7 @@ func _run() -> void:
 	lounge._arcade.hoop.until = lounge.now() + 21.0
 	lounge._arcade.hoop.scores = {1: 6, -1: 4}
 	await capture("16_arcade_hoop", Vector3(11.0, 1.75, 1.2), Rules.HOOP_RING + Vector3(0, -0.4, 0))
-	await capture("17_arcade_board_lane", Vector3(2.4, 2.0, -2.4), Vector3(0, 2.0, -7.2))
+	await capture("17_arcade_board_lane", Vector3(2.4, 2.0, -2.4), Vector3(0, 2.0, TableView.BOARD_CENTER.z))
 	await capture("18_arcade_prize", Vector3(-2.2, 1.9, 1.2), Vector3(-6.5, 1.3, 4.6))
 	# 깨지는 병: 세게 던져 바에 부딪히는 순간.
 	var bottle: int = 1

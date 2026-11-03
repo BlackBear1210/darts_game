@@ -185,6 +185,9 @@ func _process(_delta: float) -> void:
 	var seat_text: String = key + ": 일어서기" if seated else (key + ": 착석 가능 (선택)" if game.can_sit(id) else ("투척선 뒤 — 던질 수 있습니다" if in_zone else "다트 홀로 가야 던질 수 있습니다"))
 	if gathering and not seated:
 		seat_text = key + ": 지금 앉으세요!" if game.can_sit(id) else "자기 색 자리로 이동하세요 (늦으면 자동 착석 + 슬로우)"
+	elif not seated and game.actors.has(id) and TableView.in_block_zone((game.actors[id] as PlayerView).position):
+		# 몸으로 막기(2026-11-02): 레인 옆벽의 틈 안에 서 있다 → 날아오는 다트를 몸으로 가로막을 수 있다.
+		seat_text = "몸으로 막는 중 — 맞으면 잠깐 못 움직이지만 방해 성공 보상"
 	var can_throw: bool = state.phase == MatchState.Phase.AIMING and state.active_player() != null and state.active_player().peer_id == id
 	var throw_status: String = "투척 가능: 왼쪽 버튼을 누르고 놓으세요"
 	if state.phase == MatchState.Phase.FINISHED:

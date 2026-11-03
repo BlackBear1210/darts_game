@@ -44,6 +44,9 @@ func _init(owner: MatchController) -> void:
 	var settings: RoomSettings = owner.room_settings
 	rules.win_mode = [Rules.WinMode.ROUND_LIMIT, Rules.WinMode.TARGET_SCORE, Rules.WinMode.COUNTDOWN][settings.win_mode]
 	rules.target_score = settings.target_score
+	# 방해 성공 보상은 점수로 고정한다. 라운드 한정 카드 보상은 테이블 예약 칸(RoundRules.reward)을 쓰는데
+	# 경기 손패(MatchPlayer.hand)는 7칸만 실어 나르므로 아직 F6 시연 전용이다.
+	rules.reward_mode = Rules.RewardMode.SCORE
 	for index in range(peers.size()):
 		if settings.win_mode == 2: owner.state.players[index].score = settings.target_score
 		rules.seats[index].score = owner.state.players[index].score
@@ -165,6 +168,21 @@ func _bot_use(player: MatchPlayer, seat: int, type: int) -> void:
 func end_dart_turn() -> void:
 	rules.end_turn()
 	_sync()
+
+## 몸으로 막은 사람에게 주는 방해 성공 보상(계산은 RoundRules.disrupt). 점수판까지 맞추고
+## 킬로그 뒤에 붙일 짧은 글자를 돌려준다.
+func disrupt(peer_id: int) -> String:
+	var seat: int = peers.find(peer_id)
+	var player: MatchPlayer = controller.state.find_player(peer_id)
+	if seat < 0 or player == null:
+		return ""
+	var reward: Dictionary = rules.disrupt(seat)
+	player.score = rules.seats[seat].score
+	_sync()
+	if str(reward.kind) != "score":
+		return ""
+	var mark: String = "−" if rules.win_mode == Rules.WinMode.COUNTDOWN else "+"
+	return " · 방해 성공 %s%d점" % [mark, int(reward.amount)]
 
 func modifiers(peer_id: int) -> Dictionary:
 	var seat: int = peers.find(peer_id)

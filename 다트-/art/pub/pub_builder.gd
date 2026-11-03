@@ -72,6 +72,10 @@ func build() -> void:
 		character.free()
 	var bartender := CharacterFactory.create_bartender()
 	save_scene(bartender, CHARACTER_SCENE_PATH % CharacterFactory.BARTENDER_NAME.to_lower())
+	# 펍 손님 NPC 4종(2026-11-02). 몸은 선수와 같고 피부·옷·머리만 다르다.
+	for i in range(CharacterFactory.GUEST_NAMES.size()):
+		var guest := CharacterFactory.create_guest(i)
+		save_scene(guest, CHARACTER_SCENE_PATH % CharacterFactory.GUEST_NAMES[i].to_lower())
 	bartender.free()
 	# 2) 펍: 건물 → 다트판 벽 → 카드 테이블·캐릭터 → 바 → 조명 순서로 쌓는다.
 	var pub := Node3D.new()

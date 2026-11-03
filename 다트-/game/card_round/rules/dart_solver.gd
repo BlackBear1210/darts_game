@@ -4,10 +4,8 @@ extends RefCounted
 ## 결과 kind: "board"(과녁 평면 도착) · "body"(사람) · "wall"(벽·바닥·테이블) · "none"(비행 제한).
 
 const DART_CONFIG: DartConfig = preload("res://game/dart/default_dart.tres")
-## 사람 몸 판정 = 발에서 머리끝까지 세운 캡슐(큰 머리 포함).
-const BODY_RADIUS: float = 0.3
-const BODY_BOTTOM: float = 0.15
-const BODY_TOP: float = 1.75
+## 사람 몸 판정(캡슐 크기와 계산은 실제 경기와 같이 쓴다).
+const BodyHit = preload("res://game/dart/body_hit.gd")
 const STEP: float = 1.0 / 120.0
 
 
@@ -27,13 +25,10 @@ static func solve(space: PhysicsDirectSpaceState3D, start: Vector3, aim_point: V
 		if crosses:
 			time = plane_time
 		var point: Vector3 = DART_CONFIG.position_at(start, initial, time)
-		for body: Dictionary in bodies:
-			var base: Vector3 = body.position
-			var closest: PackedVector3Array = Geometry3D.get_closest_points_between_segments(previous, point,
-				base + Vector3.UP * BODY_BOTTOM, base + Vector3.UP * BODY_TOP)
-			if closest[0].distance_to(closest[1]) <= BODY_RADIUS:
-				var ratio: float = previous.distance_to(closest[0]) / maxf(previous.distance_to(point), 0.0001)
-				return _result("body", start, closest[0], lerpf(previous_time, time, ratio), int(body.seat))
+		var body: Dictionary = BodyHit.first(previous, point, bodies)
+		if not body.is_empty():
+			return _result("body", start, body.point, lerpf(previous_time, time, float(body.ratio)),
+				int(bodies[int(body.index)].seat))
 		if space != null:
 			var query := PhysicsRayQueryParameters3D.create(previous, point, 1)
 			var hit: Dictionary = space.intersect_ray(query)

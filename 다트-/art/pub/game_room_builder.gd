@@ -21,6 +21,10 @@ extends RefCounted
 const MeshKit = preload("res://art/mesh_kit.gd")
 const PubParts = preload("res://art/pub/pub_parts.gd")
 const BARTENDER_SCENE := "res://art/characters/chr_bartender.tscn"
+## 펍 손님 NPC(2026-11-02). 생성물은 pub_builder.gd 가 만든다(chr_guest_a~d).
+const GUEST_SCENE := "res://art/characters/chr_%s.tscn"
+const GUEST_KEYS: Array[String] = ["guest_a", "guest_b", "guest_c", "guest_d"]
+const NPC_IDLE_SCRIPT := "res://art/pub/npc_idle.gd"
 ## 과녁 뒤 초록 특징 판넬의 절반 폭(m). 캐비닛 문 두 짝이 열린 폭보다 넓어야 한다.
 const FEATURE_HALF := 2.7
 
@@ -37,6 +41,7 @@ static func build() -> Node3D:
 	_table_and_seats(_group(room, "TableAndSeats"))
 	_bar(_group(room, "Bar"))
 	_npc_corner(_group(room, "NpcCorner"))
+	_guests(_group(room, "Guests"))
 	_pool_table(_group(room, "PoolTable"))
 	var pub_only := _group(room, "PubOnly")
 	_decor(_group(room, "Decor"), _group(room, "Windows"), pub_only)
@@ -155,13 +160,30 @@ static func _shell(p: Node3D) -> void:
 		var roof := MeshKit.box(p, "Ceiling", Vector3(roof_rect.size.x, 0.08, roof_rect.size.y),
 			Vector3(roof_rect.get_center().x, ceiling + 0.04, roof_rect.get_center().y), PubParts.trim())
 		roof.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# 보: 칸마다 폭을 맞춰 가로로 지른다. 다트 홀 2개(과녁 조명 자리를 피해), 라운지는 길이에 맞춰 3개.
-	var beams := {hall: [-5.4, -2.1], lounge: [lounge.position.y + lounge.size.y * 0.22, lounge.get_center().y, lounge.position.y + lounge.size.y * 0.8]}
-	for room: Rect2 in beams:
-		for z: float in beams[room]:
+	# 보: 칸마다 폭을 맞춰 가로로 지른다. 자리는 ceiling_beams() 가 정한다(오락실도 같은 자리에 네온 관을 단다).
+	for entry: Array in ceiling_beams():
+		var room: Rect2 = entry[0]
+		for z: float in entry[1]:
 			var beam := MeshKit.box(p, "CeilingBeam", Vector3(room.size.x - 0.3, 0.16, 0.2),
 				Vector3(room.get_center().x, ceiling - 0.08, z), MeshKit.material("BeamWood", "3a2c22"))
 			beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## 천장 보 자리: [[칸, [z...]], ...]. 펍 _shell 과 네온 오락실(game/lounge/arcade/arcade_room.gd)이 같이 쓴다.
+## 다트 홀은 입구 쪽부터 2.6m 간격으로 지르고 과녁 스포트라이트(BOARD_CENTER.z + 1.8)부터 과녁 벽까지는 비운다 —
+## 거기 보가 있으면 스포트라이트가 보 그림자를 과녁에 떨어뜨린다(2026-11-02 과녁을 3.6m 물리며 깨달은 것).
+## 라운지는 길이를 셋으로 나눈다.
+static func ceiling_beams() -> Array:
+	var hall: Rect2 = TableView.DART_HALL
+	var lounge: Rect2 = TableView.LOUNGE
+	var spot_z: float = TableView.BOARD_CENTER.z + 1.8
+	var hall_rows: Array[float] = []
+	var z: float = hall.end.y - 1.9
+	while z > spot_z + 1.2:
+		hall_rows.append(z)
+		z -= 2.6
+	return [[hall, hall_rows],
+		[lounge, [lounge.position.y + lounge.size.y * 0.22, lounge.get_center().y, lounge.position.y + lounge.size.y * 0.8]]]
 
 
 ## 과녁 벽: 초록 특징 판넬 + 다트판 캐비닛(문 두 짝이 열린 모양, 문 안쪽은 칠판) + 간판 글자.
@@ -205,6 +227,8 @@ static func _board_wall(p: Node3D) -> void:
 
 
 ## 레인: 과녁 앞 벨벳 매트 + 놋쇠 투척선 + 투척 구역 경계 로프(이 선 앞으로는 못 들어간다 = TableView 투명벽).
+## 2026-11-02 "몸으로 막기": 로프와 투명벽을 몸막 구역(TableView.BLOCK_ZONE)만큼 끊어 두고 그 바닥을 붉게 칠한다 —
+## 거기로만 레인에 들어와 다트 앞을 몸으로 가로막을 수 있다.
 static func _lane(p: Node3D) -> void:
 	var f := _faces()
 	var line_z: float = TableView.THROW_LINE_Z
@@ -221,13 +245,22 @@ static func _lane(p: Node3D) -> void:
 	oche_text.rotation.x = -PI / 2
 	# 로프는 가운데 보호 복도만 두른다(TableView 의 레인 벽과 같은 자리).
 	# 복도 바깥 양옆은 비워 둔다 — 걸어 들어가 구경하거나 방해할 수 있는 통로다.
+	var zone: Vector2 = TableView.BLOCK_ZONE
 	for side: float in [-1.0, 1.0]:
-		var front_post := Vector3(side * lane_half, 0, fence_z)
-		var back_post := Vector3(side * lane_half, 0, f.board_z + 0.45)
-		PubParts.stanchion(p, front_post)
-		PubParts.stanchion(p, back_post)
-		PubParts.rope_between(p, front_post, back_post, 0.14)
+		# 옆 로프는 두 토막이다: 투척선 쪽 ~ 몸막 구역 뒤 끝, 몸막 구역 앞 끝 ~ 과녁 앞.
+		for run: Vector2 in [Vector2(fence_z, zone.y), Vector2(zone.x, f.board_z + 0.45)]:
+			var from_post := Vector3(side * lane_half, 0, run.x)
+			var to_post := Vector3(side * lane_half, 0, run.y)
+			PubParts.stanchion(p, from_post)
+			PubParts.stanchion(p, to_post)
+			PubParts.rope_between(p, from_post, to_post, 0.14)
 	PubParts.rope_between(p, Vector3(-lane_half, 0, fence_z), Vector3(lane_half, 0, fence_z))
+	# 몸막 구역 바닥(붉은 띠 + 글자). 매트 위에 얇게 덧칠한다.
+	var zone_mid: float = (zone.x + zone.y) / 2.0
+	MeshKit.box(p, "BlockZoneFloor", Vector3(lane_half * 2, 0.006, zone.y - zone.x),
+		Vector3(0, 0.034, zone_mid), MeshKit.material("BlockZone", "7c3029"))
+	var zone_text := MeshKit.label(p, "BlockZoneText", "몸 으 로  막 기", Vector3(0, 0.05, zone_mid), 40, Color("ffb9a6"), 0.0034)
+	zone_text.rotation.x = -PI / 2
 	# 로프 가운데에 매단 안내판.
 	MeshKit.box(p, "NoEntryPlaque", Vector3(0.62, 0.24, 0.02), Vector3(0, 0.5, fence_z + 0.03), PubParts.brass())
 	MeshKit.box(p, "NoEntryPaper", Vector3(0.56, 0.18, 0.01), Vector3(0, 0.5, fence_z + 0.045), PubParts.dark())
@@ -441,6 +474,52 @@ static func _npc_corner(p: Node3D) -> void:
 			PubParts.stool(p, chair_at, PubParts.green(), "NpcStool_%d" % (i + 1))
 
 
+## 펍 손님 NPC 4명(2026-11-02 요청): 구석 테이블에 둘(마시기), 벽 쪽에 하나(잔 닦다가 마시기), 바 의자에 하나.
+## 경기에 끼어들지 않는 장식이라 충돌을 주지 않는다 — 지나갈 수 있다.
+## 몸은 선수와 같은 캐릭터 씬이고, 제자리 동작만 art/pub/npc_idle.gd 가 돌린다
+## (캐릭터 씬은 정적 메시 묶기에서 빠지므로 실행 중에 움직여도 된다).
+static func _guests(p: Node3D) -> void:
+	var f := _faces()
+	var bar: AABB = TableView.BAR_BOX
+	var npc_center: Vector3 = TableView.NPC_TABLE_BOX.get_center()
+	var npc_look := Vector3(npc_center.x, 0, npc_center.z)
+	# [설 자리, 바라볼 곳, 앉는가, 동작(0 마시기 · 1 잔 닦기)]
+	var spots: Array = [
+		[TableView.NPC_STOOLS[0], npc_look, true, 0],
+		[TableView.NPC_STOOLS[1], npc_look, true, 0],
+		[Vector3(f.lounge_x0 + 0.75, 0, bar.end.z - 1.4), Vector3(f.lounge_x0 + 3.0, 0, bar.end.z - 1.4), false, 1],
+		[Vector3(bar.end.x + 0.45, 0, bar.get_center().z), Vector3(bar.position.x, 0, bar.get_center().z), true, 0],
+	]
+	for i in range(spots.size()):
+		var spot: Array = spots[i]
+		var at: Vector3 = spot[0]
+		var look: Vector3 = spot[1]
+		var holder := Node3D.new()
+		holder.name = "Guest_%d" % (i + 1)
+		holder.set_script(load(NPC_IDLE_SCRIPT))
+		holder.set("style", int(spot[3]))
+		holder.set("phase_seconds", i * 1.3)
+		p.add_child(holder)
+		var model := (load(GUEST_SCENE % GUEST_KEYS[i]) as PackedScene).instantiate() as Node3D
+		holder.add_child(model)
+		holder.position = at
+		# 캐릭터 정면은 +Z 다(look_at 은 -Z 를 돌리므로 각도를 직접 준다).
+		holder.rotation.y = atan2(look.x - at.x, look.z - at.z)
+		if bool(spot[2]):
+			_seat_pose(model)
+
+
+## 의자에 앉은 자세로 굳힌다(CharacterRig 의 SEAT 자세와 같은 값을 쓴다).
+static func _seat_pose(model: Node3D) -> void:
+	for leg_name: String in ["LegL", "LegR"]:
+		var leg := model.get_node_or_null(leg_name) as Node3D
+		if leg != null:
+			leg.rotation.x = CharacterRig.SEAT_LEG_ANGLE
+	var body := model.get_node_or_null("Body") as Node3D
+	if body != null:
+		body.position.y = CharacterRig.HIP_HEIGHT
+
+
 ## 도면의 당구대. 충돌은 TableView.POOL_TABLE_BOX.
 static func _pool_table(p: Node3D) -> void:
 	var box: AABB = TableView.POOL_TABLE_BOX
@@ -477,10 +556,11 @@ static func _pool_table(p: Node3D) -> void:
 ## 그 벽에 네온 간판을 단다(2026-10-31 늦은 밤: 오락실 간판 글자가 창문·과녁 판넬에 겹쳐 잘려 보였다).
 static func _decor(p: Node3D, windows: Node3D, pub_only: Node3D) -> void:
 	var f := _faces()
-	# 다트 홀 옆창(특징 판넬을 피해 옆벽에).
+	# 다트 홀 옆창(특징 판넬을 피해 옆벽에). 2026-11-02 홀이 11.1m 로 길어져 한 쪽에 둘씩.
 	for side: float in [-1.0, 1.0]:
 		var x: float = (f.hall_x1 if side > 0 else f.hall_x0) - side * 0.07
-		PubParts.window(windows, Vector3(x, 2.5, -5.1), -PI / 2 * side)
+		for z: float in [-5.1, -8.7]:
+			PubParts.window(windows, Vector3(x, 2.5, z), -PI / 2 * side)
 	# 라운지 뒷벽 창 셋(넓어진 오른쪽에 하나 더)과 오른쪽 벽 창 하나.
 	for x: float in [-2.4, 1.8, 11.2]:
 		PubParts.window(windows, Vector3(x, 2.5, f.back_z - 0.07), PI)
@@ -562,9 +642,12 @@ static func _furnish(p: Node3D, pub_only: Node3D) -> void:
 	# 천장 아래 전구 줄: 다트 홀 옆벽과 라운지 뒷벽을 따라(위쪽 빈 곳 채우기). 실제 빛은 펜던트가 낸다.
 	# 높이는 천장 0.4m 아래(층고가 4.8m 로 높아져 고정값 3.85 대신 천장 기준).
 	var string_y: float = TableView.CEILING_HEIGHT - 0.4
+	# 2026-11-02: 홀이 길어졌으므로 자리를 세지 않고 2.2m 간격으로 과녁 벽까지 깐다.
 	for side: float in [-1.0, 1.0]:
-		for z: float in [-6.3, -4.1, -1.9]:
+		var z: float = -1.9
+		while z > TableView.DART_HALL.position.y + 0.8:
 			PubParts.asset(p, "string_lights", Vector3(side * (f.hall_x1 - 0.1), string_y, z), 0.0, Vector3.ONE, "StringLights", false)
+			z -= 2.2
 	for x: float in [-6.7, -4.5, -2.3, 2.3, 4.5, 6.7]:
 		PubParts.asset(p, "string_lights", Vector3(x, string_y, f.back_z - 0.1), PI / 2, Vector3.ONE, "StringLights", false)
 
@@ -608,6 +691,12 @@ static func _lighting(p: Node3D) -> void:
 	# 넓어진 라운지(뒤쪽 소파 · 입구 · 오른쪽 안락의자)도 어둡지 않게.
 	for at: Vector3 in [Vector3(-3.1, 3.4, 7.4), Vector3(8.4, 3.4, 7.6), Vector3(12.4, 3.3, 1.6)]:
 		PubParts.pendant(p, at, ceiling, 0.4, 5.0)
+	# 다트 홀 벽등(2026-11-02): 레인이 7.4m 로 길어져 가운데가 어두웠다. 펜던트를 더 달면 다트가 지나는 길 위에
+	# 걸리므로 옆벽에 붙인다. 창(z -5.1 · -8.7)과 선반(z -1.5)을 피한 높이·자리다.
+	for side: float in [-1.0, 1.0]:
+		var wall_x: float = (f.hall_x1 if side > 0 else f.hall_x0) - side * 0.03
+		for z: float in [-3.3, -6.9, -10.2]:
+			PubParts.sconce(p, Vector3(wall_x, 2.6, z), Vector3.LEFT if side > 0 else Vector3.RIGHT)
 	# 벽등: 하우스 룰 간판(z 0.5~2.3)과 창(z 3.5~5.7)을 피해.
 	for z: float in [2.9, 6.6]:
 		PubParts.sconce(p, Vector3(f.lounge_x1 - 0.03, 2.6, z), Vector3.LEFT)

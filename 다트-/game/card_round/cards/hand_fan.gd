@@ -23,6 +23,8 @@ var lift_forward: float = 0.03
 var show_keys: bool = false
 var layer_mask: int = 1
 var cast_shadows: bool = true
+## false = 조명을 받지 않는다(1인칭 부채 — 방이 어두워도 글자가 읽힌다).
+var lit: bool = true
 ## slot(0~6 = 7칸, 7~8 = 보상 카드) → CardView
 var cards: Dictionary = {}
 var lifted_slot: int = -1
@@ -40,6 +42,7 @@ func set_card(slot: int, card_type: int, reward: bool = false) -> void:
 	card.show_face(true)
 	card.set_layers(layer_mask)
 	card.set_shadow(cast_shadows)
+	card.set_lit(lit)
 	card.set_meta("reward", reward)
 	if show_keys:
 		card.show_key(str(slot + 1))

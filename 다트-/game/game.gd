@@ -23,6 +23,12 @@ const BotDriver = preload("res://game/player/bot_driver.gd")
 ## 카드 그림과 1인칭 손 부채는 카드 라운드 시연 것을 그대로 쓴다 — 카드 모양은 한 곳만 유지한다.
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
+## 몸으로 막기(2026-11-02): 몸 캡슐 판정과 머리 위 스턴 별은 카드 라운드 시연과 같은 것을 쓴다.
+const BodyHit = preload("res://game/dart/body_hit.gd")
+const StunStars = preload("res://game/card_round/fx/stun_stars.gd")
+## 몸으로 막은 사람이 옆으로 튕기는 세기(m/s). 감속 9 m/s² 라 약 0.9m 밀려난다 —
+## 다트가 지나는 한가운데에서 벗어나므로 다음 발은 다시 들어와 서야 막을 수 있다(계속 서서 막는 것 방지).
+const BODY_KNOCKBACK: float = 4.0
 ## 칠판 점수판에 쓰는 이름 최대 글자 수(칠판 폭 약 0.95m에 맞춘 값).
 const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
@@ -54,6 +60,10 @@ var session: NetworkSession
 var actors: Dictionary = {}
 var developer_enabled: bool = false
 var _controls: Dictionary = {}
+## 몸으로 막기 스턴(방장만 센다). peer ID → 풀리는 시각.
+var _stun_until: Dictionary = {}
+## 머리 위 별을 이미 띄운 한 발("차례:요청" 글자). 같은 스냅샷이 다시 와도 두 번 띄우지 않는다.
+var _shown_block: String = ""
 var _sequence: int = 0
 var _motion_sequence: int = 0
 var _last_motion_sequence: int = -1
@@ -114,6 +124,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	controller.check_seated = is_seated
 	controller.force_seat = force_seat
 	controller.in_throw_zone = can_throw_from
+	controller.stun_player = stun_player
 	emotes = Emotes.new()
 	emotes.name = "Emotes"
 	add_child(emotes)
@@ -172,6 +183,8 @@ func _prepare_hand_fan() -> void:
 	_fan.radius = 0.2
 	_fan.spread_degrees = 64.0
 	_fan.cast_shadows = false
+	# 펍이 어두워도 내 카드 글자가 읽히게 조명을 받지 않는다(2026-11-02).
+	_fan.lit = false
 	camera.add_child(_fan)
 	# 카드 라운드 시연의 1인칭 부채와 같은 자리(화면 왼쪽 아래).
 	_fan.transform = Transform3D(Vector3(0.995, -0.0998, 0), Vector3(0.0998, 0.995, 0), Vector3(0, 0, 1), Vector3(-0.22, -0.4, -0.42))
@@ -344,13 +357,13 @@ func _physics_process(delta: float) -> void:
 		for id: int in actors:
 			var actor := actors[id] as PlayerView
 			if actor.identity.is_bot:
-				if lounge != null and lounge.is_stunned(id): actor.simulate(delta, {})
+				if _frozen(id): actor.simulate(delta, {})
 				else: _drive_bot(actor, delta)
 				continue
 			var controls: Dictionary = _controls.get(id, {})
 			if controller._now() - float(controls.get("at", 0)) > INPUT_TIMEOUT:
 				controls = {}
-			if lounge != null and lounge.is_stunned(id): controls = {}
+			if _frozen(id): controls = {}
 			actor.simulate(delta, controls)
 			if _controls.has(id):
 				_controls[id]["jump"] = false
@@ -599,6 +612,45 @@ func _apply_state() -> void:
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id
 		_clear_darts()
+	# 몸으로 막힌 한 발: 모든 화면이 같은 스냅샷을 보고 맞은 사람 머리 위에 별을 띄운다.
+	var hit: Dictionary = controller.state.last_hit
+	var victim_id: int = int(hit.get("victim", 0))
+	var key := "%s:%s" % [hit.get("request_id", 0), victim_id]
+	if victim_id != 0 and key != _shown_block:
+		_shown_block = key
+		_show_body_hit(victim_id, hit.get("target", Vector3.ZERO))
+
+
+## 못 움직이는 상태인가: 소품에 맞은 스턴(LoungeWorld)과 몸으로 막은 스턴을 함께 본다.
+func _frozen(peer_id: int) -> bool:
+	if controller._now() < float(_stun_until.get(peer_id, 0.0)):
+		return true
+	return lounge != null and lounge.is_stunned(peer_id)
+
+
+## 몸으로 막혔다(MatchController 가 방장에서 부른다): 맞은 사람이 seconds 동안 못 움직이고
+## 레인 옆으로 튕겨 난다. 머리 위 별은 각 화면이 스냅샷을 보고 띄운다(_apply_state).
+func stun_player(peer_id: int, seconds: float) -> void:
+	if not multiplayer.is_server():
+		return
+	_stun_until[peer_id] = controller._now() + seconds
+	var actor := actors.get(peer_id) as PlayerView
+	if actor == null or actor.seated:
+		return
+	# 옆으로 튕긴다 — 앞(과녁 쪽)으로 밀면 레인 안쪽 벽에 끼이고 다음 발도 계속 막게 된다.
+	var away: float = signf(actor.global_position.x)
+	actor.knockback = Vector3(away if away != 0.0 else 1.0, 0, 0) * BODY_KNOCKBACK
+
+
+## 몸에 맞은 사람 머리 위의 스턴 별과 소리. 판정은 방장이 했고 여기서는 보이기만 한다.
+func _show_body_hit(victim_id: int, at: Vector3) -> void:
+	var actor := actors.get(victim_id) as PlayerView
+	if actor == null or DisplayServer.get_name() == "headless":
+		return
+	var stars := StunStars.new()
+	stars.seconds = MatchController.BODY_STUN_SECONDS
+	actor.add_child(stars)
+	Sfx.play_at(self, "thunk", at, -2.0, 0.82)
 
 
 func _show_throw(data: Dictionary) -> void:
@@ -649,10 +701,13 @@ func _clear_darts() -> void:
 		child.queue_free()
 
 
+## 방장이 한 발을 확정한다. 과녁까지 가는 길에 사람 몸이 있으면 거기서 멈춘다(몸으로 막기 — 0점 + 맞은 사람 스턴).
 func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 	var config := throw_input.config
-	var actor: PlayerView = actors[peer_id if peer_id != 0 else controller.local_peer_id] as PlayerView
+	var thrower_id: int = peer_id if peer_id != 0 else controller.local_peer_id
+	var actor: PlayerView = actors[thrower_id] as PlayerView
 	var start: Vector3 = actor.eye_position()
+	var bodies: Array = _dart_bodies(thrower_id)
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	var aim_target := TableView.BOARD_CENTER + Vector3(aim.x * radius, aim.y * radius, 0)
 	var speed: float = lerpf(config.minimum_speed, config.maximum_speed, charge)
@@ -669,6 +724,12 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 		if crosses_board:
 			time = board_time
 		var point: Vector3 = config.position_at(start, initial, time)
+		# 몸이 먼저다: 벽보다 앞에 있는 사람에게 맞으면 거기서 끝난다.
+		var body: Dictionary = BodyHit.first(previous, point, bodies)
+		if not body.is_empty():
+			var victim: MatchPlayer = bodies[int(body.index)].player
+			return _flight_result(start, body.point, maxf(lerpf(previous_time, time, float(body.ratio)), 0.02),
+				Vector2.INF, 0, "%s 몸에 맞음!" % victim.display_name, victim.peer_id)
 		var query := PhysicsRayQueryParameters3D.create(previous, point, 1)
 		var collision: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 		if not collision.is_empty():
@@ -686,10 +747,26 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 	return _flight_result(start, previous, config.flight_limit, Vector2.INF, 0, "비행 제한시간 · 실패")
 
 
-func _flight_result(start: Vector3, target: Vector3, duration: float, hit: Vector2, points: int, reason: String) -> Dictionary:
+## 몸으로 막고 있는 사람들(몸 판정용). **몸막 구역 안에 선 사람만** 센다.
+## 투척선 뒤 던지는 칸에는 여럿이 몰려 서기 때문에(차례를 기다리거나 구경하거나) 거기까지 세면
+## 서로 끊임없이 막혀 경기가 성립하지 않는다 — 막는 것은 레인 안으로 들어온 사람의 몫이다.
+func _dart_bodies(thrower_id: int) -> Array:
+	var bodies: Array = []
+	for id: int in actors:
+		var other := actors[id] as PlayerView
+		if id == thrower_id or not other.visible or other.identity == null or other.seated:
+			continue
+		if TableView.in_block_zone(other.global_position):
+			bodies.append({"player": other.identity, "position": other.global_position})
+	return bodies
+
+
+## victim = 몸에 맞은 사람의 peer ID(0 = 사람에게 안 맞음). 스냅샷으로 모든 화면이 같은 값을 본다.
+func _flight_result(start: Vector3, target: Vector3, duration: float, hit: Vector2, points: int, reason: String,
+		victim: int = 0) -> Dictionary:
 	# 실패의 무한 좌표는 네트워크/JSON에 넣지 않는다.
 	return {"start": start, "target": target, "duration": duration, "x": hit.x if hit.is_finite() else 99.0,
-		"y": hit.y if hit.is_finite() else 99.0, "points": points, "base": points, "reason": reason}
+		"y": hit.y if hit.is_finite() else 99.0, "points": points, "base": points, "reason": reason, "victim": victim}
 
 
 func sync_room(room: RoomState) -> void:

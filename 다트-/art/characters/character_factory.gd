@@ -41,6 +41,19 @@ static func create(index: int) -> Node3D:
 	return _build(NAMES[index], index, SKIN_COLORS[index], PlayerLook.hex(index), eye_scale, brow_y, 0.3 if index == 3 else 0.0, index)
 
 
+## 펍 손님 NPC(2026-11-02). 몸·관절은 선수와 똑같이 쓰고 피부·옷·머리만 바꾼다
+## — 나중에 의상 교체 구조가 생기면 손님도 그대로 따라온다.
+const GUEST_NAMES = ["GUEST_A", "GUEST_B", "GUEST_C", "GUEST_D"]
+const GUEST_SKINS = ["c89a6e", "e0b893", "a97b54", "d7ab80"]
+const GUEST_TOPS = ["5f7384", "86566b", "6d7f58", "8a6a44"]
+
+
+static func create_guest(index: int) -> Node3D:
+	# key 는 재질 이름을 가르는 번호다. 선수(0~3)·바텐더(9)와 겹치지 않게 20번대를 쓴다.
+	return _build(GUEST_NAMES[index], 20 + index, GUEST_SKINS[index], GUEST_TOPS[index],
+		1.0 if index % 2 == 0 else 0.85, 1.44, 0.15 if index == 2 else 0.0, index)
+
+
 ## 바텐더 시안: 흰 셔츠 + 조끼 + 나비넥타이 + 콧수염, 민머리. 펍 바 뒤에 서 있는 NPC 자리표시.
 static func create_bartender() -> Node3D:
 	var root := _build(BARTENDER_NAME, 9, "c99a72", "e9e3d6", 0.9, 1.43, 0.0, 4)
