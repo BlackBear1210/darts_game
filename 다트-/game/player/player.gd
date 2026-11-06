@@ -1,7 +1,7 @@
 class_name PlayerView
 extends CharacterBody3D
 ## 입력 소유권은 Game에 있고 이 노드는 방장 시뮬레이션과 캐릭터 표현을 소유한다.
-## 겉모습(디자인 담당): 자리(seat)마다 정해진 캐릭터 씬(art/player_look.gd) + 코드 몸짓(art/characters/character_rig.gd).
+## 겉모습(디자인 담당): 리깅 캐릭터(art/player_look.gd) + 모션 재생(art/characters/character_motion.gd).
 ## 충돌 캡슐·눈높이·속도는 예전 그대로다 → 겉모습을 바꿔도 이동·판정은 바뀌지 않는다.
 
 ## 자리 색. 디자인 약속표(PlayerLook) 하나만 보도록 그대로 가져온다.
@@ -63,7 +63,7 @@ var knockback: Vector3 = Vector3.ZERO
 ## 가챠 "왕머리" 같은 장난 효과(보이기만). LoungeWorld 가 매 프레임 넣는다.
 var head_scale: float = 1.0
 var _model: Node3D
-var _rig: CharacterRig
+var _rig: CharacterMotion
 var _label: Label3D
 var _collision: CollisionShape3D
 var _speaker: Sprite3D
@@ -121,21 +121,19 @@ func _refresh_label() -> void:
 func _process(delta: float) -> void:
 	if _rig == null:
 		return
-	var posture := CharacterRig.Posture.SEAT if seated else (CharacterRig.Posture.CROUCH if crouched else CharacterRig.Posture.STAND)
+	var posture := CharacterMotion.Posture.SEAT if seated else (CharacterMotion.Posture.CROUCH if crouched else CharacterMotion.Posture.STAND)
 	var ground_speed := Vector2(velocity.x, velocity.z).length() / SPEED
 	var airborne := not seated and position.y > 0.05
 	_rig.cheering = ready_pose or taunting
 	_rig.drinking = drink_pose
-	_rig.animate(delta, ground_speed, posture, airborne, pitch, aiming)
 	_shown_lean = lerpf(_shown_lean, seat_lean if seated else 0.0, 1.0 - exp(-18.0 * delta))
-	# 두 손 참여 동작과 엿보기는 시각 표현만 바꾼다. 충돌 캡슐은 움직이지 않는다.
-	# 왕머리: 목 관절을 키우면 머리·얼굴·머리카락이 함께 커진다(충돌 캡슐은 그대로).
-	_rig.neck.scale = _rig.neck.scale.lerp(Vector3.ONE * head_scale, minf(1, delta * 8))
-	# 엿보기: 골반에 붙은 Body 관절을 옆으로 돌리면 윗몸·팔·머리가 함께 기운다(eye_position 과 같은 각도).
-	# 모델은 180도 돌아 있어(_dress) 모델의 rotation.z + 가 이 노드의 오른쪽(+X) 기울기다.
+	# 왕머리·엿보기는 시각 표현만 바꾼다. 충돌 캡슐은 움직이지 않는다.
+	_rig.head_scale = head_scale
+	# 엿보기: 윗몸·팔·머리가 함께 기운다(eye_position 과 같은 각도).
 	var peek: float = peek_amount()
-	_rig.body.rotation.z = peek * PEEK_ANGLE
-	_rig.neck.rotation.z = peek * PEEK_HEAD_TILT
+	_rig.lean = peek * PEEK_ANGLE
+	_rig.head_tilt = peek * PEEK_HEAD_TILT
+	_rig.animate(delta, ground_speed, posture, airborne, pitch, aiming)
 	# 옆자리 카드가 뒤집힐 만큼 기울었을 때만 이름표에 표시한다(SeatCards 와 같은 기준).
 	var tagged: bool = absf(peek) >= PEEK_TAG
 	if tagged != _peek_tagged and identity != null:
@@ -173,17 +171,16 @@ func play_throw() -> void:
 		_rig.play_throw()
 
 
-## 자리 캐릭터를 입힌다. 캐릭터 정면은 +Z 이고 이 노드는 -Z 가 정면이라 모델만 180도 돌린다.
+## 자리 캐릭터를 입힌다. 캐릭터 정면과 이 노드 정면이 둘 다 -Z 라 돌리지 않는다.
 func _dress(seat: int) -> void:
 	if _model != null:
 		remove_child(_model)
 		_model.queue_free()
 	_model = PlayerLook.character(seat)
 	_model.name = "Model"
-	_model.rotation.y = PI
 	add_child(_model)
-	# 네 명이 같은 박자로 깜빡이지 않게 자리마다 시작 시각을 다르게 준다.
-	_rig = CharacterRig.new(_model, seat * 0.9)
+	# 네 명이 같은 박자로 움직이지 않게 자리마다 시작 시각을 다르게 준다.
+	_rig = CharacterMotion.new(_model, seat * 0.9)
 
 
 func _set_layers(node: Node, layer: int) -> void:

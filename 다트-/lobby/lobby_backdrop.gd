@@ -23,6 +23,8 @@ const FRAME_FOV: float = 52.0
 ## 던지는 캐릭터(등을 보이며 과녁을 겨눈다).
 const THROWER_SEAT: int = 1
 const THROWER_AT := Vector3(-1.5, 0.0, -2.5)
+## 던지는 캐릭터 기준 다트가 손을 떠나는 자리(Dart_Throw 39프레임의 오른손).
+const THROW_HAND := Vector3(0.18, 1.43, -0.5)
 ## 소개용 다트 간격(초)과 과녁에 남는 최대 개수.
 const ATTRACT_EVERY: float = 3.2
 const MAX_DARTS: int = 3
@@ -32,7 +34,7 @@ var _camera: Camera3D
 var _table: TableView
 var _darts_root: Node3D
 var _thrower: Node3D
-var _rig: CharacterRig
+var _rig: CharacterMotion
 var _next_attract: float = 1.4
 var _time: float = 0.0
 var _rng := RandomNumberGenerator.new()
@@ -60,10 +62,10 @@ func _ready() -> void:
 	_viewport.add_child(_thrower)
 	_thrower.position = THROWER_AT
 	# 던지는 사람은 카메라 뒤쪽에 서 있다 → 다트만 화면 왼쪽에서 날아 들어온다(얼굴이 카메라를 보는 어색한 구도 방지).
-	# 캐릭터 정면은 +Z → 과녁 쪽을 보도록 돌린다.
+	# 캐릭터 정면은 -Z → 과녁 쪽을 보도록 돌린다.
 	var to_board := Vector3(0.0, 0.0, TableView.BOARD_CENTER.z) - THROWER_AT
-	_thrower.rotation.y = atan2(to_board.x, to_board.z)
-	_rig = CharacterRig.new(_thrower, 0.4)
+	_thrower.rotation.y = atan2(-to_board.x, -to_board.z)
+	_rig = CharacterMotion.new(_thrower, 0.4)
 	_rng.seed = 2026
 
 
@@ -77,11 +79,11 @@ func _process(delta: float) -> void:
 	_camera.position = CAMERA_AT + Vector3(sin(_time * 0.31) * 0.06, sin(_time * 0.47) * 0.03, 0.0)
 	_camera.look_at(_look_at() + Vector3(sin(_time * 0.23) * 0.05, 0.0, 0.0))
 	var aiming: bool = _next_attract - _time < 1.1
-	_rig.animate(delta, 0.0, CharacterRig.Posture.STAND, false, 0.12, aiming)
+	_rig.animate(delta, 0.0, CharacterMotion.Posture.STAND, false, 0.12, aiming)
 	if _time >= _next_attract:
 		_next_attract = _time + ATTRACT_EVERY + _rng.randf_range(-0.4, 0.6)
 		_rig.play_throw()
-		var hand := _thrower.global_position + Vector3(0.0, 1.72, 0.0) + _thrower.global_basis.z * 0.35
+		var hand := _thrower.to_global(THROW_HAND)
 		var aim := Vector2(_rng.randf_range(-0.55, 0.55), _rng.randf_range(-0.55, 0.55))
 		_throw(hand, aim, 0.5)
 

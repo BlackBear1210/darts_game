@@ -8,9 +8,12 @@ const MeshKit = preload("res://art/mesh_kit.gd")
 const RADIUS: float = 0.95
 const WEDGES: int = 16
 const SPIN_SPEED: float = 1.5
-## 묶인 캐릭터 크기·발 위치(원판 중심 기준).
-const VICTIM_SCALE: float = 0.9
+## 묶인 캐릭터 크기·발 위치(원판 중심 기준). 키 1.85m 캐릭터가 원판 안에 들어오는 크기다.
+const VICTIM_SCALE: float = 0.75
 const VICTIM_FEET_Y: float = -0.84
+## 판정용 몸 치수(캐릭터 원래 크기 기준, m): 머리 중심 높이, 몸통·다리 상자 윗면.
+const VICTIM_HEAD_HEIGHT: float = 1.6
+const VICTIM_BODY_TOP: float = 1.3
 
 var spinner: Node3D
 var speed: float = SPIN_SPEED
@@ -53,19 +56,15 @@ func _process(delta: float) -> void:
 		_flip_in = _random.randf_range(2.0, 4.0)
 
 
-## 꼴찌 캐릭터를 팔다리를 벌린 채 원판에 묶는다. 캐릭터 정면(+Z)이 던지는 사람 쪽이다.
+## 꼴찌 캐릭터를 팔다리를 벌린 채 원판에 묶는다. 캐릭터 정면(-Z)을 돌려 던지는 사람 쪽(+Z)을 보게 한다.
 func attach(seat: int) -> Node3D:
 	var model: Node3D = PlayerLook.character(seat)
 	model.name = "Victim"
 	model.position = Vector3(0, VICTIM_FEET_Y, 0.03)
+	model.rotation.y = PI
 	model.scale = Vector3.ONE * VICTIM_SCALE
 	spinner.add_child(model)
-	# 팔은 위로 비스듬히(만세), 다리는 양옆으로. L = 캐릭터 본인 왼쪽 = +X.
-	var pose := {"Body/ArmL": 2.25, "Body/ArmR": -2.25, "LegL": 0.32, "LegR": -0.32}
-	for path: String in pose:
-		var joint := model.get_node_or_null(path) as Node3D
-		if joint != null:
-			joint.rotation.z = float(pose[path])
+	CharacterMotion.freeze(model, "Wheel_Spread")
 	return model
 
 
@@ -77,10 +76,10 @@ func stick(dart: Node3D) -> void:
 ## 판 위 한 점이 묶인 사람 몸(머리 원 + 몸통·다리 상자)에 맞았는지. 팔은 판정하지 않는다.
 func hits_body(world_point: Vector3) -> bool:
 	var local: Vector3 = spinner.to_local(world_point)
-	var head := Vector2(0, VICTIM_FEET_Y + 1.34 * VICTIM_SCALE)
+	var head := Vector2(0, VICTIM_FEET_Y + VICTIM_HEAD_HEIGHT * VICTIM_SCALE)
 	if Vector2(local.x, local.y).distance_to(head) <= 0.19:
 		return true
-	return absf(local.x) <= 0.2 and local.y >= VICTIM_FEET_Y and local.y <= VICTIM_FEET_Y + 1.08 * VICTIM_SCALE
+	return absf(local.x) <= 0.2 and local.y >= VICTIM_FEET_Y and local.y <= VICTIM_FEET_Y + VICTIM_BODY_TOP * VICTIM_SCALE
 
 
 ## 원판 회전을 1.2초에 걸쳐 멈춘다.

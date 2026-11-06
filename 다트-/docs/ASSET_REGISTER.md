@@ -8,7 +8,8 @@
 | 항목 | 경로 | 출처·제작 방법 | 외부 에셋 | 비고 |
 |---|---|---|---|---|
 | 펍 환경 | `art/pub/pub.tscn`, `art/pub/pub_builder.gd` | 아스트라 AI 도움으로 작성한 GDScript 도형 조합 | 아니오 | 외부 3D 파일·텍스처·로고 없음 |
-| 캐릭터 4종 | `art/characters/` | 디자인 문서의 비율로 만든 매개변수 모델 | 아니오 | 참고 이미지 임포트 없음 |
+| 플레이어·봇 캐릭터 | `art/characters/rigged/character_library.glb` | 팀 캐릭터 시트 기준 Tripo 생성 후 Blender 로 다듬고 리깅(v18). 게임 모션은 `character_assets/.../game_ready_v19/build_game_motions.py` 로 추가 | 아니오 | 텍스처 없이 단색 재질. Tripo 생성물 이용 조건은 팀 확인 필요 |
+| 펍 NPC(손님·바텐더) | `art/characters/` | 디자인 문서의 비율로 만든 매개변수 모델 | 아니오 | 참고 이미지 임포트 없음 |
 | 다트판(아트) | `art/pub/pub_builder.gd`, `art/board_spec.gd` | 표준 규격 수치 + 팀 `BoardLayout` 비율 | 아니오 | 기존 판 이미지 없음 |
 | 쇼케이스 효과음 | `art/showcase/synth_audio.gd` | 사인파·난수 즉석 합성 | 아니오 | 녹음·샘플 없음 |
 | 아이콘 | `icon.svg` | 팀 프로젝트 기본 | — | |

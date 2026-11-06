@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "fps": 30,
+  "bones": 54,
+  "clips": {
+    "Look_Left": {
+      "frames": 60,
+      "loop": false,
+      "label": "왼쪽 보기",
+      "events": [],
+      "duration_seconds": 2.0
+    },
+    "Look_Right": {
+      "frames": 60,
+      "loop": false,
+      "label": "오른쪽 보기",
+      "events": [],
+      "duration_seconds": 2.0
+    },
+    "Look_Down": {
+      "frames": 60,
+      "loop": false,
+      "label": "아래 보기",
+      "events": [],
+      "duration_seconds": 2.0
+    },
+    "Idle": {
+      "frames": 60,
+      "loop": true,
+      "label": "기본 서기",
+      "events": [],
+      "duration_seconds": 2.0
+    },
+    "Hand_Grip": {
+      "frames": 36,
+      "loop": false,
+      "label": "손 쥐기",
+      "events": [
+        {
+          "frame": 12,
+          "name": "grip_closed",
+          "time_seconds": 0.4
+        }
+      ],
+      "duration_seconds": 1.2
+    },
+    "Dart_Throw": {
+      "frames": 84,
+      "loop": false,
+      "label": "다트 던지기",
+      "events": [
+        {
+          "frame": 39,
+          "name": "dart_release",
+          "time_seconds": 1.3
+        }
+      ],
+      "duration_seconds": 2.8
+    },
+    "Sit_Down": {
+      "frames": 36,
+      "loop": false,
+      "label": "앉기",
+      "events": [
+        {
+          "frame": 36,
+          "name": "seated",
+          "time_seconds": 1.2
+        }
+      ],
+      "duration_seconds": 1.2
+    },
+    "Seated_Idle": {
+      "frames": 60,
+      "loop": true,
+      "label": "앉은 상태",
+      "events": [],
+      "duration_seconds": 2.0
+    },
+    "Stand_Up": {
+      "frames": 36,
+      "loop": false,
+      "label": "일어나기",
+      "events": [
+        {
+          "frame": 36,
+          "name": "standing",
+          "time_seconds": 1.2
+        }
+      ],
+      "duration_seconds": 1.2
+    },
+    "Jump": {
+      "frames": 42,
+      "loop": false,
+      "label": "점프",
+      "events": [
+        {
+          "frame": 10,
+          "name": "jump_takeoff",
+          "time_seconds": 0.3333333333333333
+        },
+        {
+          "frame": 29,
+          "name": "jump_land",
+          "time_seconds": 0.9666666666666667
+        }
+      ],
+      "duration_seconds": 1.4
+    },
+    "Rig_Check": {
+      "frames": 48,
+      "loop": true,
+      "label": "변형 검사",
+      "events": [],
+      "duration_seconds": 1.6
+    },
+    "Card_Hold_L": {
+      "frames": 30,
+      "loop": true,
+      "label": "왼손 카드 레이어",
+      "events": [],
+      "duration_seconds": 1.0
+    },
+    "Dart_Throw_Card": {
+      "frames": 84,
+      "loop": false,
+      "label": "다트 던지기 + 카드",
+      "events": [
+        {
+          "frame": 39,
+          "name": "dart_release",
+          "time_seconds": 1.3
+        }
+      ],
+      "duration_seconds": 2.8
+    },
+    "Sit_Down_Card": {
+      "frames": 36,
+      "loop": false,
+      "label": "앉기 + 카드",
+      "events": [
+        {
+          "frame": 36,
+          "name": "seated",
+          "time_seconds": 1.2
+        }
+      ],
+      "duration_seconds": 1.2
+    },
+    "Seated_Idle_Card": {
+      "frames": 60,
+      "loop": true,
+      "label": "앉은 상태 + 카드",
+      "events": [],
+      "duration_seconds": 2.0
+    },
+    "Jump_Card": {
+      "frames": 42,
+      "loop": false,
+      "label": "점프 + 카드",
+      "events": [
+        {
+          "frame": 10,
+          "name": "jump_takeoff",
+          "time_seconds": 0.3333333333333333
+        },
+        {
+          "frame": 29,
+          "name": "jump_land",
+          "time_seconds": 0.9666666666666667
+        }
+      ],
+      "duration_seconds": 1.4
+    }
+  },
+  "default": "Idle",
+  "transitions": {
+    "Sit_Down": "Seated_Idle",
+    "Stand_Up": "Idle",
+    "Dart_Throw": "Idle",
+    "Jump": "Idle",
+    "Hand_Grip": "Idle",
+    "Look_Left": "Idle",
+    "Look_Right": "Idle",
+    "Look_Down": "Idle"
+  },
+  "seat": {
+    "seat_top_height_m": 0.43,
+    "center_gltf": [
+      0,
+      0.43,
+      0.28
+    ]
+  },
+  "root_motion": {
+    "Sit_Down": "hips lower 0.35m and shift back 0.26m; feet planted",
+    "Jump": "vertical visual root motion; do not add it twice when integrating a physics controller"
+  },
+  "dart": {
+    "socket": "Socket_Dart_R",
+    "prop": "props/dart_preview.glb",
+    "release_event": "dart_release",
+    "pinch_bone_tip_distance_m": 0.022376075260612874,
+    "stance": "front-facing torso, pelvis and parallel planted feet; only right arm moves",
+    "phases": {
+      "raise": [
+        0,
+        15
+      ],
+      "aim": [
+        15,
+        27
+      ],
+      "draw_back": [
+        27,
+        34
+      ],
+      "throw": [
+        34,
+        44
+      ],
+      "follow_through": [
+        44,
+        60
+      ],
+      "recover": [
+        60,
+        84
+      ]
+    },
+    "hand": "negative local-X finger flexion toward palm; opposed thumb-index grip"
+  }
+}

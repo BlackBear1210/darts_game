@@ -1,3 +1,14 @@
+# 최신 작업 — 리깅 캐릭터(v18) 게임 적용 (2026-11-06)
+
+- 상태: 헤드리스 15종 + `run_first_idea` PASS, 실제 방 화면 촬영 확인. 사람이 F5 로 직접 플레이해 보지는 않았다.
+- 플레이어·봇·로비·벌칙 원판 캐릭터를 `art/characters/rigged/player_character.tscn` 하나로 바꿨다(GLB 상속, 에디터에서 같은 모습). 셔츠만 자리 색이다.
+- 모션 선택은 `art/characters/character_motion.gd`, 팔·고개·기울기는 `character_pose_layer.gd`.
+- v18 원본은 그대로다. 없던 모션은 `character_assets/.../game_ready_v19/build_game_motions.py` 가 복사본에 더한다.
+- 펍 손님·바텐더와 1인칭 손은 예전 모델이다.
+- 상세: `작업기록/2026-11-06_리깅캐릭터_게임적용.md`.
+
+---
+
 # 최신 작업 — 몸으로 다트 막기 F5 이식 (2026-11-02)
 
 - 상태: 헤드리스 17종 PASS(새 `test_body_block` 포함), **미커밋**.

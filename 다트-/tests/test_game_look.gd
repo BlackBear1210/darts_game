@@ -5,6 +5,8 @@ extends SceneTree
 ##   & $godot --headless --path . --script res://art/pub/pub_builder.gd
 
 const PUB_GAME_SCENE := "res://art/pub/pub_game.tscn"
+## 기본 차림 조각 수(머리·귀·눈 4·눈썹 2·입·양팔·머리카락·상의·하의·신발).
+const WORN_PART_COUNT := 15
 
 
 func _initialize() -> void:
@@ -14,7 +16,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_check_room_matches_rules()
 	await _check_table_scene()
-	_check_characters_and_rig()
+	await _check_characters_and_rig()
 	await _check_player_view()
 	await _check_board_follows_layout()
 	await _check_dart_paint_and_scale()
@@ -62,39 +64,92 @@ func _check_table_scene() -> void:
 	await process_frame
 
 
-## 캐릭터 4종 + 바텐더: 관절 이름이 있고, 몸짓이 자세마다 관절을 움직인다.
+## 네 자리 캐릭터 + 바텐더: 자세마다 맞는 모션을 틀고, 팔 자세가 온몸 모션 위에 얹힌다.
 func _check_characters_and_rig() -> void:
 	for seat in range(4):
-		var model := PlayerLook.character(seat)
-		var rig := CharacterRig.new(model, 0.0)
-		assert(rig.is_valid(), "관절 없음: " + PlayerLook.CHARACTER_SCENES[seat])
-		root.add_child(model)
-		# 앉기: 다리가 앞으로(음수) 든다.
-		_animate(rig, 1.0, 0.0, CharacterRig.Posture.SEAT, false, false)
-		assert(absf(rig.leg_l.rotation.x - CharacterRig.SEAT_LEG_ANGLE) < 0.05)
-		# 숙이기: 다리가 줄고 몸이 낮아진다.
-		_animate(rig, 1.0, 0.0, CharacterRig.Posture.CROUCH, false, false)
-		assert(rig.leg_l.scale.y < 0.7 and rig.body.position.y < CharacterRig.HIP_HEIGHT * 0.7)
-		# 서서 조준: 오른팔을 앞-위로 든다.
-		_animate(rig, 1.0, 0.0, CharacterRig.Posture.STAND, false, true)
-		assert(absf(rig.arm_r.rotation.x - CharacterRig.AIM_ARM_ANGLE) < 0.05)
-		# 던지기: 팔이 휘둘러 내려간다.
-		rig.play_throw()
-		_animate(rig, CharacterRig.THROW_SECONDS * 0.95, 0.0, CharacterRig.Posture.STAND, false, false)
-		assert(rig.arm_r.rotation.x > -1.0)
-		# 걷기: 다리가 앞뒤로 엇갈린다.
-		_animate(rig, 0.2, 1.0, CharacterRig.Posture.STAND, false, false)
-		assert(absf(rig.leg_l.rotation.x - rig.leg_r.rotation.x) > 0.1)
-		model.queue_free()
+		var worn := PlayerLook.character(seat)
+		var parts := _worn_parts(worn)
+		assert(parts.size() == WORN_PART_COUNT and "Top_Reference" in parts and "Bottom_Shorts" not in parts, "기본 차림이 아닙니다: " + str(parts))
+		assert(_shirt_color(worn) == PlayerLook.COLORS[seat], "셔츠가 자리 색이 아닙니다")
+		worn.free()
+	var model := PlayerLook.character(0)
+	root.add_child(model)
+	var rig := CharacterMotion.new(model, 0.0)
+	var skeleton := model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	# 팔·머리 덧씌움은 모디파이어 결과라 뼈 값이 아니라 뼈에 붙은 노드(BoneAttachment3D)로 잰다.
+	var hand_l := model.find_child("hand_L", true, false) as Node3D
+	var hand_r := model.find_child("hand_R", true, false) as Node3D
+	# 처음부터 앉아 있으면 앉는 동작 없이 앉은 모션이다.
+	await _animate(rig, 0.1, 0.0, CharacterMotion.Posture.SEAT, false, false)
+	assert(rig.clip == CharacterMotion.SEATED)
+	assert(_bone_height(skeleton, "hips") < 0.75, "앉았는데 골반이 높습니다")
+	# 일어서면 일어나는 모션을 끝낸 뒤 서기로 돌아간다.
+	await _animate(rig, 0.1, 0.0, CharacterMotion.Posture.STAND, false, false)
+	assert(rig.clip == CharacterMotion.STAND_UP)
+	await _animate(rig, 1.4, 0.0, CharacterMotion.Posture.STAND, false, false)
+	assert(rig.clip == CharacterMotion.IDLE)
+	# 숙이기: 골반이 낮아진다.
+	await _animate(rig, 0.6, 0.0, CharacterMotion.Posture.CROUCH, false, false)
+	assert(rig.clip == CharacterMotion.CROUCH_IDLE and _bone_height(skeleton, "hips") < 0.55)
+	# 걷기: 발이 앞뒤로 엇갈린다.
+	await _animate(rig, 0.3, 1.0, CharacterMotion.Posture.STAND, false, false)
+	assert(rig.clip == CharacterMotion.WALK)
+	await _animate(rig, 0.1, 1.0, CharacterMotion.Posture.STAND, false, false)
+	# 점프: 공중 모션이고 뼈대 자체는 위로 뜨지 않는다(높이는 PlayerView 물리).
+	await _animate(rig, 0.3, 0.0, CharacterMotion.Posture.STAND, true, false)
+	assert(rig.clip == CharacterMotion.JUMP and _bone_height(skeleton, "root") < 0.01)
+	# 조준: 걷는 중에도 오른손이 어깨보다 높이 올라온다.
+	await _animate(rig, 0.8, 1.0, CharacterMotion.Posture.STAND, false, true)
+	assert(hand_r.global_position.y > 1.3, "조준 팔이 안 올라갑니다")
+	# 던지기: 휘두른 뒤 팔이 내려온다.
+	rig.play_throw()
+	await _animate(rig, 1.2, 0.0, CharacterMotion.Posture.STAND, false, false)
+	assert(hand_r.global_position.y < 1.0, "던진 뒤 팔이 안 내려옵니다")
+	# 카드 들기: 왼손이 가슴 앞으로 올라오고, 부채는 손을 따라간다.
+	rig.holding_cards = true
+	var fan := Node3D.new()
+	fan.name = "LeftHandCards"
+	rig.attach_cards(fan)
+	await _animate(rig, 0.6, 1.0, CharacterMotion.Posture.STAND, false, false)
+	assert(hand_l.global_position.y > 0.85, "카드 든 왼손이 안 올라갑니다")
+	assert(fan.global_position.distance_to(hand_l.global_position) < 0.2)
+	# 왕머리: 머리 뼈가 커진다.
+	rig.head_scale = 2.0
+	await _animate(rig, 0.8, 0.0, CharacterMotion.Posture.STAND, false, false)
+	assert((model.find_child("head", true, false) as Node3D).global_basis.get_scale().y > 1.8, "왕머리가 안 커집니다")
+	model.queue_free()
 	var bartender := (load("res://art/characters/chr_bartender.tscn") as PackedScene).instantiate() as Node3D
 	assert(CharacterRig.new(bartender).is_valid() and bartender.find_child("Vest", true, false) != null)
 	bartender.free()
 
 
-func _animate(rig: CharacterRig, seconds: float, speed: float, posture: CharacterRig.Posture, airborne: bool, aiming: bool) -> void:
-	var frames := int(seconds * 60)
-	for i in range(frames):
-		rig.animate(1.0 / 60.0, speed, posture, airborne, 0.0, aiming)
+## 실제 시간으로 프레임을 돌린다. AnimationPlayer 가 실제 시간으로 흐르고 뼈에는 프레임이 지나야 반영된다.
+func _animate(rig: CharacterMotion, seconds: float, speed: float, posture: CharacterMotion.Posture, airborne: bool, aiming: bool) -> void:
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < until:
+		rig.animate(root.get_process_delta_time(), speed, posture, airborne, 0.0, aiming)
+		await process_frame
+
+
+func _worn_parts(model: Node3D) -> Array[String]:
+	var parts: Array[String] = []
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mesh.visible:
+			parts.append(str(mesh.name))
+	return parts
+
+
+func _bone_height(skeleton: Skeleton3D, bone: String) -> float:
+	return skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin.y
+
+
+func _shirt_color(model: Node3D) -> Color:
+	var top := model.find_child("Top_Reference", true, false) as MeshInstance3D
+	for surface in range(top.mesh.get_surface_count()):
+		var shirt := top.get_surface_override_material(surface) as StandardMaterial3D
+		if shirt != null:
+			return shirt.albedo_color
+	return Color.BLACK
 
 
 ## PlayerView: 자리 캐릭터를 입고, 모든 조각이 자기 자리 렌더 레이어에 있다(자기 카메라에서만 빠진다).
@@ -109,13 +164,13 @@ func _check_player_view() -> void:
 	view.configure(player)
 	await process_frame
 	var model := view.get_node("Model") as Node3D
-	assert(model.scene_file_path == PlayerLook.CHARACTER_SCENES[2])
-	assert(is_equal_approx(model.rotation.y, PI))
+	assert(model.scene_file_path == PlayerLook.CHARACTER_SCENE)
+	assert(is_zero_approx(model.rotation.y), "캐릭터 정면은 PlayerView 정면과 같은 -Z 입니다")
 	var visuals := view.find_children("*", "VisualInstance3D", true, false)
-	assert(visuals.size() > 20)
+	assert(visuals.size() > WORN_PART_COUNT)
 	for visual: VisualInstance3D in visuals:
 		assert(visual.layers == 1 << 3, "레이어가 다른 조각: " + str(visual.name))
-	assert((view.get_node("Model/Body/ArmR") as Node3D) != null)
+	assert(view.get("_rig") is CharacterMotion)
 	view.queue_free()
 	await process_frame
 

@@ -10,8 +10,10 @@
 |---|---|---|
 | 펍 방 전체(벽·바닥·바·창문·조명·로프·주크박스·바텐더) | `pub/game_room_builder.gd` → 생성물 `pub/pub_game.tscn` | `game/table/table.tscn`의 자식 `Pub` |
 | 다트판(칸·숫자·뒤판) | `board_art.gd` | `game/board/board.gd`(BoardView)가 실행 때 그림. 카드로 숫자 순서가 바뀌면 다시 그림 |
-| 캐릭터 4종 + 바텐더 | `characters/character_factory.gd` → 생성물 `characters/chr_*.tscn` | `game/player/player.gd`(PlayerView)가 자리 번호로 골라 입힘 |
-| 캐릭터 몸짓(걷기·앉기·숙이기·점프·조준·던지기·깜빡임) | `characters/character_rig.gd` | PlayerView `_process()` |
+| 플레이어·봇 캐릭터(리깅, 셔츠만 자리 색) | `characters/rigged/player_character.tscn` | `player_look.gd` `character()` → `game/player/player.gd`(PlayerView `_dress`) |
+| 펍 NPC(손님·바텐더) | `characters/character_factory.gd` → 생성물 `characters/chr_*.tscn` | `pub/game_room_builder.gd` |
+| 플레이어·봇 몸짓(서기·걷기·숙이기·점프·앉기·조준·던지기·카드 들기·가리키기·만세·마시기·엿보기·왕머리·깜빡임) | `characters/character_motion.gd` + `characters/character_pose_layer.gd` | PlayerView `_process`, 로비 `lobby_backdrop.gd` |
+| 펍 NPC 몸짓 | `characters/character_rig.gd` | `pub/npc_idle.gd` |
 | 자리 색·모양(●▲■◆)·캐릭터 이름 | `player_look.gd`(PlayerLook) | 이름표·발밑 매트·스툴·HUD·칠판·다트 깃이 모두 이 표 하나를 봄 |
 | 1인칭 손(자리 색 소매) | `characters/character_factory.gd` `create_hand()` | `game/game.gd` `_equip_hand()` |
 | 다트(은 촉·금 몸통·자리 색 깃) | `game/dart/dart.tscn` + `paint()` | 꽂힐 때 2.2배로 커짐(과녁이 실제의 2.5배라서) |
@@ -20,6 +22,22 @@
 
 **충돌(부딪힘)은 디자인 쪽에 없다.** 벽·테이블·바·주크박스·스툴 장애물의 충돌 상자는 `game/table/table.gd`(TableView)가 상수로 만든다.
 그래서 사람이 부딪히는 가구를 옮길 때는 TableView 상수(`BAR_BOX`, `JUKEBOX_BOX`, `OBSTACLES` …)를 같이 바꾸고 생성기를 다시 돌린다.
+
+## 리깅 캐릭터 다시 만들기
+
+원본은 `character_assets/reference_character_20261105/` 다. `animated_base_v18/` 은 고치지 않고,
+`game_ready_v19/build_game_motions.py` 가 v18 을 열어 게임에 없던 모션을 더한 뒤 GLB 를 내보낸다.
+
+```
+blender -b animated_base_v18/character_animated.blend --python game_ready_v19/build_game_motions.py -- <game_ready_v19 절대 경로> <art/characters/rigged/character_library.glb 절대 경로>
+```
+
+- 경로는 절대 경로로 넘긴다. 내보낸 뒤 Godot `--headless --import` 로 다시 가져온다.
+- `character_library.glb.import` 의 `animation/remove_immutable_tracks=false` 를 유지한다. 켜면 기본 자세와 같은 뼈 트랙이 빠져 모션을 섞을 때 앞 모션 자세가 남는다.
+- 옷을 바꾸려면 에디터에서 `player_character.tscn` 을 열어 `Character_Rig/Skeleton3D` 아래 조각의 보이기를 켜고 끈다. 셔츠 자리 색은 실행 때 칠해지므로 에디터에서는 기본 색으로 보인다.
+- 모션 미리 보기: 같은 씬에서 `AnimationPlayer` 를 고르면 아래 애니메이션 패널에서 클립을 틀어 볼 수 있다.
+- 게임 모션: `Walk`, `Crouch_Idle`, `Crouch_Walk`, `Jump_Air`(높이 이동 제거), `Sit_Stool`·`Seated_Stool`·`Stand_Stool`(스툴 높이 0.6m), `Cheer`, `Point_R`, `Drink_R`, `Wheel_Spread`. v18 그대로 쓰는 것: `Idle`, `Dart_Throw`, `Card_Hold_L`.
+- 실제 방에서 확인: `godot --path . --script res://tests/render_characters.gd` → `output/character_motions/`.
 
 ## 실행
 
@@ -37,8 +55,12 @@
 | `board_spec.gd` | 쇼케이스 다트판의 실제 크기(m)·높이·투척 거리 | 예 |
 | `mesh_kit.gd` | 상자·원기둥·부채꼴 같은 도형 메시와 재질 캐시 | 예 |
 | `static_batch.gd` | 실행 때 움직이지 않는 메시를 묶어 그리기 호출 수를 줄인다(F5 방에도 적용) | 예 |
-| `characters/character_factory.gd` | 3등신 캐릭터 4종 + 바텐더 + 1인칭 손. 관절(피벗) 구조 포함 | 예 |
-| `characters/character_rig.gd` | 관절을 돌려 몸짓을 만든다(뼈대·애니 파일 없음) | 예 |
+| `characters/rigged/player_character.tscn` | 플레이어·봇 캐릭터 씬. 아래 GLB 를 상속해 기본 차림만 보이게 둔다. 에디터로 열면 게임과 같은 모습이다 | 예 — 조각 보이기를 켜고 끄면 게임 옷이 바뀐다 |
+| `characters/rigged/character_library.glb` | v18 리깅 + 게임 모션. 옷·머리 조각이 모두 들어 있다 | **아니오 — 생성물**. 아래 "리깅 캐릭터 다시 만들기" |
+| `characters/character_motion.gd` | 위치·자세·속도로 어떤 모션을 틀지 정한다. 팔 자세 우선순위도 여기 | 예 |
+| `characters/character_pose_layer.gd` | 온몸 모션 위에 팔·고개·기울기·왕머리를 얹는 SkeletonModifier3D | 예 |
+| `characters/character_factory.gd` | 펍 NPC(3등신) + 1인칭 손. 관절(피벗) 구조 포함 | 예 |
+| `characters/character_rig.gd` | 펍 NPC 몸짓. 마시기 박자 `drink_curve` 는 플레이어도 같이 쓴다 | 예 |
 | `characters/chr_*.tscn` | 위 스크립트가 만든 결과 | **아니오 — 생성물** |
 | `pub/pub_parts.gd` | 스툴·테이블·펜던트·벽등·로프·창문·화분·병 선반 부품 + 공용 재질 | 예 |
 | `pub/game_room_builder.gd` | F5 경기 방 조립(TableView 좌표를 읽는다) | 예 |

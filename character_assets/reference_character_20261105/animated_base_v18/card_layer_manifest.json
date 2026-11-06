@@ -1,0 +1,26 @@
+{
+  "pose_clip": "Card_Hold_L",
+  "bones": [
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "thumb_01.L",
+    "thumb_02.L",
+    "thumb_03.L",
+    "index_01.L",
+    "index_02.L",
+    "index_03.L",
+    "middle_01.L",
+    "middle_02.L",
+    "middle_03.L",
+    "ring_01.L",
+    "ring_02.L",
+    "ring_03.L",
+    "pinky_01.L",
+    "pinky_02.L",
+    "pinky_03.L"
+  ],
+  "socket": "Socket_Card_L",
+  "prop": "props/card_preview.glb",
+  "mode": "replace only left arm and finger local poses after the base animation; inherits chest and root"
+}

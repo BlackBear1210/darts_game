@@ -1,0 +1,47 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" uid="uid://gwh8b7u8nx6s" path="res://art/characters/rigged/character_library.glb" id="1"]
+
+[node name="PlayerCharacter" instance=ExtResource("1")]
+
+[node name="Accessory_Glasses" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_Foot_L" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_Foot_R" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_LowerLeg_L" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_LowerLeg_R" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_Pelvis" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_Torso" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_UpperArm_L" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_UpperArm_R" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_UpperLeg_L" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Base_UpperLeg_R" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Bottom_Shorts" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Hair_Short" parent="Character_Rig/Skeleton3D"]
+visible = false
+
+[node name="Underwear_Base" parent="Character_Rig/Skeleton3D"]
+visible = false

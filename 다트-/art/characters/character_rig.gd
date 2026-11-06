@@ -1,6 +1,7 @@
 class_name CharacterRig
 extends RefCounted
-## 캐릭터 몸짓을 코드로 만든다(뼈대·애니메이션 파일 없이). 디자인 담당 소유.
+## 펍 NPC(손님·바텐더) 몸짓을 코드로 만든다(뼈대·애니메이션 파일 없이). 디자인 담당 소유.
+## 플레이어·봇은 2026-11-06 부터 리깅 캐릭터 + CharacterMotion 을 쓴다. 마시기 박자(drink_curve)는 둘이 함께 쓴다.
 ## character_factory.gd 가 만든 관절 노드(LegL/LegR/Body/ArmL/ArmR/Neck)의 회전·위치만 바꾼다.
 ##
 ## 몸짓 목록: 서기(숨쉬기) · 걷기(팔다리 흔들기) · 앉기(다리 앞으로) · 숙이기(몸 낮추고 구부정) ·

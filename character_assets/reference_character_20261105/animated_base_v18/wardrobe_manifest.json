@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "coordinate_system": "glTF right-handed Y-up, character front -Z",
+  "rig": "Character_Rig",
+  "base_regions": [
+    "Base_ArmHand_R",
+    "Base_UpperArm_R",
+    "Base_Torso",
+    "Base_Pelvis",
+    "Base_UpperLeg_R",
+    "Base_UpperArm_L",
+    "Base_ArmHand_L",
+    "Base_UpperLeg_L",
+    "Base_LowerLeg_R",
+    "Base_Foot_R",
+    "Base_LowerLeg_L",
+    "Base_Foot_L"
+  ],
+  "base_head": [
+    "Head_Base",
+    "Ears_Base",
+    "Eye_L",
+    "Eye_R",
+    "Pupil_L",
+    "Pupil_R",
+    "Brow_L",
+    "Brow_R",
+    "Mouth_Reference_Line"
+  ],
+  "underwear": "Underwear_Base",
+  "slots": {
+    "hair": {
+      "none": null,
+      "reference": "Hair_Reference",
+      "short": "Hair_Short"
+    },
+    "top": {
+      "none": null,
+      "reference": "Top_Reference"
+    },
+    "bottom": {
+      "none": null,
+      "reference": "Bottom_Reference",
+      "shorts": "Bottom_Shorts"
+    },
+    "shoes": {
+      "none": null,
+      "reference": "Shoes_Reference"
+    },
+    "accessory": {
+      "none": null,
+      "glasses": "Accessory_Glasses"
+    }
+  },
+  "defaults": {
+    "hair": "reference",
+    "top": "reference",
+    "bottom": "reference",
+    "shoes": "reference",
+    "accessory": "none"
+  },
+  "hide_regions": {
+    "top:reference": [
+      "Base_Torso",
+      "Base_UpperArm_L",
+      "Base_UpperArm_R"
+    ],
+    "bottom:reference": [
+      "Base_Pelvis",
+      "Base_UpperLeg_L",
+      "Base_UpperLeg_R",
+      "Base_LowerLeg_L",
+      "Base_LowerLeg_R"
+    ],
+    "bottom:shorts": [
+      "Base_Pelvis",
+      "Base_UpperLeg_L",
+      "Base_UpperLeg_R"
+    ],
+    "shoes:reference": [
+      "Base_Foot_L",
+      "Base_Foot_R"
+    ]
+  },
+  "bones": [
+    "root",
+    "hips",
+    "spine",
+    "chest",
+    "neck",
+    "head",
+    "eye.L",
+    "eye.R",
+    "clavicle.L",
+    "upper_arm.L",
+    "forearm.L",
+    "hand.L",
+    "index_01.L",
+    "index_02.L",
+    "index_03.L",
+    "middle_01.L",
+    "middle_02.L",
+    "middle_03.L",
+    "ring_01.L",
+    "ring_02.L",
+    "ring_03.L",
+    "pinky_01.L",
+    "pinky_02.L",
+    "pinky_03.L",
+    "thumb_01.L",
+    "thumb_02.L",
+    "thumb_03.L",
+    "clavicle.R",
+    "upper_arm.R",
+    "forearm.R",
+    "hand.R",
+    "index_01.R",
+    "index_02.R",
+    "index_03.R",
+    "middle_01.R",
+    "middle_02.R",
+    "middle_03.R",
+    "ring_01.R",
+    "ring_02.R",
+    "ring_03.R",
+    "pinky_01.R",
+    "pinky_02.R",
+    "pinky_03.R",
+    "thumb_01.R",
+    "thumb_02.R",
+    "thumb_03.R",
+    "thigh.L",
+    "shin.L",
+    "foot.L",
+    "toe.L",
+    "thigh.R",
+    "shin.R",
+    "foot.R",
+    "toe.R"
+  ],
+  "sockets": {
+    "Head": {
+      "bone": "head",
+      "rest_world_position": [
+        -0.0204,
+        0.045,
+        1.76
+      ]
+    },
+    "Ear_L": {
+      "bone": "head",
+      "rest_world_position": [
+        -0.17,
+        0.010000000000000002,
+        1.48
+      ]
+    },
+    "Ear_R": {
+      "bone": "head",
+      "rest_world_position": [
+        0.14,
+        0.010000000000000002,
+        1.48
+      ]
+    },
+    "Hand_L": {
+      "bone": "hand.L",
+      "rest_world_position": [
+        -0.59,
+        -0.025,
+        0.66
+      ]
+    },
+    "Hand_R": {
+      "bone": "hand.R",
+      "rest_world_position": [
+        0.59,
+        -0.025,
+        0.66
+      ]
+    },
+    "Back": {
+      "bone": "chest",
+      "rest_world_position": [
+        0,
+        -0.12,
+        1.1
+      ]
+    },
+    "Dart_R": {
+      "bone": "hand.R",
+      "rest_world_position": [
+        0.5424076914787292,
+        0.0311223603785038,
+        0.6438013315200806
+      ],
+      "forward_axis": "prop local -Z in glTF"
+    },
+    "Card_L": {
+      "bone": "hand.L",
+      "rest_world_position": [
+        -0.5431338548660278,
+        0.029495693743228912,
+        0.6467411518096924
+      ]
+    }
+  },
+  "test_animation": "Rig_Check",
+  "note": "v18: shared 54-bone skeleton including five articulated digits per hand. Motion timing and events are in animation_manifest.json."
+}

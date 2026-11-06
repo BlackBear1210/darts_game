@@ -1,0 +1,24 @@
+v18 · 왼손 카드 레이어
+v17의 거북목/다트 그립/모션/커스터마이징을 유지했습니다.
+실행_커스터마이징.cmd에서 '왼손에 카드 들기' 스위치를 켜고 모션을 선택하세요.
+card_motion_preview.mp4는 실제 Godot 재생 영상입니다.
+
+Godot 사용
+  avatar.set_card_held(true)  # 카드를 들기. 기본 전환 0.15초.
+  avatar.play_motion("Dart_Throw")  # 왼손 카드 상태를 유지하며 오른손으로 던지기.
+  avatar.play_motion("Sit_Down")   # 카드 상태를 유지하며 앉기.
+  avatar.set_card_held(false) # 왼손을 다른 상호작용에 사용하기 전에 해제.
+  set_card_held(true, 0.0)은 즉시 적용입니다.
+
+이 레이어는 기본 애니메이션 뒤에 왼팔/손가락 18개 뼈의 로컬 자세만 덮어씁니다.
+몸통/골반/머리/다리/오른팔은 기본 애니메이션을 유지합니다.
+왼팔도 몸통과 루트의 이동은 따라가므로 점프/앉기 중 카드가 함께 움직입니다.
+향후 추가하는 상호작용에도 같은 함수를 사용하면 됩니다.
+왼팔 자체를 움직여야 하는 상호작용과 카드 레이어는 우선순위를 정해야 합니다. 그때 카드를 해제하세요.
+현재 제공된 동작 조합을 검사했으며 아직 만들지 않은 모든 미래 동작을 검사한 것은 아닙니다.
+
+카드 디자인은 예제입니다. props/card_preview.glb를 Socket_Card_L에 연결합니다.
+card_layer_manifest.json에 마스크, 자세 클립, 소켓 정보가 있습니다.
+Blender/GLB에는 Card_Hold_L과 Dart_Throw_Card, Sit_Down_Card, Seated_Idle_Card, Jump_Card 예제도 들어 있습니다.
+일반 GLB만 가져오면 런타임 레이어 코드는 포함되지 않습니다. Godot에서는 modular_character.gd와 card_hold_modifier.gd를 함께 사용하세요.
+기존 게임 프로젝트는 수정하지 않았으며 독립 Godot 미리보기에서 구현했습니다.

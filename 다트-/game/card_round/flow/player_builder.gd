@@ -8,11 +8,6 @@ const HudPresenter = preload("res://game/card_round/flow/hud_presenter.gd")
 const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 
-## 캐릭터 왼손 부채 위치와 그 캐릭터 눈 위치(몸 Body 기준).
-## art/characters/character_factory.gd 치수 + 카드 든 팔 각도(character_rig.gd HOLD_ARM_*)로 계산한 값이다. 팔 각도를 바꾸면 같이 맞춘다.
-const FAN_POSITION := Vector3(0.11, 0.33, 0.43)
-const FAN_EYE := Vector3(0, 0.75, 0.17)
-
 
 ## 자리 0~3 캐릭터를 만들어 앉히고 ctx.players · ctx.actors · ctx.fans 를 채운다.
 static func build(ctx: Context, players_root: Node3D, mover: SeatMover, presenter: HudPresenter) -> void:
@@ -30,15 +25,15 @@ static func build(ctx: Context, players_root: Node3D, mover: SeatMover, presente
 		ctx.actors.append(view)
 		mover.sit(seat)
 		ctx.fans.append(_left_hand_fan(view, seat))
-		# 팔 자세는 캐릭터 몸짓(CharacterRig)이 정한다. PlayerView 의 _rig 를 이름으로 꺼내 player.gd 는 고치지 않았다.
-		var rig: CharacterRig = view.get("_rig")
+		# 팔 자세는 캐릭터 몸짓(CharacterMotion)이 정한다. PlayerView 의 _rig 를 이름으로 꺼내 player.gd 는 고치지 않았다.
+		var rig: CharacterMotion = view.get("_rig")
 		if rig != null:
 			rig.holding_cards = true
 		presenter.attach_status(view)
 	_setup_local_fan(ctx.local_fan)
 
 
-## 왼손 카드 부채: 몸(Body) 자식이라 걷고 앉아도 손을 따라간다.
+## 왼손 카드 부채: 캐릭터 몸짓이 왼손을 따라가게 해 걷고 앉아도 손에 들려 있다.
 ## 레이어 = 그 캐릭터 레이어(자리 + 1) → 내 화면에는 내 몸·부채가 안 보이고 1인칭 부채만 보인다.
 static func _left_hand_fan(view: PlayerView, seat: int) -> HandFan:
 	var fan := HandFan.new()
@@ -51,11 +46,8 @@ static func _left_hand_fan(view: PlayerView, seat: int) -> HandFan:
 	fan.lift_scale = 1.3
 	fan.lift_forward = 0.03
 	fan.layer_mask = 1 << (seat + 1)
-	var body := view.get_node("Model/Body") as Node3D
-	body.add_child(fan)
-	fan.position = FAN_POSITION
 	# 카드 앞면이 든 사람 눈 쪽을 본다 → 뒤로 돌아가 보면 상대 카드가 보인다(기획: "걸어가서 상대 왼손 카드 보기").
-	fan.basis = Basis.looking_at(FAN_POSITION - FAN_EYE, Vector3.UP)
+	(view.get("_rig") as CharacterMotion).attach_cards(fan)
 	return fan
 
 

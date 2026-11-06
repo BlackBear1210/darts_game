@@ -195,8 +195,8 @@ func update_pending() -> void:
 				else:
 					fan.lift(slot)
 			fan.ready_ratio = ratio
-		# 카드가 한 장이라도 있으면 왼팔을 들어 부채를 든다(art/characters/character_rig.gd holding_cards).
-		var rig: CharacterRig = _ctx.actors[seat].get("_rig")
+		# 카드가 한 장이라도 있으면 왼팔을 들어 부채를 든다(art/characters/character_motion.gd holding_cards).
+		var rig: CharacterMotion = _ctx.actors[seat].get("_rig")
 		if rig != null:
 			rig.holding_cards = rules.hand_count(seat) > 0 and _ctx.actors[seat].visible
 		if pending != null and _last_pending[seat] != pending.uid and seat == Context.LOCAL_SEAT and not _ctx.autoplay:

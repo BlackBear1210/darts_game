@@ -87,7 +87,7 @@ func before_next_round() -> void:
 ## 카드 확인이 끝났다 → 맞은편(테이블 앞쪽) 사람 왼손 부채를 가까이 본다(2026-10-28: 부채 1.5배 확인용).
 func on_cards_checked() -> void:
 	var opponent: PlayerView = _ctx.actors[3 if Context.LOCAL_SEAT != 3 else 0]
-	var fan: Node3D = opponent.get_node_or_null("Model/Body/LeftHandCards")
+	var fan: Node3D = opponent.find_child("LeftHandCards", true, false)
 	if fan != null:
 		shot_once_looking("14_opponent_fan", fan.global_position, 1.6, 1.2)
 

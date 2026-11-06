@@ -1,6 +1,6 @@
 extends RefCounted
 ## 몸짓·감정표현(2026-10-28 사용자 기획): 왼클릭 = 손가락으로 가리키기, T = 감정표현 피자판(ui/emote_wheel.gd).
-## 가리키기: 캐릭터 오른팔을 앞으로 뻗고 손가락(PointFinger)이 나온다(art/characters/character_rig.gd pointing).
+## 가리키기: 캐릭터가 오른팔을 앞으로 뻗어 집게손가락으로 가리킨다(art/characters/character_motion.gd pointing).
 ##           내 화면에는 오른쪽 아래에 가리키는 1인칭 손이 잠깐 올라온다.
 ## 감정표현: 머리 위 말풍선 + 효과음(fx/emote_bubble.gd). 내 것은 피자판 쪽이 화면 아래에 크게 보여 준다.
 ## 봇도 일이 생기면 가끔 감정표현을 한다(맞음·무효·높은 점수) — 시연을 살리는 정도(확률·쿨타임은 시연값).
@@ -43,18 +43,8 @@ func setup(ctx: Context, wheel: EmoteWheel) -> void:
 	_wheel.chosen.connect(func(index: int) -> void: emote(Context.LOCAL_SEAT, index))
 
 
-## 캐릭터가 다 만들어진 뒤 한 번: 캐릭터마다 오른손 가리키는 손가락(숨김), 내 카메라에 1인칭 가리키는 손.
+## 캐릭터가 다 만들어진 뒤 한 번: 내 카메라에 1인칭 가리키는 손.
 func build() -> void:
-	for actor in _ctx.actors:
-		var arm := actor.get_node_or_null("Model/Body/ArmR") as Node3D
-		var hand: MeshInstance3D = arm.get_node_or_null("Hand") as MeshInstance3D if arm != null else null
-		if hand == null:
-			continue
-		# 어깨(팔 원점) → 손 방향으로 손끝 너머까지 뻗은 막대 = 집게손가락. 팔을 앞으로 들면 앞을 가리킨다.
-		var along: Vector3 = hand.position.normalized()
-		var finger := MeshKit.rod(arm, "PointFinger", hand.position + along * 0.04, hand.position + along * 0.13, 0.02, hand.material_override)
-		finger.layers = hand.layers
-		finger.visible = false
 	_fp_hand = CharacterFactory.create_hand(Context.LOCAL_SEAT)
 	_fp_hand.name = "PointingHand"
 	var mitten := _fp_hand.get_node("Mitten") as MeshInstance3D
@@ -87,7 +77,7 @@ func emote(seat: int, index: int) -> void:
 ## 매 프레임: 가리키는 팔 자세와 1인칭 가리키는 손.
 func process(delta: float) -> void:
 	for seat in range(Context.SEAT_COUNT):
-		var rig: CharacterRig = _ctx.actors[seat].get("_rig")
+		var rig: CharacterMotion = _ctx.actors[seat].get("_rig")
 		if rig != null:
 			rig.pointing = _ctx.now < _point_until[seat]
 	if _fp_hand == null:

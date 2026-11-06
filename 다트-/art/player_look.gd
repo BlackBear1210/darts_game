@@ -15,20 +15,25 @@ const SYMBOLS: Array[String] = ["●", "▲", "■", "◆"]
 const MAT_SIDES: Array[int] = [32, 3, 4, 4]
 ## 화면에 보이는 캐릭터 이름(기획 2-4).
 const CHARACTER_NAMES: Array[String] = ["삐죽이", "바가지", "반짝이", "뽀글이"]
-## 캐릭터 씬. art/pub/pub_builder.gd 가 character_factory.gd 로 만든 생성물이다(손으로 고치지 않는다).
-const CHARACTER_SCENES: Array[String] = [
-	"res://art/characters/chr_spike.tscn",
-	"res://art/characters/chr_bowl.tscn",
-	"res://art/characters/chr_gloss.tscn",
-	"res://art/characters/chr_curl.tscn",
-]
+## 플레이어·봇 공용 리깅 캐릭터. character_library.glb 를 상속해 기본 차림 조각만 보이게 둔 씬이다.
+## 에디터에서 이 씬을 열면 게임과 같은 모습이 보인다. 옷을 갈아입히려면 조각의 보이기를 켜고 끈다.
+## GLB 를 만드는 곳: character_assets/reference_character_20261105/game_ready_v19/build_game_motions.py
+const CHARACTER_SCENE: String = "res://art/characters/rigged/player_character.tscn"
+## 자리 색으로 칠하는 셔츠 재질 이름. 같은 캐릭터 네 명을 자리 색으로 구분한다.
+const SHIRT_MATERIAL: String = "Ref_Shirt_Plum"
 
 
-## seat 자리의 캐릭터를 새로 만든다. 정면은 +Z(팀 플레이어는 -Z 정면이라 PlayerView 가 180도 돌린다).
-## preload 대신 load 를 쓰는 이유: 생성기가 이 파일을 읽는 동안 캐릭터 씬을 다시 쓰기 때문이다.
+## seat 자리의 캐릭터를 새로 만든다. 정면은 -Z 이고, 모션은 CharacterMotion 이 튼다.
 static func character(seat: int) -> Node3D:
-	var scene := load(CHARACTER_SCENES[seat % CHARACTER_SCENES.size()]) as PackedScene
-	return scene.instantiate() as Node3D
+	var model := (load(CHARACTER_SCENE) as PackedScene).instantiate() as Node3D
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for surface in range(mesh.mesh.get_surface_count()):
+			var material := mesh.mesh.surface_get_material(surface) as StandardMaterial3D
+			if material != null and material.resource_name == SHIRT_MATERIAL:
+				var shirt := material.duplicate() as StandardMaterial3D
+				shirt.albedo_color = COLORS[seat % COLORS.size()]
+				mesh.set_surface_override_material(surface, shirt)
+	return model
 
 
 ## 이름표·점수판용 "● 이름" 글자.

@@ -1,3 +1,17 @@
+# 최신 인수인계 — 리깅 캐릭터(v18) 게임 적용 (2026-11-06)
+
+- 상세: `작업기록/2026-11-06_리깅캐릭터_게임적용.md`. 다시 만드는 법은 `art/README.md` "리깅 캐릭터 다시 만들기".
+- `PlayerView._rig` 는 이제 `CharacterMotion` 이다. 겉면(`holding_cards`, `pointing`, `cheering`, `drinking`, `animate`, `play_throw`)은 같다.
+- **`Model/Body/...` 경로는 없어졌다.** 카드 부채는 `rig.attach_cards(fan)`, 찾을 때는 `find_child("LeftHandCards", true, false)`.
+- 에디터에서 볼 때는 `art/characters/rigged/player_character.tscn` 을 연다. 게임도 이 씬을 쓴다(`chr_*.tscn` 은 펍 쇼케이스·NPC 용).
+- 캐릭터 정면은 `-Z` 다(예전 `+Z`). `PlayerLook.character()` 를 새로 쓰는 곳은 돌리는 방향에 주의한다.
+- 모디파이어로 얹은 팔·머리는 `get_bone_global_pose` 로 안 읽힌다. `BoneAttachment3D`(`hand_L`, `hand_R`, `head`)로 읽는다.
+- `CharacterRig` 는 펍 NPC 용으로 남았다. `drink_curve` 와 `HIP_HEIGHT` 는 플레이어 쪽도 아직 쓴다.
+- `character_assets/` 는 GLB 를 다시 만드는 데 필요한 파일만 git 에 있다. 전체를 `git add` 하면 700MB 가 올라가니 조심한다.
+- 남은 판단: 펍 NPC·1인칭 손 교체, 키 1.85m 와 판정 높이 1.75m 차이, 달리기 클립.
+
+---
+
 # 최신 인수인계 — 몸으로 다트 막기 F5 이식 (2026-11-02)
 
 - 상세: `작업기록/2026-11-02_몸으로_막기_F5이식.md`.
