@@ -1,5 +1,5 @@
 extends Node
-## F5 경기에서 다른 사람(봇·원격 플레이어) 캐릭터의 왼손 카드 부채(2026-10-31 저녁 사용자 요청: "봇 손에 카드가 안 들려 있다").
+## F5 경기의 캐릭터 왼손 카드 부채. 자기 것은 3인칭 모션 카메라에서도 보인다.
 ## 카드 라운드 시연(F6)의 상대 왼손 부채(game/card_round/flow/player_builder.gd)와 같은 HandFan·크기·자리를 쓴다.
 ##   - 손패가 한 장이라도 있으면 왼팔을 들어(CharacterMotion.holding_cards) 부채를 든다. 걷거나 투척선에 서 있어도 손을 따라간다.
 ##   - 꺼내 든 카드(MatchPlayer.pending_slot)는 부채 위로 빠져나와 커진다 → 누가 카드를 쓰려는지 눈으로 보고 무효(×0)로 막을 수 있다.
@@ -15,12 +15,12 @@ var _fans: Dictionary = {}
 var _shown: Dictionary = {}
 
 
-## 스냅샷마다 부른다. actors = GameView.actors(peer_id → PlayerView), local_id = 내 peer_id(내 것은 1인칭 부채가 따로 있다).
-func sync(actors: Dictionary, players: Array[MatchPlayer], local_id: int) -> void:
+## 자기 부채도 자기 몸과 같은 렌더 레이어라 1인칭에는 안 보이고 3인칭에만 보인다.
+func sync(actors: Dictionary, players: Array[MatchPlayer], _local_id: int) -> void:
 	var present: Array[int] = []
 	for player in players:
 		var view: PlayerView = actors.get(player.peer_id)
-		if view == null or player.peer_id == local_id:
+		if view == null:
 			continue
 		present.append(player.peer_id)
 		var fan: HandFan = _fan_for(view, player)

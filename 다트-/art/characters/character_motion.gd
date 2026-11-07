@@ -1,15 +1,16 @@
 class_name CharacterMotion
 extends RefCounted
-## 리깅 캐릭터(rigged/character_library.glb)의 몸짓을 정한다. 디자인 담당 소유.
+## 리깅 캐릭터(rigged/tripo_character.glb)의 몸짓을 정한다. 디자인 담당 소유.
 ## PlayerView·로비가 쓰는 겉면은 예전 CharacterRig 와 같다: 매 프레임 animate(), 던질 때 play_throw().
 ##
 ## 온몸: AnimationPlayer 가 서기·걷기·숙이기·점프·앉기·일어서기 모션을 튼다.
 ## 팔: Dart_Throw·Card_Hold_L·Cheer·Point_R·Drink_R 자세를 CharacterPoseLayer 가 팔 뼈에만 덮어쓴다.
 ##     오른팔 우선순위 = 던지기 > 조준 > 마시기 > 만세 > 가리키기. 왼팔 = 만세 > 카드 들기.
-## 네트워크로 몸짓을 보내지 않는다. 화면마다 위치·자세·속도로 같은 몸짓을 만든다.
-## 모델 정면은 -Z(PlayerView 와 같다). 모션을 만든 곳: character_assets/.../game_ready_v19/build_game_motions.py
+## 기본 몸짓은 위치·자세·속도로 만든다. 선택 모션은 방장이 승인한 감정표현 이벤트로 시작한다.
+## 모델 정면은 -Z(PlayerView 와 같다). 생성기: character_assets/.../incoming_tripo_20261107/build_game_character.py
 
 enum Posture { STAND, CROUCH, SEAT }
+const MotionEmotes = preload("res://art/characters/motion_emotes.gd")
 
 const IDLE := "Idle"
 const WALK := "Walk"
@@ -74,6 +75,8 @@ var head_tilt := 0.0
 var head_scale := 1.0
 ## 지금 틀고 있는 온몸 모션.
 var clip := ""
+## 선택한 Tripo 모션. 한 번 재생하고 기본 동작으로 돌아간다.
+var emote_clip: String = ""
 
 var _model: Node3D
 var _player: AnimationPlayer
@@ -97,11 +100,17 @@ func _init(model: Node3D, seed_offset := 0.0) -> void:
 	_player = model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	var rig := model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 	_card_socket = model.find_child("Socket_Card_L", true, false) as Node3D
-	_eyes.assign([model.find_child("Eye_L", true, false), model.find_child("Eye_R", true, false)])
-	_pupils.assign([model.find_child("Pupil_L", true, false), model.find_child("Pupil_R", true, false)])
-	_skin = (model.find_child("Head_Base", true, false) as MeshInstance3D).mesh.surface_get_material(0)
+	# Tripo 얼굴은 눈과 피부가 하나의 텍스처 메시다. 분리된 눈이 있을 때만 기존 깜빡임을 쓴다.
+	var head := model.find_child("Head_Base", true, false) as MeshInstance3D
+	if head != null:
+		_eyes.assign([model.find_child("Eye_L", true, false), model.find_child("Eye_R", true, false)])
+		_pupils.assign([model.find_child("Pupil_L", true, false), model.find_child("Pupil_R", true, false)])
+		_skin = head.mesh.surface_get_material(0)
 	for name: String in LOOPS:
 		_player.get_animation(name).loop_mode = Animation.LOOP_LINEAR
+	for name: String in MotionEmotes.CLIPS:
+		if _player.has_animation(name):
+			_player.get_animation(name).loop_mode = Animation.LOOP_NONE
 	var path := String(_player.get_node(_player.root_node).get_path_to(rig))
 	_layer = CharacterPoseLayer.new()
 	rig.add_child(_layer)
@@ -121,18 +130,46 @@ func attach_cards(fan: Node3D) -> void:
 
 ## 던지기 동작을 재생한다(GameView 가 다트를 띄우는 순간에 부른다).
 func play_throw() -> void:
+	stop_emote()
 	_throw_time = THROW_START
+
+
+func play_emote(index: int) -> bool:
+	if index == MotionEmotes.STOP:
+		stop_emote()
+		return true
+	if index < 0 or index >= MotionEmotes.CLIPS.size():
+		return false
+	var name: String = MotionEmotes.CLIPS[index]
+	if not _player.has_animation(name):
+		return false
+	emote_clip = name
+	clip = name
+	_player.speed_scale = 1.0
+	_player.play(name, BLEND)
+	_player.seek(0.0, true)
+	return true
+
+
+func stop_emote() -> void:
+	emote_clip = ""
 
 
 ## 매 프레임 호출. speed_ratio = 지금 이동 속도 / 최고 속도, look_pitch = 위아래 시선(라디안, 위 +).
 func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool, look_pitch: float, aiming: bool) -> void:
 	_time += delta
 	var amount := 1.0 - exp(-FOLLOW * delta)
+	if posture != Posture.STAND or airborne or aiming or drinking > 0.0 or _throw_time >= 0.0:
+		stop_emote()
 	_update_body(speed_ratio, posture, airborne)
 	var drink: Vector2 = CharacterRig.drink_curve(drinking)
-	_update_right_arm(delta, amount, aiming, drink.x)
+	if not emote_clip.is_empty():
+		_layer.right.follow(_layer.right.pose, 0.0, amount)
+	else:
+		_update_right_arm(delta, amount, aiming, drink.x)
 	_update_left_arm(amount)
-	_layer.look_pitch = lerpf(_layer.look_pitch, clampf(look_pitch * 0.6, -0.45, 0.5) + drink.y * DRINK_HEAD_BACK, amount)
+	var head_pitch: float = 0.0 if not emote_clip.is_empty() else clampf(look_pitch * 0.6, -0.45, 0.5) + drink.y * DRINK_HEAD_BACK
+	_layer.look_pitch = lerpf(_layer.look_pitch, head_pitch, amount)
 	_layer.lean = lean
 	_layer.head_tilt = head_tilt
 	_layer.head_scale = lerpf(_layer.head_scale, head_scale, minf(1.0, delta * HEAD_SCALE_RATE))
@@ -148,6 +185,11 @@ static func freeze(model: Node3D, clip_name: String) -> void:
 
 
 func _update_body(speed_ratio: float, posture: Posture, airborne: bool) -> void:
+	if not emote_clip.is_empty():
+		if _player.is_playing():
+			_player.speed_scale = 1.0
+			return
+		stop_emote()
 	var moving := speed_ratio > MOVE_THRESHOLD and posture != Posture.SEAT and not airborne
 	var next := _next_clip(moving, posture, airborne)
 	if next != clip:
@@ -206,7 +248,7 @@ func _update_right_arm(delta: float, amount: float, aiming: bool, drink_lift: fl
 
 func _update_left_arm(amount: float) -> void:
 	var arm := _layer.left
-	if cheering:
+	if cheering and emote_clip.is_empty():
 		arm.follow(arm.sample(_player.get_animation(CHEER), 0.0), 1.0, amount)
 	elif holding_cards:
 		var hold := _player.get_animation(CARD_HOLD)

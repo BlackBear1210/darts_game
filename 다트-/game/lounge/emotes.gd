@@ -1,7 +1,7 @@
 extends Node
 ## F5 감정표현(2026-10-31 저녁 사용자 요청: "이모티콘이 사라졌다 — T 로 골라서 마이크 없이도 쓰게").
-## 카드 라운드 시연(F6)에만 있던 감정표현을 F5 경기·대기실에 연결한다. 그림·소리·피자판은 시연 것을 그대로 쓴다.
-##   T 누른 채 마우스 방향으로 고르고 떼면 보낸다 · 왼클릭으로 바로 보낸다 · T 를 톡 누르면 열린 채로 남는다 · Esc = 닫기.
+## T 원형 메뉴: 마우스 휠로 이모티콘 8개 / 수신 모션 7개+중지 페이지 전환.
+##   T 를 누른 채 방향 선택 후 떼기/왼클릭 = 실행 · 짧게 톡 누르기 = 메뉴 유지 · Esc = 취소.
 ##   보낸 감정은 그 사람 머리 위 말풍선 + 효과음(fx/emote_bubble.gd). 내 것은 내 화면 아래에 크게(ui/emote_wheel.gd show_mine).
 ## 네트워크: 손님 → 방장 "emote" 요청 → 방장이 간격(EMOTE_GAP)을 확인하고 모두에게 "emote" 이벤트. 방장은 자기 화면에도 바로 띄운다.
 ## 봇도 킬로그를 보고 반응한다(방장만): 카드를 맞으면 으악/흑흑, 카드를 쓰면 메롱, 다트 고득점이면 최고/ㅋㅋㅋ, 0점이면 흑흑.
@@ -9,6 +9,7 @@ extends Node
 const EmoteWheel = preload("res://game/card_round/ui/emote_wheel.gd")
 const EmoteBubble = preload("res://game/card_round/fx/emote_bubble.gd")
 const EmoteArt = preload("res://game/card_round/fx/emote_art.gd")
+const MotionEmotes = preload("res://art/characters/motion_emotes.gd")
 
 ## 한 사람이 감정을 다시 보낼 수 있는 간격(초). 도배 방지.
 const EMOTE_GAP: float = 1.0
@@ -30,6 +31,8 @@ const BUBBLE_HEIGHT: float = 1.72
 const BUBBLE_SIDE: float = 0.48
 ## 다트 한 발 점수가 이 이상이면 봇이 좋아한다.
 const BOT_HAPPY_POINTS: int = 40
+## 모션 재생 중 자기 모습을 보여 주는 카메라 거리(m).
+const MOTION_CAMERA_OFFSET := Vector3(1.0, 1.45, -3.0)
 
 var game: GameView
 var wheel: EmoteWheel
@@ -39,6 +42,7 @@ var _last_sent: Dictionary = {}
 var _seen_feed: Dictionary = {}
 var _bot_ready: Dictionary = {}
 var _random := RandomNumberGenerator.new()
+var _motion_camera: Camera3D
 
 
 func setup(view: GameView) -> void:
@@ -84,6 +88,10 @@ func handle(event: InputEvent) -> bool:
 
 ## 내가 index 감정을 보낸다.
 func request(index: int) -> void:
+	if index >= EmoteArt.COUNT and index < EmoteArt.COUNT + MotionEmotes.STOP and not _can_motion(game.controller.local_peer_id):
+		if wheel != null:
+			wheel.show_notice("일어나서 사용하세요 · 조준/소품은 내려놓기")
+		return
 	if game.session == null or game.session.is_host():
 		_accept(game.controller.local_peer_id, index)
 	else:
@@ -97,18 +105,26 @@ func _receive_action(sender: int, action: String, payload: Array) -> void:
 
 ## 방장: 간격·번호를 확인하고 모두에게 알린다.
 func _accept(sender: int, index: int) -> void:
-	if index < 0 or index >= EmoteArt.COUNT or not game.actors.has(sender):
+	if index < 0 or index >= EmoteArt.COUNT + MotionEmotes.COUNT or not game.actors.has(sender):
+		return
+	var motion: bool = index >= EmoteArt.COUNT
+	var stop: bool = index == EmoteArt.COUNT + MotionEmotes.STOP
+	var actor: PlayerView = game.actors[sender]
+	if motion and not stop and not _can_motion(sender):
+		return
+	if stop and actor.emote_clip().is_empty():
 		return
 	var now: float = game.controller._now()
-	if now - float(_last_sent.get(sender, -10.0)) < EMOTE_GAP:
+	if not stop and now - float(_last_sent.get(sender, -10.0)) < EMOTE_GAP:
 		return
-	_last_sent[sender] = now
+	if not stop:
+		_last_sent[sender] = now
 	var data := {"match_id": game.controller.state.match_id, "peer": sender, "index": index}
 	if game.session != null and game.session.is_host() and game.multiplayer.has_multiplayer_peer():
 		game.session.receive_game_event.rpc("emote", data)
 	show_emote(sender, index)
 	# 싱글 플레이: 사람이 보낸 감정에 봇이 답한다(game/player/bot_social.gd, 2026-11-01).
-	if game.bot_social != null and not (game.actors[sender] as PlayerView).identity.is_bot:
+	if not motion and game.bot_social != null and not actor.identity.is_bot:
 		game.bot_social.heard(sender, index)
 
 
@@ -122,10 +138,18 @@ func _receive_event(kind: String, data: Dictionary) -> void:
 		show_emote(int(data.get("peer", 0)), int(data.get("index", 0)))
 
 
-## peer 의 머리 위에 말풍선을 띄운다. 내 것이면 내 화면 아래에 크게 보이고 소리는 화면 소리로 낸다.
+## 이모티콘은 말풍선/소리, 모션은 실제 캐릭터에서 재생한다. 화면 없는 서버에도 모션 상태를 반영한다.
 func show_emote(peer: int, index: int) -> void:
 	var actor: PlayerView = game.actors.get(peer)
-	if actor == null or wheel == null:
+	if actor == null or index < 0 or index >= EmoteArt.COUNT + MotionEmotes.COUNT:
+		return
+	if index >= EmoteArt.COUNT:
+		var motion_index: int = index - EmoteArt.COUNT
+		actor.play_emote(motion_index)
+		if wheel != null and peer == game.controller.local_peer_id:
+			wheel.show_notice(MotionEmotes.label(motion_index))
+		return
+	if wheel == null:
 		return
 	if peer == game.controller.local_peer_id:
 		wheel.show_mine(index)
@@ -148,6 +172,12 @@ func show_emote(peer: int, index: int) -> void:
 
 ## 방장 매 프레임: 새 킬로그 줄을 보고 봇이 감정으로 반응한다.
 func _process(_delta: float) -> void:
+	# 서버와 화면 모두 같은 자세/턴 조건으로 중단한다. 전용 서버에는 로컬 카메라가 없다.
+	if game != null:
+		for actor: PlayerView in game.actors.values():
+			if not actor.emote_clip().is_empty() and not _can_motion(actor.identity.peer_id):
+				actor.play_emote(MotionEmotes.STOP)
+	_sync_motion_camera()
 	# 싱글 플레이는 bot_social.gd 가 봇 반응(놀리기·수다 포함)을 모두 맡는다.
 	if game == null or game.session == null or not game.session.is_host() or game.bot_social != null:
 		return
@@ -160,6 +190,40 @@ func _process(_delta: float) -> void:
 	if _seen_feed.size() > 200:
 		_seen_feed.clear()
 		for entry: String in state.feed: _seen_feed[entry] = true
+
+
+func _can_motion(peer: int) -> bool:
+	var actor: PlayerView = game.actors.get(peer)
+	var active: MatchPlayer = game.controller.state.active_player()
+	if active != null and active.peer_id == peer and game.controller.state.phase == MatchState.Phase.AIMING:
+		return false
+	return actor != null and actor.can_emote() and not game._frozen(peer) \
+		and (game.lounge == null or game.lounge.held(peer) < 0)
+
+
+func _sync_motion_camera() -> void:
+	if game == null or DisplayServer.get_name() == "headless":
+		return
+	var actor: PlayerView = game.actors.get(game.controller.local_peer_id)
+	var playing: bool = actor != null and not actor.emote_clip().is_empty()
+	if playing:
+		if _motion_camera == null:
+			_motion_camera = Camera3D.new()
+			_motion_camera.name = "MotionCamera"
+			_motion_camera.fov = 55.0
+			add_child(_motion_camera)
+		var target: Vector3 = actor.global_position + Vector3.UP * 0.95
+		var destination: Vector3 = actor.global_position + actor.global_basis * MOTION_CAMERA_OFFSET
+		var query := PhysicsRayQueryParameters3D.create(target, destination, 1)
+		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
+		_motion_camera.global_position = destination if hit.is_empty() else hit.position + hit.normal * 0.15
+		_motion_camera.look_at(target)
+		# 1인칭 부채·손은 기존 카메라 자식이므로 함께 숨긴다.
+		game.camera.visible = false
+		_motion_camera.make_current()
+	elif _motion_camera != null and _motion_camera.current:
+		game.camera.visible = true
+		game.camera.make_current()
 
 
 ## 킬로그 한 줄(아이콘 · 주체 자리 · 주체 · 내용 · 대상 자리 · 대상)에 봇이 반응한다.

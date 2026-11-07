@@ -15,25 +15,16 @@ const SYMBOLS: Array[String] = ["●", "▲", "■", "◆"]
 const MAT_SIDES: Array[int] = [32, 3, 4, 4]
 ## 화면에 보이는 캐릭터 이름(기획 2-4).
 const CHARACTER_NAMES: Array[String] = ["삐죽이", "바가지", "반짝이", "뽀글이"]
-## 플레이어·봇 공용 리깅 캐릭터. character_library.glb 를 상속해 기본 차림 조각만 보이게 둔 씬이다.
-## 에디터에서 이 씬을 열면 게임과 같은 모습이 보인다. 옷을 갈아입히려면 조각의 보이기를 켜고 끈다.
-## GLB 를 만드는 곳: character_assets/reference_character_20261105/game_ready_v19/build_game_motions.py
+## 플레이어·봇 공용 리깅 캐릭터. 수신 Tripo 외형과 텍스처를 그대로 쓴다.
+## GLB 생성기: character_assets/reference_character_20261105/incoming_tripo_20261107/build_game_character.py
 const CHARACTER_SCENE: String = "res://art/characters/rigged/player_character.tscn"
-## 자리 색으로 칠하는 셔츠 재질 이름. 같은 캐릭터 네 명을 자리 색으로 구분한다.
-const SHIRT_MATERIAL: String = "Ref_Shirt_Plum"
 
 
 ## seat 자리의 캐릭터를 새로 만든다. 정면은 -Z 이고, 모션은 CharacterMotion 이 튼다.
-static func character(seat: int) -> Node3D:
-	var model := (load(CHARACTER_SCENE) as PackedScene).instantiate() as Node3D
-	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		for surface in range(mesh.mesh.get_surface_count()):
-			var material := mesh.mesh.surface_get_material(surface) as StandardMaterial3D
-			if material != null and material.resource_name == SHIRT_MATERIAL:
-				var shirt := material.duplicate() as StandardMaterial3D
-				shirt.albedo_color = COLORS[seat % COLORS.size()]
-				mesh.set_surface_override_material(surface, shirt)
-	return model
+static func character(_seat: int) -> Node3D:
+	# 상의와 오른팔이 같은 재질이라 전체를 자리 색으로 칠하면 피부색까지 바뀐다.
+	# 수신 색을 보존하고 자리 구분은 기존 이름표·매트·HUD의 색과 모양을 쓴다.
+	return (load(CHARACTER_SCENE) as PackedScene).instantiate() as Node3D
 
 
 ## 이름표·점수판용 "● 이름" 글자.

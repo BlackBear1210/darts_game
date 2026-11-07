@@ -11,6 +11,7 @@ const EmoteArt = preload("res://game/card_round/fx/emote_art.gd")
 const EmoteWheel = preload("res://game/card_round/ui/emote_wheel.gd")
 const CharacterFactory = preload("res://art/characters/character_factory.gd")
 const MeshKit = preload("res://art/mesh_kit.gd")
+const MotionEmotes = preload("res://art/characters/motion_emotes.gd")
 
 ## 가리키는 시간(초).
 const POINT_SECONDS: float = 1.3
@@ -65,6 +66,13 @@ func point(seat: int) -> void:
 func emote(seat: int, index: int) -> void:
 	var actor: PlayerView = _ctx.actors[seat]
 	if not actor.visible:
+		return
+	if index >= EmoteArt.COUNT:
+		var motion_index: int = index - EmoteArt.COUNT
+		if motion_index == MotionEmotes.STOP or actor.can_emote():
+			actor.play_emote(motion_index)
+		elif seat == Context.LOCAL_SEAT:
+			_wheel.show_notice("일어나서 사용하세요")
 		return
 	var bubble := EmoteBubble.new()
 	bubble.index = index

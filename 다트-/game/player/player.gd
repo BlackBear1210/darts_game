@@ -117,7 +117,7 @@ func _refresh_label() -> void:
 	_label.modulate = COLORS[identity.seat].lightened(0.35)
 
 
-## 몸짓 재생(화면마다 따로 돈다. 네트워크로 보내는 값은 위치·자세·속도뿐이고 몸짓은 그 값으로 만든다).
+## 기본 몸짓은 위치·자세·속도로 만들고, 선택 모션은 방장이 승인한 감정표현 이벤트로 시작한다.
 func _process(delta: float) -> void:
 	if _rig == null:
 		return
@@ -169,6 +169,19 @@ func set_speaking(level: float) -> void:
 func play_throw() -> void:
 	if _rig != null:
 		_rig.play_throw()
+
+
+func can_emote() -> bool:
+	return _rig != null and not seated and not crouched and not aiming and drink_pose <= 0.0 \
+		and position.y <= 0.05
+
+
+func play_emote(index: int) -> bool:
+	return _rig != null and _rig.play_emote(index)
+
+
+func emote_clip() -> String:
+	return _rig.emote_clip if _rig != null else ""
 
 
 ## 자리 캐릭터를 입힌다. 캐릭터 정면과 이 노드 정면이 둘 다 -Z 라 돌리지 않는다.
