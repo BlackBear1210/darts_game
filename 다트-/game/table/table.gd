@@ -20,7 +20,11 @@ extends Node3D
 ## 2026-11-02 사용자 요청 "다트와 던지는 곳 거리를 두 배는 늘리자":
 ##   다트 홀을 과녁 쪽으로 3.6m 늘렸다(깊이 7.5 → 11.1). 투척선·레인 폭·라운지·테이블·자리·바는 한 칸도 안 옮겼다 —
 ##   사람이 서는 곳과 봇 길, 규칙(in_throw_zone)이 그대로다. 과녁 벽과 거기 붙은 것(큰 통 둘·작은 통 하나·연습 과녁)만 벽을 따라갔다.
-const DART_HALL := Rect2(-6.6, -11.1, 13.2, 11.1)
+## 2026-11-07 아수라장 다트 머신(디자인 요청서 5장 "벽에서 떨어진 독립 머신"):
+##   과녁 벽 앞에 깊이 0.9m 머신이 서려면 자리가 없어 다트 홀을 과녁 뒤쪽으로 1.4m 늘렸다(깊이 11.1 → 12.5).
+##   과녁 중심·투척선·레인·자리·라운지는 그대로 — 투척 거리 7.2m 와 규칙 좌표가 바뀌지 않는다.
+##   과녁 벽에 붙어 있던 것(큰 통 둘·작은 통 하나·연습 과녁)만 벽을 따라 1.4m 물렸다.
+const DART_HALL := Rect2(-6.6, -12.5, 13.2, 12.5)
 const LOUNGE := Rect2(-8.4, 0.0, 22.0, 9.0)
 
 ## 과녁은 다트 홀 끝 벽 가운데에 건다. 높이·크기는 바꾸지 않았다(팀 확정 대기).
@@ -61,11 +65,12 @@ const RAISED_HEIGHT: float = 1.6
 ## 도면의 럼주통. 큰 통 4개는 다트 홀 네 귀퉁이(둘은 투척 구역 안), 작은 통은 그 곁이다.
 ## 2026-10-31 늦은 밤: 다트 홀이 양옆으로 0.6m 넓어져 벽과의 거리를 유지하려고 통도 0.6m 바깥으로 옮겼다.
 ## 2026-11-02: 과녁 벽이 3.6m 물러났으므로 그 벽 쪽 두 개도 같이 물렸다(투척선 쪽 두 개는 그대로).
-const BARRELS: Array[Vector3] = [Vector3(-5.7, 0, -10.4), Vector3(5.6, 0, -10.8),
+## 2026-11-07: 과녁 벽이 1.4m 물러나 벽 쪽 두 개를 또 같이 물렸다(-10.4 → -11.8, -10.8 → -12.2).
+const BARRELS: Array[Vector3] = [Vector3(-5.7, 0, -11.8), Vector3(5.6, 0, -12.2),
 	Vector3(-5.7, 0, -3.1), Vector3(5.6, 0, -3.15)]
 const BARREL_RADIUS: float = 0.4
 const BARREL_HEIGHT: float = 0.9
-const SMALL_BARRELS: Array[Vector3] = [Vector3(6.0, 0, -9.75), Vector3(-6.15, 0, -2.4),
+const SMALL_BARRELS: Array[Vector3] = [Vector3(6.0, 0, -11.15), Vector3(-6.15, 0, -2.4),
 	Vector3(5.1, 0, -2.5), Vector3(6.0, 0, -2.3)]
 const SMALL_BARREL_RADIUS: float = 0.2
 const SMALL_BARREL_HEIGHT: float = 0.5
@@ -86,7 +91,7 @@ const POOL_TABLE_BOX := AABB(Vector3(10.4, 0, 2.8), Vector3(1.5, 0.8, 2.55))
 ##   라운지: 뒷벽 구경 소파 · 오른쪽 귀퉁이 안락의자 + 축음기 탁자 · 문 옆 짐(나무 상자·곡물 자루)
 const KEG_AT := Vector3(-7.5, 0, 0.95)
 const BACK_COUNTER_AT := Vector3(-7.8, 0, 6.3)
-const PRACTICE_TARGET_AT := Vector3(-3.4, 0, -10.2)
+const PRACTICE_TARGET_AT := Vector3(-3.4, 0, -11.6) # 2026-11-07 과녁 벽을 따라 1.4m 뒤로
 const BUCKET_AT := Vector3(5.9, 0, -5.0)
 const SOFA_AT := Vector3(-3.1, 0, 8.35)
 const ARMCHAIR_AT := Vector3(12.75, 0, 1.0)
@@ -118,14 +123,29 @@ static func decor_blocks() -> Array[AABB]:
 
 ## 정적 메시 묶기(그리기 호출 줄이기). class_name 이 없는 도구라 preload 로 부른다.
 const StaticBatch = preload("res://art/static_batch.gd")
+## 아수라장 다트 머신 몸체(셔터·테두리 조명·상태 화면). 과녁 그림(BoardView)은 그대로 $Board 가 그린다.
+## class_name 을 새로 만들지 않고 preload 로 부른다(열린 편집기가 새 class_name 을 못 읽어 파스 오류가 나는 함정).
+const DartMachine = preload("res://art/dart_machine/dart_machine.gd")
+## 머신 충돌 상자의 폭·높이(m). 그림 치수(어깨 포함 폭 약 2.7m, 아치 꼭대기 4.2m)에 맞췄다.
+## 앞면은 과녁 면보다 0.12m 뒤라서 다트 판정(과녁 평면 통과)을 가로막지 않는다 — 판 밖으로 빗나간 다트만 몸체에 박힌다.
+## 뒤는 과녁 벽까지 막는다(머신 뒤 틈으로 들어가 끼이지 않게).
+const MACHINE_WIDTH: float = 2.7
+const MACHINE_HEIGHT: float = 4.2
+const MACHINE_FACE_GAP: float = 0.12
 
 @onready var board: BoardView = $Board
 var is_ready: bool = true
+## 다트 머신 그림(_ready 에서 만든다). 테마가 바뀌면 set_machine_skin 으로 다시 칠한다.
+var machine: DartMachine
+## 지금 깔아 둔 자리 번호(0~3). 방 인원수에 맞춰 GameView.sync_room 이 정한다(기본 = 4자리 전부).
+## 방 그림을 다시 만들면(_prepare_pub) 이 값으로 다시 숨긴다.
+var _shown_seats: Array[int] = [0, 1, 2, 3]
 
 
 ## 방 배치 상수를 한 줄 글자로 만든다. 생성기가 방(pub_game.tscn)에 저장하고, 실행 때 같은지 비교한다.
 static func layout_signature() -> String:
-	return var_to_str(["round_table_v1", BOARD_CENTER, BOARD_SCALE, SEATS, DART_HALL, LOUNGE, WALL_THICKNESS, CEILING_HEIGHT,
+	# "dart_machine_v1"(2026-11-07): 과녁 벽 캐비닛을 독립 머신으로 바꾼 방 — 이 글자가 다르면 방을 다시 만들라고 경고한다.
+	return var_to_str(["round_table_v1", "dart_machine_v1", BOARD_CENTER, BOARD_SCALE, SEATS, DART_HALL, LOUNGE, WALL_THICKNESS, CEILING_HEIGHT,
 		NO_ENTRY_Z, THROW_LINE_Z, LANE_HALF, BLOCK_ZONE, TABLE_CENTER, TABLE_SIZE, TABLE_HEIGHT,
 		BARRELS, BARREL_RADIUS, SMALL_BARRELS, SMALL_BARREL_RADIUS,
 		BAR_BOX, NPC_TABLE_BOX, NPC_STOOLS, POOL_TABLE_BOX,
@@ -226,7 +246,23 @@ func _ready() -> void:
 	# 도면 v3 장식 가구(소파·안락의자·짐·연습 과녁 등). 오락실 테마에서도 같은 자리에 남는다.
 	for block in decor_blocks():
 		_box(block.get_center(), block.size)
+	# 다트 머신 충돌: 과녁 면 0.12m 뒤부터 과녁 벽까지(사람·다트 레이어 1).
+	var machine_front: float = BOARD_CENTER.z - MACHINE_FACE_GAP
+	var machine_depth: float = machine_front - DART_HALL.position.y
+	_box(Vector3(BOARD_CENTER.x, MACHINE_HEIGHT / 2.0, machine_front - machine_depth / 2.0), Vector3(MACHINE_WIDTH, MACHINE_HEIGHT, machine_depth))
+	# 다트 머신 그림: 원점 = 과녁 바로 아래 바닥. 기본은 펍 스킨이고 오락실 테마면 LoungeWorld 가 바꾼다.
+	machine = DartMachine.new()
+	machine.name = "DartMachine"
+	machine.position = Vector3(BOARD_CENTER.x, 0, BOARD_CENTER.z)
+	add_child(machine)
+	machine.build(false)
 	_prepare_pub()
+
+
+## 다트 머신 스킨(false = 펍 월넛, true = 오락실 크림·시안/마젠타). 같은 스킨이면 다시 만들지 않는다.
+func set_machine_skin(arcade: bool) -> void:
+	if machine != null and machine.arcade != arcade:
+		machine.build(arcade)
 
 
 ## 칠판 점수판(과녁 왼쪽 문)의 글자를 바꾼다. 방이 없으면(생성 전) 아무것도 안 한다.
@@ -262,6 +298,28 @@ func rebuild_pub(skip: Array[String], trim: Callable = Callable()) -> void:
 	_prepare_pub()
 
 
+## 방 인원수만큼만 자리(테이블 위 매트·바닥 자리 표시·스툴·자리 글자)를 보인다(2026-11-07 사용자 요청).
+## seats = 보일 자리 번호(0~3, RoomState.shown_seats). 빈자리 매트에는 카드가 깔리지 않는다(seat_cards.gd 는 앉은 사람만).
+## 충돌은 건드리지 않는다 — 자리에는 원래 충돌 상자가 없고(테이블 원기둥만), 숨긴 자리는 그냥 지나다닐 수 있는 바닥이 된다.
+func show_seats(seats: Array[int]) -> void:
+	if seats == _shown_seats:
+		return
+	_shown_seats = seats.duplicate()
+	var pub := get_node_or_null("Pub")
+	if pub != null:
+		_apply_seats(pub)
+
+
+## 자리 노드 이름은 1부터 센다(SeatMat_1 … — art/pub/game_room_builder.gd _table_and_seats).
+func _apply_seats(pub: Node) -> void:
+	for seat in range(SEATS.size()):
+		var shown: bool = _shown_seats.has(seat)
+		for part: String in ["SeatMat_%d", "SeatRug_%d", "SeatStool_%d", "SeatLabel_%d"]:
+			var node := pub.find_child(part % (seat + 1), true, false) as Node3D
+			if node != null:
+				node.visible = shown
+
+
 ## 방 그림이 지금 규칙 좌표로 만들어졌는지 확인하고, 화면이 있을 때만 메시를 묶는다.
 func _prepare_pub() -> void:
 	var pub := get_node_or_null("Pub") as Node3D
@@ -270,6 +328,7 @@ func _prepare_pub() -> void:
 		return
 	if str(pub.get_meta("layout_signature", "")) != layout_signature():
 		push_warning("방 그림(pub_game.tscn)이 TableView 상수와 다릅니다. art/pub/pub_builder.gd 를 다시 실행하세요.")
+	_apply_seats(pub)
 	# 화면 없는 시험(--headless)에서는 그리지 않으므로 묶는 시간만 아낀다.
 	if DisplayServer.get_name() != "headless":
 		StaticBatch.optimize(pub)

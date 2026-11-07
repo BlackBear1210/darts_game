@@ -215,6 +215,9 @@ func apply_theme() -> void:
 	var pub: Node = game.table.get_node("Pub")
 	_recolor(pub, next == 1)
 	_set_glow(pub, next == 1)
+	# 다트 머신은 방 그림(Pub) 밖에 있어 위 색 바꾸기가 닿지 않는다 → 스킨을 직접 바꾼다(2026-11-07).
+	# 펍 = 월넛·청록 가죽·황동 / 오락실 = 크림 에나멜·남색·시안/마젠타 테두리(디자인 요청서 5장).
+	game.table.set_machine_skin(next == 1)
 	for child in _theme_root.get_children():
 		_theme_root.remove_child(child)
 		child.queue_free()
@@ -267,6 +270,9 @@ func _set_glow(pub: Node, arcade: bool) -> void:
 func focus(peer_id: int) -> Dictionary:
 	var actor: PlayerView = game.actors.get(peer_id)
 	if actor == null: return {}
+	# 2026-11-07: 인형뽑기 조종 중이면 고개를 돌려 유리 속을 들여다봐도 상호작용 키는 계속 "집게 내리기"다.
+	if _theme_id == 1 and _arcade.operating(peer_id):
+		return {"kind": "claw", "at": Rules.CLAW_PANEL}
 	var origin: Vector3 = actor.eye_position()
 	var forward: Vector3 = Basis(Vector3.UP, actor.rotation.y) * Basis(Vector3.RIGHT, actor.pitch) * Vector3.FORWARD
 	var candidates: Array[Dictionary] = [{"kind": "monitor", "at": MONITOR},
@@ -318,6 +324,11 @@ func prop_name(index: int) -> String:
 
 func machine_prompt(peer_id: int, kind: String) -> String:
 	return _arcade.prompt(peer_id, kind)
+
+## 방장(GameView._physics_process): 이 사람이 인형뽑기를 조종 중이면 WASD 를 집게로 돌린다.
+## true 를 돌려주면 GameView 가 그 사람의 몸 이동·점프를 막는다(조이스틱을 잡고 서 있는 느낌).
+func steer_machine(peer_id: int, controls: Dictionary, delta: float) -> bool:
+	return _theme_id == 1 and _arcade.steer(peer_id, controls, delta)
 
 ## 장난 효과가 몇 초 남았는지(HUD 덮개·캐릭터 왕머리).
 func effect_left(peer_id: int, name: String) -> float:
@@ -408,6 +419,9 @@ func _throw(actor: PlayerView, index: int, value: Variant) -> void:
 	else:
 		var charge: float = clampf(float(value), 0.0, 1.0)
 		velocity = direction * lerpf(4.5, 12.0, charge) * (1.35 if powered else 1.0) + Vector3.UP * (0.8 + charge)
+		# 2026-11-07: 오락실 농구공을 골대 쪽으로 힘 줘 던지면 오락기처럼 포물선을 보정한다(힘 조절이 맞을수록 골).
+		if objects[index].kind == "hoop_ball" and _theme_id == 1:
+			velocity = _arcade.assist_throw(actor.eye_position() + direction * 0.4, velocity, charge)
 	_launch(index, actor.eye_position() + direction * 0.4, velocity, actor.identity.peer_id, powered)
 	objects[index].available = now() + session.room.settings.miss_cooldown
 
@@ -485,7 +499,10 @@ func _step_projectiles(delta: float) -> void:
 		var exclude: Array[RID] = projectile.exclude
 		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, 3, exclude))
 		var end: Vector3 = hit.position if not hit.is_empty() else to
-		if object.kind == "hoop_ball" and _theme_id == 1: _arcade.ball_moved(projectile, from, end)
+		# 림에 걸린 공은 규칙이 속도를 바꿔 튕겨 냈다 → 림 위에 두고 다음 걸음부터 새 속도로 난다(2026-11-07).
+		if object.kind == "hoop_ball" and _theme_id == 1 and _arcade.ball_moved(projectile, from, end):
+			object.position = projectile.rim_at
+			continue
 		object.spin = float(object.get("spin", 0.0)) + delta * minf(velocity.length(), 14.0) * 1.6
 		if hit.is_empty():
 			object.position = to

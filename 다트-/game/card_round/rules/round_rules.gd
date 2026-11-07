@@ -359,7 +359,10 @@ func begin_turn(position: int) -> void:
 
 ## 이 사람의 다음 다트에 걸린 조준·연출 효과(점수 연산은 resolve_dart).
 func dart_modifiers(seat: int) -> Dictionary:
-	var mods := {"drop": 0.0, "push": 0.0, "power": false, "triple": false, "shuffle": false, "cover": false, "drowsy": false}
+	# spin·split(2026-11-07 아수라장 머신 카드)은 F5 경기(MatchCards)가 과녁 모양으로 바꿔 판정한다.
+	# F6 시연은 이 두 값을 읽지 않는다(시연 과녁은 회전·분리 그림이 없다).
+	var mods := {"drop": 0.0, "push": 0.0, "power": false, "triple": false, "shuffle": false, "cover": false, "drowsy": false,
+		"spin": false, "split": false}
 	for effect in effects:
 		if effect.target != seat:
 			continue
@@ -371,7 +374,7 @@ func dart_modifiers(seat: int) -> Dictionary:
 		match effect.kind:
 			"heavy": mods.drop = float(mods.drop) + float(data.drop)
 			"wind": mods.push = float(mods.push) + float(data.push)
-			"power", "triple", "shuffle", "cover", "drowsy": mods[effect.kind] = true
+			"power", "triple", "shuffle", "cover", "drowsy", "spin", "split": mods[effect.kind] = true
 	return mods
 
 

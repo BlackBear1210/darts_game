@@ -1,3 +1,20 @@
+# 최신 인수인계 — 아수라장 다트 머신 · 인원수 좌석 · 오락실 기계 조작 (2026-11-07)
+
+- 상세: `작업기록/2026-11-07_로비배경_인원좌석_다트머신_오락실기계.md`. 결정: `docs/DECISIONS.md` 2026-11-07.
+- **과녁 모양은 `game/board/board_chaos.gd` 한 곳에서 계산한다.** 그림(`BoardView.show_chaos`, `DartMachine.show_chaos`)과 방장 점수(`MatchCards.landing_points`)가 같은 `BoardChaos.pose/locate/score` 를 쓴다. 회전·분리·셔터 숫자를 다른 곳에 다시 적지 말 것.
+- **과녁 노드 경로가 바뀌었다**: 숫자·칸은 `Board/Face/Spin/SectorGroup0~4` 아래에 있다(불·뒤판은 `Spin` 바로 아래). 이름으로 찾을 때는 `find_child(..., true, false)` 로 재귀 검색.
+- 꽂힌 다트는 `BoardView.pin()` 으로 조각에 붙고 `clear_pins()` 로 지운다(`GameView._clear_darts`). 셔터에 맞은 다트는 셔터 앞면(`BoardChaos.SHUTTER_FRONT`)에 박힌다.
+- **카드 번호**: `board_spin`·`board_split` 은 `CardCatalog` 맨 뒤다. 새 카드도 맨 뒤에 붙일 것(손패를 종류 번호로 보낸다). `cover`(9번)는 이름만 "셔터".
+- F6 카드 라운드 시연(`round_rules.gd`)은 spin/split 을 읽기만 하고 그림이 없다 → 시연에서는 효과 없는 카드다.
+- **다트 홀이 1.4m 깊어졌다**(`TableView.DART_HALL` z −12.5). 머신 충돌 상자는 과녁 면 −0.12m ~ 뒷벽. 배치 상수를 바꾸면 방을 다시 만들어야 하는데, `art/pub/pub_builder.gd` 를 통째로 돌리면 다른 작업자가 바꾼 `chr_*.tscn`(7cd1130)까지 덮는다 — `pub_game.tscn` 만 다시 만드는 쪽을 쓸 것.
+- **빈자리 숨기기**: `RoomState.shown_seats()` → `TableView.show_seats()`. `Seat` 로 시작하는 노드는 정적 묶기(`StaticBatch.NO_BATCH_PREFIXES`)에서 빠진다 — 새 자리 소품도 `Seat…_n` 이름을 쓰면 같이 숨는다.
+- **오락실 인형뽑기 조종**: 방장 `GameView._physics_process` 가 `lounge.steer_machine()` 을 먼저 부르고, true 면 그 사람의 `move`·`jump` 를 0 으로 바꿔 시뮬레이션한다. 새 "몸 대신 무언가를 조종하는" 기능은 같은 자리에 붙일 것. 조종 중 `LoungeWorld.focus()` 는 언제나 인형뽑기를 돌려준다.
+- 가챠 캡슐은 굴러 나오는 동안 `locked` + `dropping` 이다(`_capsule_in` 이 건너뜀). 농구 보정은 `ArcadeRules.assist_throw`, 림 튕김은 `ball_moved` 가 true 를 돌려주면 `LoungeWorld` 가 공을 `projectile.rim_at` 에 둔다.
+- 새 스크립트 3개의 `.uid` 는 열린 에디터 때문에 `--import` 대신 `ResourceUID` 로 직접 만들었다(내용 형식 같음). 에디터가 다시 훑으면 그대로 읽는다.
+- 남은 판단: 집게 속도·조종 시간·농구 보정 세기·회전 속도·분리 주기(모두 시작값), 요청서의 GLB 교체·홀 새 치수·소품 7종, 가챠 받침대를 요청서 좌표로 옮길지(펍 NPC 식탁 충돌과 공용).
+
+---
+
 # 최신 인수인계 — 리깅 캐릭터(v18) 게임 적용 (2026-11-06)
 
 - 상세: `작업기록/2026-11-06_리깅캐릭터_게임적용.md`. 다시 만드는 법은 `art/README.md` "리깅 캐릭터 다시 만들기".

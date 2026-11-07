@@ -11,8 +11,14 @@ const BurstFx = preload("res://art/fx/burst_fx.gd")
 var lounge: Node3D
 var lounge_hud: CanvasLayer
 var _screen_fx: CanvasLayer
-var _cover: MeshInstance3D
 var _last_quality: int = -1
+## 아수라장 다트 머신(2026-11-07): 과녁 회전·피자 분리·셔터의 모양 계산(판정과 화면이 같은 함수).
+## 예전 "가림판" 카드의 파란 상자(_cover)는 머신 셔터가 대신한다.
+const BoardChaos = preload("res://game/board/board_chaos.gd")
+## 화면에 지금 보이는 머신 모양. 효과가 끝나면 제자리로 부드럽게 돌아가게 따로 들고 있다.
+var _shown_chaos: Dictionary = {}
+## 제자리로 돌아가는 빠르기(1/초). 효과가 걸려 있는 동안은 방장 모양을 그대로 따른다(판정과 같아야 하므로).
+const CHAOS_SETTLE_RATE: float = 4.0
 
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
@@ -156,14 +162,6 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		if DisplayServer.get_name() != "headless":
 			_screen_fx = preload("res://game/card_round/fx/screen_debuff.gd").new()
 			add_child(_screen_fx)
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(BoardLayout.RADIUS * TableView.BOARD_SCALE, BoardLayout.RADIUS * TableView.BOARD_SCALE * 2, 0.05)
-		_cover = MeshInstance3D.new()
-		_cover.mesh = mesh
-		_cover.material_override = preload("res://art/mesh_kit.gd").material("card_cover", "243b49")
-		_cover.position = TableView.BOARD_CENTER + Vector3(-mesh.size.x / 2, 0, 0.08)
-		_cover.hide()
-		add_child(_cover)
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_state()
@@ -364,6 +362,11 @@ func _physics_process(delta: float) -> void:
 			if controller._now() - float(controls.get("at", 0)) > INPUT_TIMEOUT:
 				controls = {}
 			if _frozen(id): controls = {}
+			# 2026-11-07 오락실: 인형뽑기를 조종 중이면 WASD 가 집게 조이스틱이 된다 → 몸은 제자리(고개는 그대로 돌릴 수 있다).
+			if lounge != null and lounge.steer_machine(id, controls, delta):
+				controls = controls.duplicate()
+				controls.move = Vector2.ZERO
+				controls.jump = false
 			actor.simulate(delta, controls)
 			if _controls.has(id):
 				_controls[id]["jump"] = false
@@ -567,7 +570,7 @@ func _process(delta: float) -> void:
 		var current: MatchPlayer = state.active_player()
 		if current != null:
 			table.board.show_layout(current.layout)
-			_cover.visible = bool(current.card_effects.get("cover", false)) and state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]
+	_show_chaos(delta)
 	# 다트 홀 밖(라운지)에서는 조준·충전 자체를 잠근다 — 방장도 같은 조건으로 거부한다.
 	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
 	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (lounge == null or (lounge.held(controller.local_peer_id) < 0 and lounge.focus(controller.local_peer_id).is_empty()))
@@ -666,7 +669,7 @@ func _show_throw(data: Dictionary) -> void:
 		thrower.play_throw()
 		if thrower.identity.peer_id == controller.local_peer_id:
 			_throw_kick = 1.0
-	dart.landed.connect(_on_dart_landed)
+	dart.landed.connect(_on_dart_landed.bind(dart))
 	Sfx.play_at(self, "whoosh", data.start, -8.0)
 
 
@@ -676,7 +679,12 @@ func _redirect_throw(data: Dictionary) -> void:
 
 
 ## 다트가 멈춘 순간의 손맛: 과녁이 움찔하고 코르크 가루가 튀며 "턱" 소리가 난다. 판정과 무관하다.
-func _on_dart_landed(at: Vector3, hit_board: bool) -> void:
+## 2026-11-07: 과녁 면에 꽂힌 다트는 맞은 조각에 붙인다(BoardView.pin) — 판이 돌거나 벌어지면 다트도 같이 움직인다.
+## 셔터 앞면·머신 몸체·벽에 박힌 다트는 과녁 면(z)에서 떨어져 있으므로 붙이지 않는다.
+func _on_dart_landed(at: Vector3, hit_board: bool, dart: Node3D = null) -> void:
+	if dart != null and is_instance_valid(dart) and absf(at.z - TableView.BOARD_CENTER.z) < 0.03:
+		var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
+		table.board.pin(dart, Vector2(at.x - TableView.BOARD_CENTER.x, at.y - TableView.BOARD_CENTER.y) / radius)
 	if hit_board:
 		_board_shake = 1.0
 		BurstFx.spawn(self, "cork", at, table.board.global_basis.z)
@@ -699,6 +707,27 @@ func _clear_darts() -> void:
 	for child in _darts.get_children():
 		_darts.remove_child(child)
 		child.queue_free()
+	# 과녁 조각에 붙여 둔 다트(BoardView.pin)도 함께 지운다.
+	table.board.clear_pins()
+
+
+## 다트 머신 모양(회전·분리·셔터)을 과녁과 머신 그림에 옮긴다. 모든 화면에서 매 프레임.
+## 효과가 걸린 동안은 방장 모양(MatchController.chaos_shape)을 그대로 쓰고 — 꽂힌 자리 판정과 같아야 한다 —
+## 효과가 끝나면 제자리로 부드럽게 돌아간다(차례가 바뀔 때 판이 덜컥 튀지 않게).
+func _show_chaos(delta: float) -> void:
+	var target: Dictionary = controller.chaos_shape()
+	var active: bool = absf(float(target.angle)) > 0.0 or float(target.split) > 0.0 or float(target.shutter) > 0.0
+	if active or _shown_chaos.is_empty():
+		_shown_chaos = target.duplicate()
+	else:
+		var weight: float = 1.0 - exp(-CHAOS_SETTLE_RATE * delta)
+		_shown_chaos.angle = lerp_angle(float(_shown_chaos.angle), 0.0, weight)
+		_shown_chaos.split = lerpf(float(_shown_chaos.split), 0.0, weight)
+		_shown_chaos.shutter = lerpf(float(_shown_chaos.shutter), 0.0, weight)
+		_shown_chaos.cover = false
+	table.board.show_chaos(_shown_chaos)
+	if table.machine != null:
+		table.machine.show_chaos(_shown_chaos, delta)
 
 
 ## 방장이 한 발을 확정한다. 과녁까지 가는 길에 사람 몸이 있으면 거기서 멈춘다(몸으로 막기 — 0점 + 맞은 사람 스턴).
@@ -715,6 +744,10 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 	var nominal_time: float = start.distance_to(aim_target) / config.maximum_speed
 	var initial: Vector3 = direction * speed + Vector3.UP * config.gravity * nominal_time * 0.5
 	var board_time: float = (TableView.BOARD_CENTER.z - start.z) / initial.z
+	# 피자 분리(2026-11-07): 조각이 바깥으로 벌어지면 판 밖(반지름 1 너머)에도 조각이 있다 → 과녁 평면에서 받아 둔다.
+	# 꽂히는 순간 조각에 맞았는지 틈인지는 MatchCards.landing_points 가 그 시각 모양으로 센다(틈 = 0점).
+	var mods: Dictionary = controller.cards.modifiers(thrower_id) if controller.cards != null else {}
+	var reach: float = 1.0 + (BoardChaos.SPLIT_MAX if mods.get("split", false) else 0.0)
 	var previous: Vector3 = start
 	var previous_time: float = 0
 	var step: float = 1.0 / 120.0
@@ -739,7 +772,7 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 			return _flight_result(start, collision.position, maxf(hit_time, 0.01), Vector2.INF, 0, reason)
 		if crosses_board:
 			var hit := Vector2(point.x - TableView.BOARD_CENTER.x, point.y - TableView.BOARD_CENTER.y) / radius
-			if hit.length() <= 1.0 + BoardScorer.BOUNDARY_EPSILON:
+			if hit.length() <= reach + BoardScorer.BOUNDARY_EPSILON:
 				var points: int = BoardScorer.score(hit, actor.identity.layout)
 				return _flight_result(start, point, time, hit, points, "%d점 적중" % points)
 		previous = point
@@ -775,6 +808,8 @@ func sync_room(room: RoomState) -> void:
 		controller.config.rounds = room.settings.rounds
 		controller.config.turn_seconds = room.settings.dart_seconds
 	controller.sync_roster(room)
+	# 방 인원수만큼만 의자·매트를 깐다(2인 방 = 마주 보는 두 자리). 사람이 들고 나도 빈자리는 남는다.
+	table.show_seats(room.shown_seats())
 	if room.phase == RoomState.Phase.LOBBY:
 		for player in controller.state.players:
 			if actors.has(player.peer_id): continue

@@ -13,6 +13,16 @@ extends Node3D
 ##   다트 홀 옆벽 · 라운지 뒷벽 → 오락기 줄(이 테마에서만 충돌)
 ## 규칙 좌표(TableView · arcade_rules.gd)는 하나도 바꾸지 않았다 — 게임 흐름·방해 공작·오락실 규칙은 그대로다.
 ## 움직이지 않는 물건은 _static 아래에 모아 화면이 있을 때 한 번에 묶는다(StaticBatch, 그리기 호출 줄이기).
+##
+## [2026-11-07 디자인 요청서(DARTY ROUNDHOUSE) 반영 — 사용자 "디자인과 상호작용 느낌이 이상해"]
+##   색: 기계 몸은 크림 에나멜(CREAM) + 남색(NAVY), 네온(시안·마젠타)은 "얇은 가장자리 줄"에만. 예전처럼 옆판 전체가 빛나지 않는다.
+##   모양: 상자 대신 둥근 모서리(Kit.rounded_box — 요청서 2장 "캐비닛 큰 모서리 40~100mm").
+##   인형뽑기: 조이스틱이 집게 방향대로 기울고(stick_x/z), 조종 중에는 집게 아래 바닥에 시안 조준 고리 + 가는 빛줄기가 뜬다.
+##            간판(마퀴)은 남은 초를 센다.
+##   가챠: 진열대 위에서 옆을 보던 2대를 앞(-Z, 통로 쪽)을 보게 돌렸다(요청서 3.3). 손잡이는 앞면에서 Z 축으로 돈다.
+##        캡슐은 규칙(arcade_rules._step_gacha)이 배출구 → 받침으로 굴려 보낸다.
+##   농구: 골이 들어가면 그물이 출렁이고 전광판이 GOAL!, 림에 맞으면 링이 떨린다. 바닥에 3점 선(3m 호)을 그었다.
+##   장식 인형뽑기 4대 → 닫힌 경품 진열장 2대(요청서 6.3 A05 — 조작 기계와 헷갈리지 않게 집게·조이스틱이 없다).
 
 const Kit = preload("res://art/mesh_kit.gd")
 const PubParts = preload("res://art/pub/pub_parts.gd")
@@ -28,6 +38,10 @@ const YELLOW := Color("ffd34d")
 const ORANGE := Color("ff8a3c")
 const VIOLET := Color("8f6bff")
 const PINK := Color("ff5aa8")
+## 2026-11-07 요청서 2장 오락실 가구 색: 크림 에나멜 · 남색 몸체 · 자두색(유리 안 바닥).
+const CREAM := Color("eee8dc")
+const NAVY := Color("20283e")
+const PLUM := Color("382743")
 ## 오락기: [놓는 자리(바닥), 정면이 보는 방향 yaw, 화면 위 글자]. 정면 = 로컬 -Z.
 ## 뒷벽 6대는 펍 소파 자리 양옆, 다트 홀 옆벽 4대는 넓어진 홀(2026-10-31 늦은 밤)의 투척 구역 밖 벽쪽이다.
 const CABINETS: Array = [
@@ -35,9 +49,14 @@ const CABINETS: Array = [
 	[Vector3(2.5, 0, 8.51), 0.0, "SPACE\nDUCK"], [Vector3(3.5, 0, 8.51), 0.0, "RHYTHM\n★"], [Vector3(4.5, 0, 8.51), 0.0, "BLOCK\nDROP"],
 	[Vector3(-6.11, 0, -0.65), -PI / 2, "ZOMBIE\nPARTY"], [Vector3(-6.11, 0, -1.55), -PI / 2, "KART\nGP"],
 	[Vector3(6.11, 0, -0.65), PI / 2, "PIXEL\nQUEST"], [Vector3(6.11, 0, -1.55), PI / 2, "BEAT\nBOX"]]
-## 장식 인형뽑기(진짜 기계 Rules.CLAW_AT 옆). [자리, yaw, 몸통 색]. 뒷벽 3대 + 오른쪽 벽 1대 = ㄱ자 코너.
-const CLAW_DECOS: Array = [[Vector3(10.0, 0, 8.3), 0.0, "ff5aa8"], [Vector3(11.2, 0, 8.3), 0.0, "3bc8e5"], [Vector3(12.4, 0, 8.3), 0.0, "ffcf3d"],
-	[Vector3(12.9, 0, 7.0), PI / 2, "8f6bff"]]
+## 장식 경품 진열장(닫힌 유리장, 진짜 인형뽑기 Rules.CLAW_AT 옆 뒷벽). [자리, yaw, 가장자리 줄 색].
+## 2026-11-07: 예전 장식 인형뽑기 4대(ㄱ자)는 진짜 기계와 똑같이 생겨 "어느 게 되는 기계인지" 헷갈렸다 → 2대 · 집게 없음(요청서 6.3 A05).
+const CLAW_DECOS: Array = [[Vector3(10.35, 0, 8.4), 0.0, "ef65cb"], [Vector3(12.15, 0, 8.4), 0.0, "3be5db"]]
+## 인형뽑기 조작판의 조이스틱 자리(기계 기준 x). 기계 앞에 서서 +Z 를 보면 +X 가 왼손 쪽이다 →
+## 진짜 오락기처럼 조이스틱은 왼손, 내리기 버튼은 오른손(-STICK_X). 2026-11-07 렌더에서 반대로 놓인 것을 보고 고쳤다.
+const STICK_X: float = 0.22
+## 진열장 크기(폭, 높이, 깊이).
+const SHOWCASE_SIZE := Vector3(1.1, 2.4, 0.8)
 ## 인형 색(곰). 오리는 모델 색 그대로.
 const PLUSH_COLORS: Array[Color] = [Color("ff6fae"), Color("49d6e6"), Color("ffd34d"), Color("a98bff"), Color("ff9a52"), Color("7be86a")]
 
@@ -47,9 +66,14 @@ var _claw_cable: MeshInstance3D
 var _claw_fingers: Array[Node3D] = []
 var _claw_body: Node3D
 var _claw_marquee: Label3D
+## 조이스틱(규칙 stick_x/z 대로 기운다) · 조준 고리(집게 바로 아래 바닥) · 조준 빛줄기.
+var _claw_stick: Node3D
+var _claw_aim: Node3D
+var _claw_beam: MeshInstance3D
 var _gacha_cranks: Array[Node3D] = []
 var _gacha_bodies: Array[Node3D] = []
 var _hoop_ring: Node3D
+var _hoop_net: MeshInstance3D
 var _hoop_led: Label3D
 var _hoop_score: Label3D
 var _screens: Array[MeshInstance3D] = []
@@ -249,7 +273,7 @@ func _carpet_pattern() -> Texture2D:
 	return ImageTexture.create_from_image(image)
 
 
-## 천장: 벽 위 네온 레일 + 천장 보 아래 네온 관(청록·분홍 번갈아) + 과녁 둘레 고리 · 레인 LED · 빛나는 투척선.
+## 천장: 벽 위 네온 레일 + 천장 보 아래 네온 관(청록·분홍 번갈아) · 레인 LED · 빛나는 투척선.
 func _ceiling_neon() -> void:
 	var hall: Rect2 = TableView.DART_HALL
 	var lounge: Rect2 = TableView.LOUNGE
@@ -270,15 +294,13 @@ func _ceiling_neon() -> void:
 		for z: float in entry[1]:
 			Kit.box(_static, "BeamNeon", Vector3(room.size.x - 0.8, 0.035, 0.05), Vector3(room.get_center().x, ceiling - 0.19, z), _neon_mat(CYAN if index % 2 == 0 else PINK, 2.0))
 			index += 1
-	var ring := TorusMesh.new()
-	ring.inner_radius = 0.86
-	ring.outer_radius = 0.92
-	ring.rings = 48
-	var halo := Kit.mesh_node(_static, "BoardHalo", ring, TableView.BOARD_CENTER + Vector3(0, 0, 0.06), _neon_mat(MAGENTA, 3.0))
-	halo.rotation.x = PI / 2
+	# 2026-11-07: 과녁 둘레 분홍 고리(BoardHalo)는 뺐다 — 다트 머신(art/dart_machine/dart_machine.gd)이
+	# 오락실 스킨에서 자기 테두리 조명(시안/마젠타 반쪽씩)을 켠다. 고리가 둘이면 과녁 숫자보다 눈에 띈다(요청서 가독성 위계).
+	# 레인 LED 는 과녁 벽이 아니라 머신 받침 앞(과녁 면 아래)에서 끝난다.
 	for side: float in [-1.0, 1.0]:
-		var depth: float = TableView.NO_ENTRY_Z - hall.position.y
-		Kit.box(_static, "LaneLed", Vector3(0.04, 0.012, depth), Vector3(side * TableView.LANE_HALF, 0.016, (TableView.NO_ENTRY_Z + hall.position.y) / 2.0), _neon_mat(CYAN, 2.0))
+		var lane_end: float = TableView.BOARD_CENTER.z
+		var depth: float = TableView.NO_ENTRY_Z - lane_end
+		Kit.box(_static, "LaneLed", Vector3(0.04, 0.012, depth), Vector3(side * TableView.LANE_HALF, 0.016, (TableView.NO_ENTRY_Z + lane_end) / 2.0), _neon_mat(CYAN, 2.0))
 	Kit.box(_static, "ThrowLine", Vector3(TableView.LANE_HALF * 2.0, 0.014, 0.06), Vector3(0, 0.017, TableView.THROW_LINE_Z), _neon_mat(YELLOW, 3.0))
 
 
@@ -460,16 +482,23 @@ func _cabinets() -> void:
 		_static.add_child(root)
 		root.position = at
 		root.rotation.y = yaw
-		Kit.box(root, "Cabinet", Vector3(0.82, 1.82, 0.6), Vector3(0, 0.91, 0), _mat("cabinet", Color("181330")))
-		Kit.box(root, "CabinetSide", Vector3(0.84, 1.84, 0.04), Vector3(0, 0.92, -0.3), _neon_mat(color, 1.4))
-		var screen := Kit.box(root, "CabinetScreen", Vector3(0.62, 0.5, 0.02), Vector3(0, 1.3, -0.315), _glow("screen_%d" % index, color.darkened(0.2), 1.6))
+		# 2026-11-07: 남색 둥근 몸통 + 크림 간판·화면 테두리·조작판. 예전엔 앞판 전체(0.84×1.84m)가 네온으로 빛나 과녁보다 눈에 띄었다
+		# → 네온은 앞 모서리 두 줄(얇은 세로 띠)만 남겼다(요청서 2장 "시안/마젠타는 가장자리에만").
+		var navy := _mat("arcade_navy", NAVY, 0.1, 0.42)
+		var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
+		Kit.rounded_box(root, "Cabinet", Vector3(0.82, 1.82, 0.6), Vector3(0, 0.91, 0), navy, 0.07)
+		for side: float in [-1.0, 1.0]:
+			Kit.box(root, "CabinetEdge", Vector3(0.018, 1.5, 0.018), Vector3(side * 0.392, 0.92, -0.302), _neon_mat(color, 1.6))
+		Kit.rounded_box(root, "CabinetMarquee", Vector3(0.78, 0.26, 0.08), Vector3(0, 1.66, -0.29), cream, 0.035)
+		Kit.rounded_box(root, "CabinetBezel", Vector3(0.7, 0.58, 0.04), Vector3(0, 1.3, -0.3), cream, 0.03)
+		var screen := Kit.box(root, "CabinetScreen", Vector3(0.6, 0.46, 0.02), Vector3(0, 1.3, -0.325), _glow("screen_%d" % index, color.darkened(0.2), 1.6))
 		_screens.append(screen)
-		Kit.box(root, "CabinetPanel", Vector3(0.8, 0.06, 0.3), Vector3(0, 0.98, -0.42), _mat("cabinet_panel", Color("2a2148")))
-		Kit.cylinder(root, "Stick", 0.012, 0.12, Vector3(-0.18, 1.06, -0.45), _mat("ink", Color("120c12")), 6)
+		Kit.rounded_box(root, "CabinetPanel", Vector3(0.8, 0.07, 0.3), Vector3(0, 0.98, -0.42), cream, 0.03)
+		Kit.cylinder(root, "Stick", 0.012, 0.12, Vector3(-0.18, 1.06, -0.45), navy, 6)
 		Kit.sphere(root, "StickBall", 0.035, Vector3(-0.18, 1.13, -0.45), _mat("stick_ball", MAGENTA))
 		for button in range(3):
-			Kit.cylinder(root, "Button", 0.028, 0.03, Vector3(0.04 + button * 0.09, 1.02, -0.45), _neon_mat(colors[(index + button + 1) % colors.size()], 1.6), 10)
-		_sign(str(CABINETS[index][2]), Vector3(0, 1.68, -0.33), PI, 40, color, 0.004, root)
+			Kit.cylinder(root, "Button", 0.028, 0.03, Vector3(0.04 + button * 0.09, 1.03, -0.45), _neon_mat(colors[(index + button + 1) % colors.size()], 1.6), 10)
+		_sign(str(CABINETS[index][2]), Vector3(0, 1.66, -0.34), PI, 40, color, 0.004, root)
 		var turned: bool = absf(sin(yaw)) > 0.5
 		_body(at + Vector3(0, 0.91, 0), Vector3(0.6, 1.82, 0.82) if turned else Vector3(0.82, 1.82, 0.6))
 
@@ -510,11 +539,11 @@ func _plush(parent: Node3D, at: Vector3, yaw: float, pick: int) -> void:
 	_bear(parent, at, PLUSH_COLORS[pick % PLUSH_COLORS.size()], yaw, 0.95, true)
 
 
-## 인형뽑기 코너: 장식 기계 4대(ㄱ자) + 뒷벽 인형 진열 선반 2단. 진짜 기계(_claw_machine)는 그 앞 Rules.CLAW_AT.
+## 인형뽑기 코너: 닫힌 경품 진열장 2대 + 뒷벽 인형 진열 선반 2단. 진짜 기계(_claw_machine)는 그 앞 Rules.CLAW_AT.
 func _claw_corner() -> void:
 	var f := _faces()
 	for index in range(CLAW_DECOS.size()):
-		_claw_deco(CLAW_DECOS[index][0], CLAW_DECOS[index][1], Color(str(CLAW_DECOS[index][2])), index)
+		_prize_showcase(CLAW_DECOS[index][0], CLAW_DECOS[index][1], Color(str(CLAW_DECOS[index][2])), index)
 	# 진열 선반: 장식 기계 위(2.75m · 3.3m), 뒷벽 x 9.45~12.95.
 	var from: float = 9.45
 	var to: float = 12.95
@@ -526,45 +555,41 @@ func _claw_corner() -> void:
 			_plush(_static, Vector3(from + 0.22 + slot * 0.44, y + 0.14, f.back_z - 0.15), PI, slot + row * 3)
 
 
-## 장식 인형뽑기 한 대(움직이지 않음, 이 테마에서만 충돌). 진짜 기계와 같은 크기(Rules.CLAW_SIZE). 정면 = 로컬 -Z.
-func _claw_deco(at: Vector3, yaw: float, shell_color: Color, index: int) -> void:
-	var size: Vector3 = Rules.CLAW_SIZE
+## 닫힌 경품 진열장 한 대(움직이지 않음, 이 테마에서만 충돌). 정면 = 로컬 -Z.
+## 2026-11-07: 조작 인형뽑기와 헷갈리지 않게 집게·레일·조이스틱이 없다. 유리장 안에 3단 계단 받침 + 인형이 줄지어 앉아 있다.
+func _prize_showcase(at: Vector3, yaw: float, accent: Color, index: int) -> void:
+	var size: Vector3 = SHOWCASE_SIZE
 	var root := Node3D.new()
-	root.name = "ClawDeco"
+	root.name = "PrizeShowcase"
 	_static.add_child(root)
 	root.position = at
 	root.rotation.y = yaw
-	var shell := _mat("claw_shell_" + shell_color.to_html(false), shell_color, 0.15, 0.28)
-	Kit.box(root, "ClawBase", Vector3(size.x, 0.95, size.z), Vector3(0, 0.475, 0), shell)
-	Kit.box(root, "ClawStripe", Vector3(size.x + 0.01, 0.06, size.z + 0.01), Vector3(0, 0.8, 0), _neon_mat(YELLOW, 2.0))
-	Kit.box(root, "ClawFloor", Vector3(size.x - 0.08, 0.04, size.z - 0.08), Vector3(0, 0.98, 0), _mat("claw_floor", Color("4b2a6b"), 0.0, 0.8))
+	var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
+	var navy := _mat("arcade_navy", NAVY, 0.1, 0.42)
+	var front: float = -size.z / 2.0
+	# 아래 몸통(크림) + 남색 걸레받이 + 윗선 얇은 네온.
+	Kit.rounded_box(root, "ShowcaseKick", Vector3(size.x - 0.06, 0.1, size.z - 0.06), Vector3(0, 0.05, 0), navy, 0.03)
+	Kit.rounded_box(root, "ShowcaseBase", Vector3(size.x, 0.8, size.z), Vector3(0, 0.5, 0), cream, 0.07)
+	Kit.box(root, "ShowcaseEdge", Vector3(size.x - 0.12, 0.014, 0.014), Vector3(0, 0.86, front - 0.002), _neon_mat(accent, 1.8))
+	# 유리장: 모서리 기둥(남색) · 안쪽 바닥(자두색) · 3단 계단 받침 · 인형.
+	Kit.box(root, "ShowcaseFloor", Vector3(size.x - 0.08, 0.04, size.z - 0.08), Vector3(0, 0.92, 0), _mat("arcade_plum", PLUM, 0.0, 0.8))
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		Kit.box(root, "ClawPost", Vector3(0.05, 1.12, 0.05), Vector3(corner.x * (size.x / 2 - 0.025), 1.5, corner.y * (size.z / 2 - 0.025)), shell)
-	Kit.box(root, "ClawHeader", Vector3(size.x + 0.04, 0.36, size.z + 0.04), Vector3(0, 2.23, 0), shell)
-	Kit.box(root, "ClawLamp", Vector3(size.x - 0.12, 0.02, size.z - 0.12), Vector3(0, 2.04, 0), _neon_mat(Color("fff3e0"), 1.2))
-	Kit.box(root, "ClawHeaderLed", Vector3(size.x + 0.05, 0.04, 0.02), Vector3(0, 2.08, -size.z / 2 - 0.02), _neon_mat(CYAN, 2.4))
-	Kit.box(root, "ClawPanel", Vector3(size.x, 0.1, 0.22), Vector3(0, 0.98, -size.z / 2 - 0.08), _mat("cabinet_panel", Color("2a2148")))
-	Kit.sphere(root, "ClawKnob", 0.04, Vector3(-0.2, 1.1, -size.z / 2 - 0.08), _mat("claw_knob", Color("ff3b3b")))
-	Kit.cylinder(root, "ClawButton", 0.06, 0.05, Vector3(0.18, 1.05, -size.z / 2 - 0.08), _neon_mat(Color("ff3b3b"), 1.8), 14)
-	# 멈춰 있는 집게(레일 위 한쪽 구석).
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 2031 + index
-	var head := Vector3(rng.randf_range(-0.3, 0.3), 1.98, rng.randf_range(-0.25, 0.25))
-	var metal := _mat("claw_metal", Color("d8d8e4"), 0.9, 0.25)
-	Kit.box(root, "Carriage", Vector3(0.14, 0.06, 0.14), head, metal)
-	Kit.cylinder(root, "Cable", 0.006, 0.26, head + Vector3(0, -0.15, 0), _mat("ink", Color("120c12")), 5)
-	Kit.sphere(root, "HubBall", 0.045, head + Vector3(0, -0.3, 0), metal)
-	for finger in range(3):
-		var angle: float = TAU * finger / 3.0
-		Kit.box(root, "Finger", Vector3(0.018, 0.12, 0.018), head + Vector3(sin(angle) * 0.05, -0.38, cos(angle) * 0.05), metal)
-	# 안에 쌓인 인형 7개(두 층).
-	for k in range(7):
-		var layer: int = 0 if k < 5 else 1
-		var spot := Vector3(rng.randf_range(-0.36, 0.36), 1.09 + layer * 0.13, rng.randf_range(-0.3, 0.3))
-		_plush(root, spot, rng.randf_range(-0.8, 0.8) + PI, k + index * 2)
-	# 유리는 맨 나중에(투명 — 안이 보인다).
-	Kit.box(root, "ClawGlass", Vector3(size.x - 0.04, 1.1, size.z - 0.04), Vector3(0, 1.5, 0), _glass_mat("claw_glass", Color("d8f4ff"), 0.12))
-	_sign("CLAW", Vector3(0, 2.25, -size.z / 2 - 0.04), PI, 60, shell_color.lightened(0.2), 0.005, root)
+		Kit.rounded_box(root, "ShowcasePost", Vector3(0.05, 1.16, 0.05), Vector3(corner.x * (size.x / 2 - 0.025), 1.5, corner.y * (size.z / 2 - 0.025)), navy, 0.02)
+	for step in range(3):
+		var depth: float = (size.z - 0.14) * (3 - step) / 3.0
+		var z: float = (size.z - 0.14) / 2.0 - depth / 2.0
+		Kit.rounded_box(root, "ShowcaseStep", Vector3(size.x - 0.12, 0.14, depth), Vector3(0, 0.99 + step * 0.14, z), cream, 0.02)
+		for slot in range(3):
+			_plush(root, Vector3(-0.32 + slot * 0.32, 1.14 + step * 0.14, z - depth / 2.0 + 0.11), PI + (slot - 1) * 0.25, slot + step * 3 + index * 2)
+	# 위 머리(남색) + 크림 간판 판 + 아래 얇은 시안 줄 + 안쪽 조명.
+	Kit.rounded_box(root, "ShowcaseHeader", Vector3(size.x + 0.04, 0.34, size.z + 0.04), Vector3(0, 2.23, 0), navy, 0.08)
+	Kit.rounded_box(root, "ShowcaseMarquee", Vector3(size.x - 0.16, 0.22, 0.03), Vector3(0, 2.24, front - 0.03), cream, 0.025)
+	Kit.box(root, "ShowcaseHeaderEdge", Vector3(size.x - 0.04, 0.014, 0.014), Vector3(0, 2.05, front - 0.03), _neon_mat(CYAN, 1.8))
+	Kit.box(root, "ShowcaseLamp", Vector3(size.x - 0.12, 0.02, size.z - 0.12), Vector3(0, 2.05, 0), _neon_mat(Color("fff3e0"), 1.2))
+	# 유리는 맨 나중에(투명 — 안이 보인다). 앞면에 "닫힘"을 알리는 작은 자물쇠 판.
+	Kit.box(root, "ShowcaseGlass", Vector3(size.x - 0.04, 1.12, size.z - 0.04), Vector3(0, 1.5, 0), _glass_mat("claw_glass", Color("d8f4ff"), 0.12))
+	Kit.rounded_box(root, "ShowcaseLock", Vector3(0.12, 0.08, 0.02), Vector3(0, 0.98, front - 0.012), navy, 0.01)
+	_sign("PRIZE", Vector3(0, 2.24, front - 0.05), PI, 54, accent, 0.0045, root)
 	var turned: bool = absf(sin(yaw)) > 0.5
 	_body(at + Vector3(0, size.y / 2.0, 0), Vector3(size.z, size.y, size.x) if turned else size)
 
@@ -573,29 +598,60 @@ func _claw_machine() -> void:
 	var at: Vector3 = Rules.CLAW_AT
 	var size: Vector3 = Rules.CLAW_SIZE
 	_claw_body = Node3D.new()
+	_claw_body.name = "ClawMachine"
 	add_child(_claw_body)
 	_claw_body.position = at
-	var shell := _gloss(Color("ff5aa8"), 0.15, 0.28)
-	Kit.box(_claw_body, "ClawBase", Vector3(size.x, 0.95, size.z), Vector3(0, 0.475, 0), shell)
-	Kit.box(_claw_body, "ClawStripe", Vector3(size.x + 0.01, 0.06, size.z + 0.01), Vector3(0, 0.8, 0), _neon_mat(YELLOW, 2.0))
-	Kit.box(_claw_body, "ClawGlass", Vector3(size.x - 0.04, 1.1, size.z - 0.04), Vector3(0, 1.5, 0), _glass(Color("d8f4ff"), 0.12))
-	Kit.box(_claw_body, "ClawFloor", Vector3(size.x - 0.08, 0.04, size.z - 0.08), Vector3(0, 0.98, 0), _gloss(Color("4b2a6b"), 0.0, 0.8))
+	# 2026-11-07: 분홍 상자 → 크림 에나멜 둥근 몸통 + 남색 머리·기둥 + 얇은 마젠타/시안 줄(요청서 2장 오락실 스킨).
+	var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
+	var navy := _mat("arcade_navy", NAVY, 0.1, 0.42)
+	var front: float = -size.z / 2.0
+	Kit.rounded_box(_claw_body, "ClawKick", Vector3(size.x - 0.06, 0.1, size.z - 0.06), Vector3(0, 0.05, 0), navy, 0.03)
+	Kit.rounded_box(_claw_body, "ClawBase", Vector3(size.x, 0.85, size.z), Vector3(0, 0.525, 0), cream, 0.07)
+	Kit.box(_claw_body, "ClawEdge", Vector3(size.x - 0.12, 0.014, 0.014), Vector3(0, 0.91, front - 0.002), _neon_mat(MAGENTA, 2.0))
+	Kit.box(_claw_body, "ClawFloor", Vector3(size.x - 0.08, 0.04, size.z - 0.08), Vector3(0, 0.98, 0), _mat("arcade_plum", PLUM, 0.0, 0.8))
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		Kit.box(_claw_body, "ClawPost", Vector3(0.05, 1.12, 0.05), Vector3(corner.x * (size.x / 2 - 0.025), 1.5, corner.y * (size.z / 2 - 0.025)), shell)
-	Kit.box(_claw_body, "ClawHeader", Vector3(size.x + 0.04, 0.36, size.z + 0.04), Vector3(0, 2.23, 0), shell)
+		Kit.rounded_box(_claw_body, "ClawPost", Vector3(0.05, 1.12, 0.05), Vector3(corner.x * (size.x / 2 - 0.025), 1.5, corner.y * (size.z / 2 - 0.025)), navy, 0.02)
+	Kit.rounded_box(_claw_body, "ClawHeader", Vector3(size.x + 0.04, 0.36, size.z + 0.04), Vector3(0, 2.23, 0), navy, 0.08)
+	Kit.rounded_box(_claw_body, "ClawMarqueePlate", Vector3(size.x - 0.16, 0.24, 0.03), Vector3(0, 2.24, front - 0.03), cream, 0.025)
+	Kit.box(_claw_body, "ClawHeaderEdge", Vector3(size.x - 0.04, 0.014, 0.014), Vector3(0, 2.05, front - 0.03), _neon_mat(CYAN, 2.2))
 	Kit.box(_claw_body, "ClawLamp", Vector3(size.x - 0.12, 0.02, size.z - 0.12), Vector3(0, 2.04, 0), _neon_mat(Color("fff3e0"), 1.2))
-	Kit.box(_claw_body, "ClawHeaderLed", Vector3(size.x + 0.05, 0.04, 0.02), Vector3(0, 2.08, -size.z / 2 - 0.02), _neon_mat(CYAN, 2.4))
-	# 상품 구멍(앞 왼쪽 구석) + 상품 문.
-	Kit.box(_claw_body, "ClawChute", Vector3(0.26, 0.16, 0.26), Vector3(Rules.CLAW_CHUTE.x, 1.06, Rules.CLAW_CHUTE.y), _glass(YELLOW, 0.35))
-	Kit.box(_claw_body, "ClawDoor", Vector3(0.32, 0.26, 0.02), Rules.CLAW_DOOR - at + Vector3(0, 0.1, -0.03), _gloss(Color("120c12"), 0.0, 0.5))
-	# 조작판(조이스틱 + 큰 버튼).
-	Kit.box(_claw_body, "ClawPanel", Vector3(size.x, 0.1, 0.22), Vector3(0, 0.98, -size.z / 2 - 0.08), _gloss(Color("2a2148")))
-	Kit.cylinder(_claw_body, "ClawStick", 0.014, 0.14, Vector3(-0.2, 1.08, -size.z / 2 - 0.08), _gloss(Color("120c12")), 6)
-	Kit.sphere(_claw_body, "ClawKnob", 0.04, Vector3(-0.2, 1.16, -size.z / 2 - 0.08), _gloss(Color("ff3b3b")))
-	Kit.cylinder(_claw_body, "ClawButton", 0.06, 0.05, Vector3(0.18, 1.05, -size.z / 2 - 0.08), _neon_mat(Color("ff3b3b"), 1.8), 14)
+	Kit.box(_claw_body, "ClawGlass", Vector3(size.x - 0.04, 1.1, size.z - 0.04), Vector3(0, 1.5, 0), _glass(Color("d8f4ff"), 0.12))
+	# 상품 구멍(앞 왼쪽 구석, 크림 테두리 투명 통) + 상품 문(남색).
+	Kit.box(_claw_body, "ClawChute", Vector3(0.26, 0.16, 0.26), Vector3(Rules.CLAW_CHUTE.x, 1.06, Rules.CLAW_CHUTE.y), _glass_mat("claw_chute", CREAM, 0.3))
+	Kit.box(_claw_body, "ClawChuteRim", Vector3(0.28, 0.02, 0.28), Vector3(Rules.CLAW_CHUTE.x, 1.15, Rules.CLAW_CHUTE.y), _neon_mat(MAGENTA, 1.4))
+	Kit.rounded_box(_claw_body, "ClawDoor", Vector3(0.32, 0.26, 0.03), Rules.CLAW_DOOR - at + Vector3(0, 0.1, -0.03), navy, 0.02)
+	Kit.box(_claw_body, "ClawDoorLed", Vector3(0.24, 0.012, 0.012), Rules.CLAW_DOOR - at + Vector3(0, 0.25, -0.05), _neon_mat(CYAN, 1.8))
+	# 조작판: 크림 둥근 판(사람 쪽으로 살짝 기움) + 기울어지는 조이스틱 + 큰 버튼 + 작은 글자(키 이름은 설정마다 달라 적지 않는다).
+	var panel := Kit.rounded_box(_claw_body, "ClawPanel", Vector3(size.x, 0.08, 0.26), Vector3(0, 0.98, front - 0.1), cream, 0.03)
+	# 윗면이 사람 쪽(-Z)으로 기울게(rotation.x 가 음수면 위가 -Z 쪽으로 눕는다).
+	panel.rotation.x = -0.12
+	_claw_stick = Node3D.new()
+	_claw_stick.name = "ClawStickPivot"
+	_claw_body.add_child(_claw_stick)
+	_claw_stick.position = Vector3(STICK_X, 1.02, front - 0.1)
+	Kit.cylinder(_claw_stick, "ClawStick", 0.013, 0.13, Vector3(0, 0.065, 0), navy, 8)
+	Kit.sphere(_claw_stick, "ClawKnob", 0.042, Vector3(0, 0.14, 0), _mat("claw_knob", MAGENTA, 0.1, 0.25))
+	Kit.cylinder(_claw_body, "ClawStickBoot", 0.045, 0.02, Vector3(STICK_X, 1.025, front - 0.1), navy, 12)
+	Kit.cylinder(_claw_body, "ClawButton", 0.06, 0.05, Vector3(-STICK_X, 1.04, front - 0.1), _neon_mat(MAGENTA, 1.8), 16)
+	Kit.cylinder(_claw_body, "ClawButtonRing", 0.072, 0.02, Vector3(-STICK_X, 1.025, front - 0.1), navy, 16)
+	for spec: Array in [["MOVE", STICK_X], ["DROP", -STICK_X]]:
+		# 판 위에 눕힌 글자: X 로 눕히고(Y 로 반 바퀴) 앞에 선 사람이 바로 읽는다. 판과 같은 기울기(0.12).
+		var tag := Kit.label(_claw_body, "ClawTag", str(spec[0]), Vector3(float(spec[1]), 1.012, front - 0.2), 22, NAVY, 0.0028)
+		tag.rotation = Vector3(-PI / 2 + 0.12, PI, 0)
 	# 레일과 집게 머리.
 	for side in [-1.0, 1.0]:
 		Kit.box(_claw_body, "ClawRail", Vector3(size.x - 0.08, 0.03, 0.03), Vector3(0, 2.03, side * (size.z / 2 - 0.06)), _gloss(Color("c9c9d6"), 0.8, 0.3))
+	# 조준 고리(시안) + 가는 빛줄기: 조종 중에만 보인다(show_state). 집게가 어디로 떨어질지 유리 너머로도 읽히게.
+	_claw_aim = Node3D.new()
+	_claw_aim.name = "ClawAim"
+	add_child(_claw_aim)
+	_claw_aim.visible = false
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.05
+	ring.outer_radius = 0.066
+	ring.rings = 20
+	Kit.mesh_node(_claw_aim, "AimRing", ring, Vector3.ZERO, _neon_mat(CYAN, 2.4))
+	_claw_beam = Kit.cylinder(_claw_aim, "AimBeam", 0.0035, 1.0, Vector3(0, 0.5, 0), _neon_mat(CYAN, 1.2), 6)
 	_claw_head = Node3D.new()
 	add_child(_claw_head)
 	var metal := _gloss(Color("d8d8e4"), 0.9, 0.25)
@@ -615,7 +671,7 @@ func _claw_machine() -> void:
 		Kit.box(finger, "Finger", Vector3(0.018, 0.12, 0.018), Vector3(0, -0.06, 0.0), metal)
 		Kit.box(finger, "Tip", Vector3(0.018, 0.018, 0.05), Vector3(0, -0.12, -0.02), metal)
 		_claw_fingers.append(finger)
-	_claw_marquee = _sign("CLAW", at + Vector3(0, 2.25, -size.z / 2 - 0.04), PI, 72, YELLOW, 0.005, self)
+	_claw_marquee = _sign("CLAW", Vector3(0, 2.24, -size.z / 2 - 0.05), PI, 72, MAGENTA, 0.005, _claw_body)
 	_body(at + Vector3(0, size.y / 2.0, 0), size)
 	# 기계 위 큰 오리 인형(가게 마스코트).
 	PubParts.asset(_static, "plush_duck", at + Vector3(0.2, size.y + 0.02, 0.1), PI + 0.5, Vector3.ONE * 0.75)
@@ -623,34 +679,61 @@ func _claw_machine() -> void:
 
 # ─────────────────────────────── 가챠 ───────────────────────────────
 
+## 가챠 2대 + 받침대. 2026-11-07 요청서 3.3 "가챠 2대 + 독립 받침대, 전면 -Z":
+##   받침대 = 펍 NPC 식탁 충돌 상자(TableView.NPC_TABLE_BOX, 높이 0.85m) 그대로 — 크림 둥근 섬 + 남색 걸레받이 + 앞 모서리 시안 줄.
+##   기계는 그 앞쪽 가장자리에 나란히 서서 통로(-Z)를 본다. 손잡이·배출구·받침 자리는 Rules.GACHA_CRANK/EXIT/TRAY(규칙과 같은 값).
 func _gacha_machines() -> void:
 	var box: AABB = TableView.NPC_TABLE_BOX
-	Kit.box(_static, "GachaBase", box.size, box.get_center(), _mat("gacha_base", Color("2b1d4d")))
-	Kit.box(_static, "GachaBaseLed", Vector3(0.02, 0.04, box.size.z), Vector3(box.position.x - 0.01, box.end.y - 0.08, box.get_center().z), _neon_mat(YELLOW))
-	var colors: Array[Color] = [Color("ff4f6d"), Color("2fc6b6")]
+	var center: Vector3 = box.get_center()
+	var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
+	var navy := _mat("arcade_navy", NAVY, 0.1, 0.42)
+	var metal := _mat("gacha_metal", Color("d8d8e4"), 0.8, 0.25)
+	Kit.rounded_box(_static, "GachaStandKick", Vector3(box.size.x - 0.08, 0.09, box.size.z - 0.08), Vector3(center.x, 0.045, center.z), navy, 0.025)
+	Kit.rounded_box(_static, "GachaStand", Vector3(box.size.x, box.size.y - 0.12, box.size.z), Vector3(center.x, 0.085 + (box.size.y - 0.12) / 2.0, center.z), cream, 0.06)
+	Kit.rounded_box(_static, "GachaStandTop", Vector3(box.size.x + 0.04, 0.04, box.size.z + 0.04), Vector3(center.x, box.end.y - 0.02, center.z), navy, 0.015)
+	Kit.box(_static, "GachaStandEdge", Vector3(box.size.x - 0.14, 0.012, 0.012), Vector3(center.x, box.end.y - 0.08, box.position.z - 0.002), _neon_mat(CYAN, 1.8))
+	var accents: Array[Color] = [MAGENTA, CYAN]
 	for machine in range(Rules.GACHA_AT.size()):
 		var at: Vector3 = Rules.GACHA_AT[machine]
+		var accent: Color = accents[machine % accents.size()]
 		var body := Node3D.new()
+		body.name = "Gacha%d" % machine
 		add_child(body)
 		body.position = at
 		_gacha_bodies.append(body)
-		var shell := _gloss(colors[machine], 0.1, 0.3)
-		Kit.box(body, "GachaBody", Vector3(0.5, 0.52, 0.6), Vector3(0, 0.26, 0), shell)
-		Kit.box(body, "GachaFace", Vector3(0.02, 0.4, 0.5), Vector3(-0.26, 0.28, 0), _gloss(Color("fff3dc"), 0.0, 0.5))
-		Kit.cylinder(body, "GachaNeck", 0.16, 0.06, Vector3(0, 0.55, 0), shell, 16)
+		# 몸통(크림 둥근 상자, 앞면 z = -0.26) · 앞 남색 판(손잡이·동전 자리) · 배출구(검은 구멍) · 받침(남색 낮은 접시).
+		Kit.rounded_box(body, "GachaBody", Vector3(0.46, 0.5, 0.52), Vector3(0, 0.25, 0), cream, 0.06)
+		Kit.rounded_box(body, "GachaFace", Vector3(0.24, 0.26, 0.02), Vector3(-0.08, 0.31, -0.262), navy, 0.02)
+		Kit.box(body, "GachaCoin", Vector3(0.03, 0.06, 0.01), Vector3(0.12, 0.38, -0.266), _neon_mat(accent, 1.6))
+		Kit.rounded_box(body, "GachaExit", Vector3(0.15, 0.12, 0.012), Vector3(Rules.GACHA_EXIT.x, 0.14, -0.264), _mat("ink", Color("120c12"), 0.0, 0.5), 0.02)
+		Kit.rounded_box(body, "GachaTray", Vector3(0.2, 0.012, 0.17), Vector3(Rules.GACHA_TRAY.x, 0.006, Rules.GACHA_TRAY.z + 0.02), navy, 0.005)
+		Kit.rounded_box(body, "GachaTrayLip", Vector3(0.2, 0.07, 0.02), Vector3(Rules.GACHA_TRAY.x, 0.035, Rules.GACHA_TRAY.z - 0.07), navy, 0.008)
+		for side: float in [-1.0, 1.0]:
+			Kit.rounded_box(body, "GachaTraySide", Vector3(0.02, 0.07, 0.17), Vector3(Rules.GACHA_TRAY.x + side * 0.1, 0.035, Rules.GACHA_TRAY.z + 0.02), navy, 0.008)
+		# 목(남색) + 얇은 색 줄 · 유리구슬 · 뚜껑(남색) + 크림 꼭지.
+		Kit.cylinder(body, "GachaNeck", 0.17, 0.06, Vector3(0, 0.53, 0), navy, 20)
+		Kit.cylinder(body, "GachaNeckEdge", 0.172, 0.012, Vector3(0, 0.565, 0), _neon_mat(accent, 1.8), 20)
 		Kit.sphere(body, "GachaGlobe", 0.27, Vector3(0, Rules.GACHA_GLOBE_Y, 0), _glass(Color("e6f7ff"), 0.14))
-		Kit.cylinder(body, "GachaCap", 0.13, 0.08, Vector3(0, Rules.GACHA_GLOBE_Y + 0.27, 0), shell, 16)
-		Kit.box(body, "GachaTray", Vector3(0.18, 0.1, 0.2), Rules.GACHA_TRAY + Vector3(0.02, -0.03, 0), _gloss(Color("120c12"), 0.0, 0.5))
-		Kit.box(body, "GachaCoin", Vector3(0.02, 0.07, 0.03), Vector3(-0.27, 0.42, -0.16), _neon_mat(YELLOW, 1.6))
+		Kit.cylinder(body, "GachaCap", 0.12, 0.07, Vector3(0, Rules.GACHA_GLOBE_Y + 0.27, 0), navy, 20)
+		Kit.sphere(body, "GachaCapKnob", 0.04, Vector3(0, Rules.GACHA_GLOBE_Y + 0.32, 0), cream)
+		# 손잡이: 앞면에서 바깥(-Z)으로 나온 축 둘레로 돈다(show_state 가 rotation.z). 막대 끝에 색 손잡이 공.
 		var crank := Node3D.new()
+		crank.name = "Crank"
 		body.add_child(crank)
 		crank.position = Rules.GACHA_CRANK
-		Kit.cylinder(crank, "CrankHub", 0.07, 0.03, Vector3.ZERO, _gloss(Color("d8d8e4"), 0.8, 0.25), 12).rotation.z = PI / 2
-		Kit.box(crank, "CrankBar", Vector3(0.03, 0.2, 0.04), Vector3(-0.03, 0.0, 0.0), _gloss(Color("d8d8e4"), 0.8, 0.25))
-		Kit.sphere(crank, "CrankKnob", 0.03, Vector3(-0.06, 0.09, 0.0), _gloss(colors[1 - machine]))
+		var hub := Kit.cylinder(crank, "CrankHub", 0.065, 0.03, Vector3(0, 0, 0.01), metal, 16)
+		hub.rotation.x = PI / 2
+		Kit.box(crank, "CrankBar", Vector3(0.03, 0.15, 0.022), Vector3(0, 0.045, -0.015), metal)
+		Kit.sphere(crank, "CrankKnob", 0.03, Vector3(0, 0.11, -0.04), _mat("gacha_knob_%d" % machine, accent, 0.1, 0.25))
 		_gacha_cranks.append(crank)
-		_sign("GACHA", at + Vector3(-0.29, 0.47, 0), -PI / 2, 30, colors[machine].lightened(0.3), 0.0035, self)
-	_sign("가챠 · 1 COIN", Vector3(box.get_center().x + 0.3, 2.35, box.get_center().z), -PI / 2, 48, YELLOW, 0.005)
+		_sign("GACHA", Vector3(0, 0.465, -0.265), PI, 22, accent, 0.0032, body)
+	# 받침대 뒤쪽: 작은 간판(남색 판 · 두 기둥 · 아래 얇은 마젠타 줄). 기계 머리 위로 보이는 높이.
+	var sign_z: float = box.end.z - 0.18
+	for x: float in [center.x - 0.6, center.x + 0.6]:
+		Kit.cylinder(_static, "GachaSignPost", 0.018, 1.2, Vector3(x, box.end.y + 0.6, sign_z), navy, 8)
+	Kit.rounded_box(_static, "GachaSignBoard", Vector3(1.4, 0.32, 0.04), Vector3(center.x, box.end.y + 1.32, sign_z), navy, 0.03)
+	Kit.box(_static, "GachaSignEdge", Vector3(1.32, 0.012, 0.012), Vector3(center.x, box.end.y + 1.15, sign_z - 0.025), _neon_mat(MAGENTA, 1.8))
+	_sign("GACHA · 캡슐뽑기", Vector3(center.x, box.end.y + 1.32, sign_z - 0.03), PI, 40, CREAM, 0.0042)
 
 
 # ─────────────────────────────── 농구 오락기 ───────────────────────────────
@@ -658,21 +741,25 @@ func _gacha_machines() -> void:
 func _hoop_machine() -> void:
 	var box: AABB = TableView.POOL_TABLE_BOX
 	var center: Vector3 = box.get_center()
-	var shell := _gloss(Color("1f2d5c"), 0.15, 0.3)
-	Kit.box(self, "HoopBase", box.size, center, shell)
-	Kit.box(self, "HoopStripe", Vector3(box.size.x + 0.01, 0.08, box.size.z + 0.01), Vector3(center.x, box.end.y - 0.12, center.z), _neon_mat(ORANGE, 2.2))
-	var ramp := Kit.box(self, "HoopRamp", Vector3(box.size.x - 0.1, 0.03, box.size.z - 0.1), Vector3(center.x, box.end.y + 0.06, center.z), _gloss(Color("c8763a"), 0.0, 0.7))
+	# 2026-11-07: 남색 둥근 몸통 + 크림 앞판 + 얇은 마젠타 윗줄(예전 굵은 주황 띠 대신). 경사판은 공 색과 겹치지 않게 크림.
+	var shell := _mat("arcade_navy", NAVY, 0.1, 0.42)
+	var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
+	Kit.rounded_box(self, "HoopBase", box.size, center, shell, 0.07)
+	Kit.rounded_box(self, "HoopFront", Vector3(box.size.x - 0.16, box.size.y - 0.24, 0.03), Vector3(center.x, box.size.y / 2.0 + 0.02, box.position.z - 0.005), cream, 0.03)
+	Kit.box(self, "HoopEdge", Vector3(box.size.x - 0.12, 0.014, 0.014), Vector3(center.x, box.end.y - 0.06, box.position.z - 0.004), _neon_mat(MAGENTA, 2.0))
+	var ramp := Kit.box(self, "HoopRamp", Vector3(box.size.x - 0.1, 0.03, box.size.z - 0.1), Vector3(center.x, box.end.y + 0.06, center.z), _mat("hoop_ramp", CREAM.darkened(0.12), 0.0, 0.6))
 	ramp.rotation.x = -0.08
-	Kit.box(self, "HoopLip", Vector3(box.size.x - 0.1, 0.08, 0.04), Vector3(center.x, box.end.y + 0.04, box.position.z + 0.06), shell)
+	Kit.rounded_box(self, "HoopLip", Vector3(box.size.x - 0.1, 0.08, 0.04), Vector3(center.x, box.end.y + 0.04, box.position.z + 0.06), shell, 0.015)
 	# 그물(양옆) · 뒤판 · 백보드. 공이 튕기도록 이 테마에서만 충돌을 더한다.
 	var net := _glass(Color("bfe9ff"), 0.13)
 	var net_from: float = box.position.z + 0.8
 	var net_depth: float = box.end.z - net_from
 	for x in [box.position.x + 0.02, box.end.x - 0.02]:
 		Kit.box(self, "HoopNet", Vector3(0.02, 1.9, net_depth), Vector3(x, box.end.y + 0.95, net_from + net_depth / 2.0), net)
-		Kit.box(self, "HoopNetFrame", Vector3(0.04, 0.04, net_depth), Vector3(x, box.end.y + 1.9, net_from + net_depth / 2.0), _neon_mat(CYAN, 1.8))
+		Kit.rounded_box(self, "HoopNetFrame", Vector3(0.035, 0.035, net_depth), Vector3(x, box.end.y + 1.9, net_from + net_depth / 2.0), shell, 0.012)
+		Kit.box(self, "HoopNetEdge", Vector3(0.014, 0.014, net_depth), Vector3(x, box.end.y + 1.875, net_from + net_depth / 2.0), _neon_mat(CYAN, 1.6))
 		_body(Vector3(x, box.end.y + 0.95, net_from + net_depth / 2.0), Vector3(0.04, 1.9, net_depth))
-	Kit.box(self, "HoopBack", Vector3(box.size.x, 2.5, 0.06), Vector3(center.x, box.end.y + 1.25, box.end.z - 0.03), shell)
+	Kit.rounded_box(self, "HoopBack", Vector3(box.size.x, 2.5, 0.06), Vector3(center.x, box.end.y + 1.25, box.end.z - 0.03), shell, 0.025)
 	_body(Vector3(center.x, box.end.y + 1.25, box.end.z - 0.03), Vector3(box.size.x, 2.5, 0.06))
 	var board_at := Vector3(center.x, Rules.HOOP_RING.y + 0.3, Rules.HOOP_RING.z + 0.28)
 	Kit.box(self, "Backboard", Vector3(1.0, 0.68, 0.03), board_at, _glass(Color("ffffff"), 0.35))
@@ -692,20 +779,37 @@ func _hoop_machine() -> void:
 	hoop_net.height = 0.28
 	hoop_net.cap_top = false
 	hoop_net.cap_bottom = false
-	Kit.mesh_node(_hoop_ring, "Net", hoop_net, Vector3(0, -0.15, 0), _glass(Color("ffffff"), 0.45))
+	# 그물은 골이 들어가면 출렁인다(show_state 가 scale 을 바꾼다 — 원점이 그물 가운데라 위아래로 부푼다).
+	_hoop_net = Kit.mesh_node(_hoop_ring, "Net", hoop_net, Vector3(0, -0.15, 0), _glass(Color("ffffff"), 0.45))
 	Kit.box(_hoop_ring, "RingArm", Vector3(0.06, 0.03, 0.26), Vector3(0, 0, 0.24), _gloss(Color("ff5a1f"), 0.6, 0.3))
-	# 점수 전광판(백보드 위). 정면 = -Z(사람 쪽).
-	Kit.box(self, "HoopLedBox", Vector3(1.3, 0.5, 0.1), Vector3(center.x, Rules.HOOP_RING.y + 1.0, box.end.z - 0.1), _gloss(Color("0b0816")))
+	# 점수 전광판(백보드 위, 남색 둥근 틀 + 크림 테두리). 정면 = -Z(사람 쪽).
+	Kit.rounded_box(self, "HoopLedFrame", Vector3(1.36, 0.56, 0.08), Vector3(center.x, Rules.HOOP_RING.y + 1.0, box.end.z - 0.08), cream, 0.04)
+	Kit.rounded_box(self, "HoopLedBox", Vector3(1.26, 0.46, 0.1), Vector3(center.x, Rules.HOOP_RING.y + 1.0, box.end.z - 0.1), _mat("hoop_led_box", Color("0b0816"), 0.0, 0.6), 0.03)
 	_hoop_led = _sign("HOOP\nFEVER", Vector3(center.x, Rules.HOOP_RING.y + 1.02, box.end.z - 0.16), PI, 54, ORANGE, 0.0045, self)
 	_hoop_score = _sign("", Vector3(center.x, Rules.HOOP_RING.y + 0.7, box.end.z - 0.17), PI, 26, YELLOW, 0.0035, self)
-	Kit.cylinder(self, "HoopButton", 0.07, 0.05, Rules.HOOP_BUTTON + Vector3(0, -0.04, 0), _neon_mat(Color("49ff7a"), 2.0), 14)
+	Kit.cylinder(self, "HoopButtonRing", 0.085, 0.03, Rules.HOOP_BUTTON + Vector3(0, -0.06, 0), shell, 16)
+	Kit.cylinder(self, "HoopButton", 0.07, 0.05, Rules.HOOP_BUTTON + Vector3(0, -0.04, 0), _neon_mat(Color("49ff7a"), 2.0), 16)
+	_three_point_line()
+
+
+## 바닥 3점 선: 링 가운데(움직이지 않을 때)에서 Rules.THREE_POINT(3m) 반지름 호. 이 선 밖에서 던져 넣으면 3점.
+## 2026-11-07: 규칙엔 3점이 있었지만 바닥에 표시가 없어 아무도 몰랐다. 기계 앞(-Z) 쪽 반원만 그린다(벽 안으로 들어가는 끝은 잘린다).
+func _three_point_line() -> void:
+	var ring: Vector3 = Rules.HOOP_RING
+	var arc := Kit.mesh_node(_static, "ThreePointLine", Kit.arc_tube_mesh(Rules.THREE_POINT, 0.012, -PI + 0.35, -0.62, 40, 6), Vector3(ring.x, 0.022, ring.z), _neon_mat(CYAN, 1.4))
+	# 원호는 XY 평면에 만들어진다 → X 축으로 90° 눕히면 (cos a, sin a, 0) 이 (cos a, 0, sin a) 바닥 위로 간다.
+	arc.rotation.x = PI / 2
+	var tag := Kit.label(_static, "ThreePointTag", "3PT", Vector3(ring.x, 0.024, ring.z - Rules.THREE_POINT - 0.18), 64, CYAN.lightened(0.3), 0.004)
+	tag.rotation = Vector3(-PI / 2, PI, 0)
+	tag.shaded = false
 
 
 ## 작은 소품(충돌 없음 — 사람이 다니지 않는 가장자리에만): 가챠 뒤 사탕 병 · 냉장고 위 화분 · 다트 홀 오락기 옆 휴지통.
 func _small_props() -> void:
 	var gacha: AABB = TableView.NPC_TABLE_BOX
-	for z: float in [gacha.position.z + 0.18, gacha.end.z - 0.18]:
-		PubParts.asset(_static, "candy_jar", Vector3(gacha.end.x - 0.2, gacha.end.y, z), z, Vector3.ONE * 1.2)
+	# 2026-11-07: 가챠가 앞(-Z)을 보게 돌아서 사탕 병은 받침대 뒤쪽 두 구석으로 옮겼다(기계 뒤, 간판 기둥 옆).
+	for x: float in [gacha.position.x + 0.2, gacha.end.x - 0.2]:
+		PubParts.asset(_static, "candy_jar", Vector3(x, gacha.end.y, gacha.end.z - 0.42), x, Vector3.ONE * 1.2)
 	var fridge: Vector3 = TableView.BAR_FRIDGE_AT
 	for dz: float in [-0.4, 0.4]:
 		PubParts.asset(_static, "plant_pot", fridge + Vector3(-0.1, TableView.BAR_FRIDGE_SIZE.y, dz), dz, Vector3.ONE * 1.2)
@@ -716,7 +820,7 @@ func _small_props() -> void:
 ## 색 조명(그림자 없음). 오락실 분위기는 대부분 빛나는 재질이 내고, 여기 빛은 바닥·사람에 색을 묻히는 정도.
 func _lights() -> void:
 	for spec in [[Rules.CLAW_AT + Vector3(0, 2.0, -0.2), MAGENTA, 2.6, 3.2], [Vector3(11.2, 2.9, 7.4), Color("ff7ad9"), 2.2, 5.0],
-			[Rules.GACHA_AT[0] + Vector3(-0.4, 1.1, 0.37), YELLOW, 1.8, 3.0], [Rules.HOOP_RING + Vector3(0, 0.4, -0.8), ORANGE, 2.2, 3.5],
+			[(Rules.GACHA_AT[0] + Rules.GACHA_AT[1]) / 2.0 + Vector3(0, 1.3, -0.7), Color("ffe7c2"), 1.6, 3.0], [Rules.HOOP_RING + Vector3(0, 0.4, -0.8), ORANGE, 2.2, 3.5],
 			[Vector3(-3.5, 3.6, -3.0), CYAN, 1.6, 7.5], [Vector3(3.5, 3.6, -3.0), MAGENTA, 1.6, 7.5],
 			[Vector3(-6.4, 3.0, 3.7), Color("ffb347"), 1.8, 6.0], [Vector3(0.5, 3.4, 7.6), VIOLET, 1.4, 6.0]]:
 		var light := OmniLight3D.new()
@@ -750,16 +854,42 @@ func show_state(rules: RefCounted, now: float, delta: float) -> void:
 	# 누가 흔들면 기계 전체가 덜컹거린다.
 	var shaking: bool = now < float(claw.shake)
 	_claw_body.rotation.z = sin(_time * 38.0) * 0.012 if shaking else lerpf(_claw_body.rotation.z, 0.0, minf(1.0, delta * 10.0))
-	_claw_marquee.text = "CLAW" if phase == "idle" else ("★ GO! ★" if phase in ["x", "z"] else "· · ·")
-	# 가챠 손잡이: 돌린 직후 한 바퀴.
+	# 2026-11-07: 간판은 조종 중 남은 초를 센다(예전 "GO!" 는 옛 타이밍 단계 x/z 에 맞춘 글자라 새 단계 move 에선 안 떴다).
+	var moving: bool = phase == "move"
+	if phase == "idle": _claw_marquee.text = "CLAW"
+	# 숫자만(별을 붙이면 간판 판 폭 0.94m 를 넘는다 — 렌더 확인).
+	elif moving: _claw_marquee.text = "%d" % ceili(maxf(0.0, float(claw.until) - now))
+	else: _claw_marquee.text = "· · ·"
+	# 조이스틱: 규칙의 stick_x/z(세상 방향 -1~1)대로 기운다. rotation.x 양수 = 위가 +Z 로, rotation.z 음수 = 위가 +X 로.
+	var tilt := Vector2(float(claw.get("stick_x", 0.0)), float(claw.get("stick_z", 0.0))) if moving else Vector2.ZERO
+	_claw_stick.rotation.x = lerpf(_claw_stick.rotation.x, tilt.y * 0.35, minf(1.0, delta * 14.0))
+	_claw_stick.rotation.z = lerpf(_claw_stick.rotation.z, -tilt.x * 0.35, minf(1.0, delta * 14.0))
+	# 조준 고리: 집게 바로 아래 유리 안 바닥(1.0m) + 집게 손에서 고리까지 가는 빛줄기. 조종할 때만.
+	_claw_aim.visible = moving
+	if moving:
+		var floor_y: float = 1.005
+		_claw_aim.position = Vector3(_claw_head.position.x, floor_y, _claw_head.position.z)
+		var reach: float = maxf(0.05, _claw_head.position.y + hub.position.y - 0.12 - floor_y)
+		_claw_beam.scale = Vector3(1, reach, 1)
+		_claw_beam.position.y = reach / 2.0
+	# 가챠 손잡이: 돌린 직후 한 바퀴(앞에서 보면 시계 방향 — 앞면이 -Z 라 Z 축 양수 회전이 시계 방향으로 보인다).
 	for machine in range(mini(_gacha_cranks.size(), rules.gacha.size())):
 		var age: float = now - float(rules.gacha[machine].crank)
-		_gacha_cranks[machine].rotation.x = -TAU * clampf(age / 0.8, 0.0, 1.0)
+		_gacha_cranks[machine].rotation.z = TAU * clampf(age / 0.8, 0.0, 1.0)
 		_gacha_bodies[machine].scale = Vector3.ONE * (1.0 + sin(clampf(age / 0.5, 0.0, 1.0) * PI) * 0.04)
-	# 농구: 링 좌우 이동, 전광판 시간·순위.
+	# 농구: 링 좌우 이동 + 림에 맞으면 링이 위아래로 떨림, 골이면 그물이 출렁. 전광판 시간·순위(골 직후 GOAL!).
 	var hoop: Dictionary = rules.hoop
-	_hoop_ring.position = Rules.HOOP_RING + Vector3(float(hoop.offset), 0, 0)
-	if bool(hoop.running):
+	var rim_age: float = now - float(hoop.get("rim", -10.0))
+	var goal_age: float = now - float(hoop.get("goal", -10.0))
+	var wobble: float = sin(rim_age * 55.0) * 0.018 * (1.0 - rim_age / 0.45) if rim_age < 0.45 else 0.0
+	_hoop_ring.position = Rules.HOOP_RING + Vector3(float(hoop.offset), wobble, 0)
+	_hoop_ring.rotation.x = wobble * 2.0
+	var swell: float = sin(clampf(goal_age / 0.55, 0.0, 1.0) * PI) if goal_age < 0.55 else 0.0
+	_hoop_net.scale = Vector3(1.0 + swell * 0.18, 1.0 + swell * 0.45, 1.0 + swell * 0.18)
+	if goal_age < 0.9:
+		_hoop_led.text = "GOAL!"
+		_hoop_score.text = ""
+	elif bool(hoop.running):
 		_hoop_led.text = "FEVER\n%02d" % ceili(maxf(0.0, float(hoop.until) - now))
 		var lines := PackedStringArray()
 		var scores: Dictionary = hoop.scores

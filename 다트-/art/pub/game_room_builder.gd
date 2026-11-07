@@ -186,13 +186,16 @@ static func ceiling_beams() -> Array:
 		[lounge, [lounge.position.y + lounge.size.y * 0.22, lounge.get_center().y, lounge.position.y + lounge.size.y * 0.8]]]
 
 
-## 과녁 벽: 초록 특징 판넬 + 다트판 캐비닛(문 두 짝이 열린 모양, 문 안쪽은 칠판) + 간판 글자.
+## 과녁 벽: 초록 특징 판넬 + 양옆 칠판 두 장(점수·하우스 룰).
 ## 다트판 자체는 여기 없다 — game/board/board.gd(BoardView)가 art/board_art.gd 로 실행 때 그린다(카드로 숫자가 바뀌기 때문).
+## 2026-11-07: 벽에 붙어 있던 다트판 캐비닛(문 두 짝·간판 글자)을 뺐다. 이제 과녁은 벽에서 1.4m 앞에 선
+## 독립 다트 머신(art/dart_machine/dart_machine.gd, TableView 가 실행 때 세운다)에 걸린다.
+## 문 칠판에 있던 실시간 점수판(ChalkScores — GameView 가 글자를 바꾼다)과 하우스 룰은 벽 칠판으로 옮겼다.
+## 투척선에서 보면 머신 어깨(x ±1.35) 바깥으로 보이는 자리다(x ±2.05).
 static func _board_wall(p: Node3D) -> void:
 	var f := _faces()
 	var ceiling: float = TableView.CEILING_HEIGHT
 	var center: Vector3 = TableView.BOARD_CENTER
-	var board_outer: float = BoardLayout.RADIUS * TableView.BOARD_SCALE * 1.33 # 숫자 띠 포함 판 반지름(약 1m)
 	var face: float = f.board_z
 	MeshKit.box(p, "FeaturePanel", Vector3(FEATURE_HALF * 2, ceiling, 0.05), Vector3(center.x, ceiling / 2, face + 0.025), PubParts.green())
 	for x: float in [-FEATURE_HALF + 0.05, FEATURE_HALF - 0.05]:
@@ -203,27 +206,26 @@ static func _board_wall(p: Node3D) -> void:
 		var x: float = side * (FEATURE_HALF + width / 2.0)
 		MeshKit.box(p, "BackWainscot", Vector3(width, 1.2, 0.06), Vector3(x, 0.6, face + 0.03), PubParts.green())
 		MeshKit.box(p, "BackRail", Vector3(width, 0.06, 0.08), Vector3(x, 1.22, face + 0.05), PubParts.brass())
-	# 캐비닛 몸통(판보다 조금 큰 정사각) + 안쪽 어두운 판 + 테두리.
-	var half := board_outer + 0.15
-	MeshKit.box(p, "Cabinet", Vector3(half * 2, half * 2, 0.06), Vector3(center.x, center.y, face + 0.06), PubParts.wood())
-	MeshKit.box(p, "CabinetBacking", Vector3(half * 2 - 0.16, half * 2 - 0.16, 0.02), Vector3(center.x, center.y, face + 0.095), PubParts.dark())
-	for y: float in [-1.0, 1.0]:
-		MeshKit.box(p, "CabinetRail", Vector3(half * 2 + 0.08, 0.08, 0.1), Vector3(center.x, center.y + y * (half + 0.02), face + 0.08), PubParts.trim())
-	# 열린 문 두 짝(벽에 붙어 있음). 왼쪽 문 칠판 = 실시간 점수판(GameView 가 글자를 바꾼다), 오른쪽 = 하우스 룰.
-	for side: float in [-1.0, 1.0]:
-		var door_x: float = center.x + side * (half + half / 2.0 + 0.02)
-		MeshKit.box(p, "CabinetDoor", Vector3(half - 0.02, half * 2, 0.05), Vector3(door_x, center.y, face + 0.055), PubParts.wood())
-		MeshKit.box(p, "DoorChalk", Vector3(half - 0.2, half * 2 - 0.22, 0.012), Vector3(door_x, center.y, face + 0.086), PubParts.chalk_board())
-		for y: float in [-0.6, 0.6]:
-			MeshKit.box(p, "Hinge", Vector3(0.05, 0.14, 0.03), Vector3(center.x + side * (half + 0.01), center.y + y * half, face + 0.09), PubParts.brass())
+	# 칠판 두 장: 나무 틀 + 칠판면. 왼쪽 = 실시간 점수판, 오른쪽 = 하우스 룰.
+	# 투척선에서 8.8m 떨어졌으므로 예전 문 칠판(7.4m)보다 글자를 20% 키웠다.
+	var board_size := Vector2(1.0, 1.7)
 	var chalk := Color("e6e3d6")
-	var scores := MeshKit.label(p, "ChalkScores", "점 수\n\n―", Vector3(center.x - (half + half / 2.0 + 0.02), center.y + 0.05, face + 0.095), 28, chalk, 0.003)
+	for side: float in [-1.0, 1.0]:
+		var x: float = center.x + side * 2.05
+		MeshKit.box(p, "ChalkFrame", Vector3(board_size.x + 0.1, board_size.y + 0.1, 0.05), Vector3(x, center.y - 0.1, face + 0.075), PubParts.wood())
+		MeshKit.box(p, "ChalkBoard", Vector3(board_size.x - 0.04, board_size.y - 0.04, 0.012), Vector3(x, center.y - 0.1, face + 0.106), PubParts.chalk_board())
+		for y: float in [-1.0, 1.0]:
+			MeshKit.box(p, "ChalkPin", Vector3(0.05, 0.05, 0.03), Vector3(x, center.y - 0.1 + y * (board_size.y / 2.0 + 0.02), face + 0.11), PubParts.brass())
+	var scores := MeshKit.label(p, "ChalkScores", "점 수
+
+―", Vector3(center.x - 2.05, center.y - 0.05, face + 0.115), 28, chalk, 0.0036)
 	scores.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	MeshKit.label(p, "ChalkRules", "하 우 스  룰\n\n한 차례 3발\n꾹 = 충전\n오른쪽 = 취소\n늦으면 슬로우!", Vector3(center.x + (half + half / 2.0 + 0.02), center.y + 0.05, face + 0.095), 30, chalk, 0.003)
-	# 간판 글자(캐비닛 아래).
-	var bottom := center.y - half
-	MeshKit.label(p, "Brand", "DARTY", Vector3(center.x, bottom - 0.42, face + 0.06), 96, Color("e6ca90"), 0.0042)
-	MeshKit.label(p, "BrandSubtitle", "소 셜   클 럽", Vector3(center.x, bottom - 0.82, face + 0.06), 34, Color("ecdfbf"), 0.0045)
+	MeshKit.label(p, "ChalkRules", "하 우 스  룰
+
+한 차례 3발
+꾹 = 충전
+오른쪽 = 취소
+늦으면 슬로우!", Vector3(center.x + 2.05, center.y - 0.05, face + 0.115), 30, chalk, 0.0036)
 
 
 ## 레인: 과녁 앞 벨벳 매트 + 놋쇠 투척선 + 투척 구역 경계 로프(이 선 앞으로는 못 들어간다 = TableView 투명벽).
@@ -233,8 +235,10 @@ static func _lane(p: Node3D) -> void:
 	var f := _faces()
 	var line_z: float = TableView.THROW_LINE_Z
 	var fence_z: float = TableView.NO_ENTRY_Z - 0.15
-	var lane_length: float = fence_z - f.board_z
-	var lane_center: float = (fence_z + f.board_z) / 2.0
+	# 2026-11-07: 레인 매트는 과녁 벽이 아니라 다트 머신 받침 앞(과녁 면 바로 아래)에서 끝난다.
+	var lane_end: float = TableView.BOARD_CENTER.z
+	var lane_length: float = fence_z - lane_end
+	var lane_center: float = (fence_z + lane_end) / 2.0
 	var lane_half: float = TableView.LANE_HALF
 	MeshKit.box(p, "LaneMat", Vector3(lane_half * 2, 0.02, lane_length), Vector3(0, 0.02, lane_center), MeshKit.material("LaneVelvet", "244d43"))
 	for side: float in [-1.0, 1.0]:
@@ -248,7 +252,7 @@ static func _lane(p: Node3D) -> void:
 	var zone: Vector2 = TableView.BLOCK_ZONE
 	for side: float in [-1.0, 1.0]:
 		# 옆 로프는 두 토막이다: 투척선 쪽 ~ 몸막 구역 뒤 끝, 몸막 구역 앞 끝 ~ 과녁 앞.
-		for run: Vector2 in [Vector2(fence_z, zone.y), Vector2(zone.x, f.board_z + 0.45)]:
+		for run: Vector2 in [Vector2(fence_z, zone.y), Vector2(zone.x, lane_end + 0.45)]:
 			var from_post := Vector3(side * lane_half, 0, run.x)
 			var to_post := Vector3(side * lane_half, 0, run.y)
 			PubParts.stanchion(p, from_post)

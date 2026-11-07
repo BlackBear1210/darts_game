@@ -40,26 +40,67 @@ var _pointer: Control
 
 
 ## 화면 가장자리를 어둡게 감싸 글자가 3D 배경 위에서도 읽히게 한다(비네팅 + 아래 그라데이션).
+## [2026-11-07 경계선 수정] 사용자 캡처: 과녁과 메뉴 글자 사이에 검은 막이 "뚝" 끊겨 세로 줄이 보였다.
+##   원인 = 왼쪽 어둠 사각형이 화면 72% 지점에서 알파 0.25 → 0 으로 갑자기 끝났다(그 너머는 막이 없음).
+##   고침 = 화면 전체를 얇은 띠 여러 장(STEPS)으로 나눠 부드러운 곡선(smoothstep)으로 옅어지게 하고,
+##   오른쪽 끝까지 아주 옅은 막(SIDE_FLOOR)을 남겨 "막이 있는 곳 / 없는 곳" 경계 자체를 없앴다.
+##   꼭짓점 색은 직선으로 섞이므로 띠를 잘게 나누면 꺾이는 곳(줄무늬)이 눈에 보이지 않는다.
 class Shade extends Control:
 	var strength: float = 1.0
+	## 그라데이션을 나누는 띠 수. 1920px 화면에서 띠 하나 약 60px — 알파 차이가 1~2% 라 줄이 안 보인다.
+	const STEPS: int = 32
+	## 왼쪽 끝(메뉴 뒤) 어둠과, 오른쪽(과녁 쪽)에 남기는 옅은 막. 0 이 아니라서 경계가 생기지 않는다.
+	const SIDE_DARK: float = 0.82
+	const SIDE_FLOOR: float = 0.12
+	## 어둠이 옅어지는 구간(화면 폭 비율). 이 지점부터 오른쪽은 SIDE_FLOOR 로 평평하다.
+	const SIDE_FADE_END: float = 0.92
+	## 아래(버튼·안내 글자 뒤)와 위(제목 줄) 띠: 시작 높이 비율과 가장 진한 알파.
+	const BOTTOM_FROM: float = 0.55
+	const BOTTOM_DARK: float = 0.9
+	const TOP_TO: float = 0.2
+	const TOP_DARK: float = 0.7
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		# 창 크기가 바뀌면 띠를 다시 그린다.
+		resized.connect(queue_redraw)
 
 	func _draw() -> void:
 		var ink := Color(0.07, 0.045, 0.07)
-		var clear := Color(ink, 0.0)
-		var dark := Color(ink, 0.82 * strength)
 		var w := size.x
 		var h := size.y
-		# 왼쪽·가운데를 어둡게(메뉴 뒤), 오른쪽 과녁은 밝게 남긴다.
-		draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w * 0.72, 0), Vector2(w * 0.72, h), Vector2(0, h)]),
-			PackedColorArray([dark, Color(ink, 0.25 * strength), Color(ink, 0.25 * strength), dark]))
-		draw_polygon(PackedVector2Array([Vector2(0, h * 0.62), Vector2(w, h * 0.62), Vector2(w, h), Vector2(0, h)]),
-			PackedColorArray([clear, clear, Color(ink, 0.9), Color(ink, 0.9)]))
-		draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h * 0.16), Vector2(0, h * 0.16)]),
-			PackedColorArray([Color(ink, 0.7), Color(ink, 0.7), clear, clear]))
+		for i in range(STEPS):
+			var t0: float = float(i) / STEPS
+			var t1: float = float(i + 1) / STEPS
+			# 1) 가로: 왼쪽 진하게 → 오른쪽 옅게(끝까지 SIDE_FLOOR).
+			var a0: float = _side_alpha(t0) * strength
+			var a1: float = _side_alpha(t1) * strength
+			draw_polygon(PackedVector2Array([Vector2(w * t0, 0), Vector2(w * t1, 0), Vector2(w * t1, h), Vector2(w * t0, h)]),
+				PackedColorArray([Color(ink, a0), Color(ink, a1), Color(ink, a1), Color(ink, a0)]))
+			# 2) 아래 띠, 3) 위 띠: 같은 부드러운 곡선으로 세로 방향.
+			var b0: float = _bottom_alpha(t0)
+			var b1: float = _bottom_alpha(t1)
+			var c0: float = _top_alpha(t0)
+			var c1: float = _top_alpha(t1)
+			if b0 > 0.0 or b1 > 0.0:
+				draw_polygon(PackedVector2Array([Vector2(0, h * t0), Vector2(w, h * t0), Vector2(w, h * t1), Vector2(0, h * t1)]),
+					PackedColorArray([Color(ink, b0), Color(ink, b0), Color(ink, b1), Color(ink, b1)]))
+			if c0 > 0.0 or c1 > 0.0:
+				draw_polygon(PackedVector2Array([Vector2(0, h * t0), Vector2(w, h * t0), Vector2(w, h * t1), Vector2(0, h * t1)]),
+					PackedColorArray([Color(ink, c0), Color(ink, c0), Color(ink, c1), Color(ink, c1)]))
+
+	## 가로 위치 t(0 = 왼쪽, 1 = 오른쪽) → 어둠 알파.
+	static func _side_alpha(t: float) -> float:
+		return lerpf(SIDE_FLOOR, SIDE_DARK, 1.0 - smoothstep(0.0, SIDE_FADE_END, t))
+
+	## 세로 위치 t(0 = 위, 1 = 아래) → 아래 띠 알파.
+	static func _bottom_alpha(t: float) -> float:
+		return BOTTOM_DARK * smoothstep(BOTTOM_FROM, 1.0, t)
+
+	## 세로 위치 t → 위 띠 알파.
+	static func _top_alpha(t: float) -> float:
+		return TOP_DARK * (1.0 - smoothstep(0.0, TOP_TO, t))
 
 
 func _ready() -> void:

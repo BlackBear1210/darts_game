@@ -69,6 +69,107 @@ static func flat_mesh(source: Mesh) -> ArrayMesh:
 	return surface.commit()
 
 
+## 모서리가 둥근 상자 메시(2026-11-07 디자인 요청서 "상자를 쌓은 외형 대신 둥근 실루엣·베벨").
+## 원리: 정육면체 면 위의 격자 점 p 를 안쪽 상자(크기 − 2r)로 잘라 q 를 얻고, q 에서 p 방향으로 r 만큼 나간 점을 쓴다.
+##   → 면 가운데는 평평하게 남고(요청서 "평평한 패널은 평면 유지") 모서리 띠만 반지름 r 의 곡면이 된다.
+##   법선 = (p − q) 방향이라 곡면에서는 부드럽게, 평면에서는 면 법선 그대로다.
+## steps = 모서리 곡면 한 쪽을 나누는 칸 수(4 = 모서리 90°를 8조각, 가구 크기에서 다각형으로 안 보이는 정도).
+## 같은 크기·반지름은 메시를 한 번만 만든다(오락기 10대가 같은 메시를 나눠 쓴다).
+static var _rounded_cache: Dictionary = {}
+
+
+static func rounded_box_mesh(size: Vector3, radius: float, steps := 4) -> ArrayMesh:
+	var key := "%s|%.4f|%d" % [size, radius, steps]
+	if _rounded_cache.has(key):
+		return _rounded_cache[key]
+	var half: Vector3 = size / 2.0
+	var r: float = clampf(radius, 0.002, minf(half.x, minf(half.y, half.z)) - 0.001)
+	var inner: Vector3 = half - Vector3.ONE * r
+	# 축마다 격자 좌표: 모서리 띠(−half~−inner, inner~half)만 잘게 나누고 가운데 평면은 한 칸으로 둔다.
+	var coords: Array[PackedFloat32Array] = []
+	for axis in range(3):
+		var list := PackedFloat32Array()
+		for s in range(steps + 1):
+			list.append(lerpf(-half[axis], -inner[axis], float(s) / steps))
+		for s in range(steps + 1):
+			list.append(lerpf(inner[axis], half[axis], float(s) / steps))
+		coords.append(list)
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# 면 6개: [법선 축, 부호, u 축, v 축]
+	for face: Array in [[0, 1.0, 1, 2], [0, -1.0, 1, 2], [1, 1.0, 0, 2], [1, -1.0, 0, 2], [2, 1.0, 0, 1], [2, -1.0, 0, 1]]:
+		var axis: int = face[0]
+		var u_axis: int = face[2]
+		var v_axis: int = face[3]
+		var outward := Vector3.ZERO
+		outward[axis] = face[1]
+		var us: PackedFloat32Array = coords[u_axis]
+		var vs: PackedFloat32Array = coords[v_axis]
+		for iu in range(us.size() - 1):
+			for iv in range(vs.size() - 1):
+				var corners: Array[Vector3] = []
+				for pick: Vector2i in [Vector2i(iu, iv), Vector2i(iu + 1, iv), Vector2i(iu + 1, iv + 1), Vector2i(iu, iv + 1)]:
+					var p := Vector3.ZERO
+					p[axis] = half[axis] * float(face[1])
+					p[u_axis] = us[pick.x]
+					p[v_axis] = vs[pick.y]
+					corners.append(p)
+				for tri: Array in [[0, 1, 2], [0, 2, 3]]:
+					var a: Vector3 = corners[tri[0]]
+					var b: Vector3 = corners[tri[1]]
+					var c: Vector3 = corners[tri[2]]
+					# Godot 앞면 = 바깥에서 볼 때 시계 방향. (c−a)×(b−a) 가 바깥을 향하도록 순서를 맞춘다.
+					if (c - a).cross(b - a).dot(outward) < 0.0:
+						var swap := b
+						b = c
+						c = swap
+					for p: Vector3 in [a, b, c]:
+						var q: Vector3 = p.clamp(-inner, inner)
+						var normal: Vector3 = (p - q).normalized()
+						surface.set_normal(normal)
+						surface.add_vertex(q + normal * r)
+	var mesh := surface.commit()
+	_rounded_cache[key] = mesh
+	return mesh
+
+
+## 둥근 상자 노드. pos = 상자 가운데(부모 기준).
+static func rounded_box(parent: Node, name_: String, size: Vector3, pos: Vector3, mat: Material, radius := 0.04, steps := 4) -> MeshInstance3D:
+	return mesh_node(parent, name_, rounded_box_mesh(size, radius, steps), pos, mat)
+
+
+## 원호를 따라 휘어진 관(머신 아치 테두리 조명 같은 것). XY 평면 위, 중심 = 원점, 각도 0 = +X, 반시계 방향.
+## arc_radius = 원호 반지름, tube = 관 반지름, from/to = 시작·끝 각도(라디안).
+static func arc_tube_mesh(arc_radius: float, tube: float, from: float, to: float, segments := 32, sides := 8) -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(segments):
+		var a0: float = lerpf(from, to, float(i) / segments)
+		var a1: float = lerpf(from, to, float(i + 1) / segments)
+		for j in range(sides):
+			var b0: float = TAU * j / sides
+			var b1: float = TAU * (j + 1) / sides
+			var quad: Array[Vector3] = []
+			var normals: Array[Vector3] = []
+			for pick: Vector2 in [Vector2(a0, b0), Vector2(a1, b0), Vector2(a1, b1), Vector2(a0, b1)]:
+				var radial := Vector3(cos(pick.x), sin(pick.x), 0.0)
+				var normal: Vector3 = radial * cos(pick.y) + Vector3.BACK * sin(pick.y)
+				normals.append(normal)
+				quad.append(radial * arc_radius + normal * tube)
+			for tri: Array in [[0, 1, 2], [0, 2, 3]]:
+				var order: Array = tri.duplicate()
+				var a: Vector3 = quad[order[0]]
+				var b: Vector3 = quad[order[1]]
+				var c: Vector3 = quad[order[2]]
+				var outward: Vector3 = normals[order[0]] + normals[order[1]] + normals[order[2]]
+				if (c - a).cross(b - a).dot(outward) < 0.0:
+					order = [order[0], order[2], order[1]]
+				for index: int in order:
+					surface.set_normal(normals[index])
+					surface.add_vertex(quad[index])
+	return surface.commit()
+
+
 static func sphere(parent: Node, name_: String, radius: float, pos: Vector3, mat: Material, scale_: Vector3 = Vector3.ONE) -> MeshInstance3D:
 	var mesh := SphereMesh.new()
 	mesh.radius = radius

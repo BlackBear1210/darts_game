@@ -23,7 +23,10 @@ const NUMBER_FONT_SIZE := 48
 ## scoring_radius: 더블 링 바깥 반지름(판정 반지름 1). 쇼케이스 = 0.17(실제), F5 = BoardLayout.RADIUS(0.30, 노드 배율 2.5 별도).
 ## glow: 0 보다 크면 칸 색이 스스로 조금 빛난다(어두운 경기장에서 다트판이 가장 밝게 보이도록 — 기획 2-6 가독성 위계).
 ## number_scale: 숫자 글자 배율. 1 = 실제 다트판 비율. 멀리서 봐야 하는 경기장은 크게.
-static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, glow := 0.0, number_scale := 1.0) -> void:
+## sector_groups(2026-11-07 아수라장 머신): 노드를 주면(F5 = 5개) 섹터 i 의 칸·숫자를 sector_groups[i / 4] 아래에 만든다
+##   (연속 4섹터 = 피자 한 조각). 조각 노드를 옮기면 숫자가 자기 칸과 함께 움직인다. 비우면 예전처럼 parent 하나에 만든다.
+static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, glow := 0.0, number_scale := 1.0,
+		sector_groups: Array[Node3D] = []) -> void:
 	var k := scoring_radius / REAL_SCORING_RADIUS
 	var suffix := "_Glow" if glow > 0.0 else ""
 	var dark := MeshKit.material("BoardBacking", "172523")
@@ -48,11 +51,12 @@ static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, gl
 		var end := angle + PI / 20.0 - WIRE_GAP
 		var single := mats[i % 2]
 		var special := mats[2 + i % 2]
-		MeshKit.sector(parent, "SingleInner_%s" % number, outer_bull, triple_in, start, end, 0, single)
-		MeshKit.sector(parent, "Triple_%s" % number, triple_in, triple_out, start, end, 0.0003 * k, special)
-		MeshKit.sector(parent, "SingleOuter_%s" % number, triple_out, double_in, start, end, 0, single)
-		MeshKit.sector(parent, "Double_%s" % number, double_in, scoring_radius, start, end, 0.0003 * k, special)
-		var label := MeshKit.label(parent, "Number_%s" % number, str(number),
+		var holder: Node3D = sector_groups[i * sector_groups.size() / 20] if not sector_groups.is_empty() else parent
+		MeshKit.sector(holder, "SingleInner_%s" % number, outer_bull, triple_in, start, end, 0, single)
+		MeshKit.sector(holder, "Triple_%s" % number, triple_in, triple_out, start, end, 0.0003 * k, special)
+		MeshKit.sector(holder, "SingleOuter_%s" % number, triple_out, double_in, start, end, 0, single)
+		MeshKit.sector(holder, "Double_%s" % number, double_in, scoring_radius, start, end, 0.0003 * k, special)
+		var label := MeshKit.label(holder, "Number_%s" % number, str(number),
 			Vector3(sin(angle), cos(angle), 0) * scoring_radius * NUMBER_RATIO + Vector3(0, 0, 0.003 * k),
 			NUMBER_FONT_SIZE, Color("f0e6cd"), 0.00055 * k * 34.0 / NUMBER_FONT_SIZE * number_scale)
 		label.double_sided = false

@@ -45,9 +45,9 @@ const CARDS: Array[Dictionary] = [
 		"target": Target.OPPONENT, "timing": Timing.TURN, "effect": "shuffle", "weight": 1.5,
 		"art": "res://art/cards/card_number_shuffle.webp", "big": "?",
 		"text": "상대 차례 동안 과녁 숫자 배치가 뒤섞인다."},
-	{"id": "cover", "name": "가림판", "category": CardHandRules.Category.BOARD,
+	{"id": "cover", "name": "셔터", "category": CardHandRules.Category.BOARD,
 		"target": Target.OPPONENT, "timing": Timing.TURN, "effect": "cover", "weight": 1.0,
-		"art": "", "big": "가림", "text": "상대 차례 동안 과녁 왼쪽 절반을 판자로 가린다. 가린 곳은 0점."},
+		"art": "", "big": "가림", "text": "상대 차례 동안 다트 머신 왼쪽 셔터가 닫혀 과녁 왼쪽 절반을 가린다. 가린 곳은 0점."},
 	{"id": "drowsy", "name": "졸림", "category": CardHandRules.Category.PHYSICAL,
 		"target": Target.OPPONENT, "timing": Timing.TURN, "effect": "drowsy", "weight": 1.5,
 		"art": "res://art/cards/card_drowsy.webp", "big": "Zz",
@@ -55,6 +55,15 @@ const CARDS: Array[Dictionary] = [
 	{"id": "wind", "name": "바람", "category": CardHandRules.Category.PHYSICAL,
 		"target": Target.OPPONENT, "timing": Timing.TURN, "effect": "wind", "push": 0.32, "weight": 1.0,
 		"art": "", "big": "바람", "text": "상대 차례 동안 다트가 오른쪽으로 밀린다."},
+	# 아수라장 다트 머신 카드(2026-11-07). 기존 카드 번호(손패에 든 종류 번호)가 밀리지 않게 맨 뒤에 붙인다.
+	# 판정은 game/board/board_chaos.gd 가 화면에 보이는 모양 그대로 센다(숫자는 자기 조각을 따라 돈다).
+	# 셔터·숫자 섞기와 겹치면 효과가 함께 걸린다(셔터 → 회전 → 분리 순서로 판정) — 여러 장을 몰아 쓰는 "시너지 방해".
+	{"id": "board_spin", "name": "회전판", "category": CardHandRules.Category.BOARD,
+		"target": Target.OPPONENT, "timing": Timing.TURN, "effect": "spin", "weight": 1.0,
+		"art": "", "big": "회전", "text": "상대 차례 동안 다트 머신 과녁이 빙글빙글 돈다. 숫자도 자기 칸을 따라 돈다."},
+	{"id": "board_split", "name": "피자 분리", "category": CardHandRules.Category.BOARD,
+		"target": Target.OPPONENT, "timing": Timing.TURN, "effect": "split", "weight": 1.0,
+		"art": "", "big": "분리", "text": "상대 차례 동안 과녁이 피자 다섯 조각으로 벌어졌다 모였다 한다. 벌어진 틈은 0점."},
 ]
 
 ## 랜덤 연산 카드가 굴리는 결과(시연값).

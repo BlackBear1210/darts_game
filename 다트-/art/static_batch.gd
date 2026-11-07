@@ -10,6 +10,10 @@ const CELL_SIZE := Vector3(3.0, 2.0, 3.0)
 const FACE_PREFIXES: Array[String] = ["Eye", "Pupil", "Brow", "Mouth"]
 ## 실행 중 움직이는 방 소품(2026-10-31 밤 "건드리기": 바 종이 흔들린다)은 묶지 않는다 — 묶이면 원본이 숨어 흔들림이 안 보인다.
 const NO_BATCH_NAMES: Array[String] = ["Bell"]
+## 이름이 이렇게 시작하는 묶음(아래 전부)은 묶지 않는다.
+## "Seat" = 자리 매트·바닥 자리 표시·스툴·자리 글자(2026-11-07): 방 인원수에 따라 TableView.show_seats 가 숨기므로
+## 묶여 버리면 원본을 숨겨도 묶음 메시에 그대로 남는다.
+const NO_BATCH_PREFIXES: Array[String] = ["Seat"]
 
 
 ## root 아래 정적 메시를 묶어 RuntimeStaticBatches 노드에 넣는다. 반환값은 로그·검증용 개수.
@@ -66,6 +70,9 @@ static func collect(node: Node, root: Node3D, groups: Dictionary) -> void:
 		return
 	if str(node.name) in NO_BATCH_NAMES:
 		return
+	for prefix in NO_BATCH_PREFIXES:
+		if str(node.name).begins_with(prefix):
+			return
 	if node is MeshInstance3D:
 		for prefix in FACE_PREFIXES:
 			if str(node.name).begins_with(prefix):

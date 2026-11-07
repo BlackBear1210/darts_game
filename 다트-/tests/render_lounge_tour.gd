@@ -2,6 +2,7 @@ extends SceneTree
 ## 실제 생성된 테이블·준비 자세·모니터·주크박스와 두 테마를 D3D12로 캡처한다.
 ## 2026-10-30: 네온 오락실 기계(인형뽑기·가챠·농구)·깨지는 병·새 HUD(킬로그 칩·키 안내)·장난 효과 덮개 장면 추가.
 const Rules = preload("res://game/lounge/arcade/arcade_rules.gd")
+const BoardChaos = preload("res://game/board/board_chaos.gd")
 var main: Node
 var game: GameView
 var output: String = "res://.godot/lounge_render"
@@ -47,13 +48,28 @@ func _run() -> void:
 	await capture("09_arcade_jukebox", Vector3(6.7, 1.65, 3.0), Vector3(7.8, 1.0, 1.1))
 	await capture("10_arcade_monitor", Vector3(-2.5, 1.65, 3.3), Vector3(-4.35, 1.2, 2))
 	await capture("13_arcade_overview", Vector3(-1.5, 3.2, 0.6), Vector3(7.5, 0.8, 5.0))
-	await capture("14_arcade_claw", Rules.CLAW_AT + Vector3(-0.9, 1.6, -2.2), Rules.CLAW_AT + Vector3(0, 1.2, 0))
-	await capture("15_arcade_gacha", Vector3(3.6, 1.7, 4.0), Rules.GACHA_AT[0] + Vector3(0, 0.5, 0.35))
+	# 2026-11-07: 인형뽑기 조종 중(조이스틱 기울기 · 조준 고리 · 남은 초 간판)을 찍는다.
+	var claw: Dictionary = lounge._arcade.claw
+	claw.merge({"phase": "move", "operator": 1, "until": lounge.now() + 12.0, "x": 0.1, "z": 0.12, "stick_x": 0.6, "stick_z": 0.8}, true)
+	await capture("14_arcade_claw", Rules.CLAW_AT + Vector3(-0.9, 1.6, -2.2), Rules.CLAW_AT + Vector3(0, 1.2, 0), 0.5)
+	claw.phase = "idle"
+	# 2026-11-07: 가챠는 통로(-Z)를 본다 → 오른쪽 앞에서 찍는다(정면 드럼 의자에 펍 손님 NPC 가 서 있어 가린다).
+	await capture("15_arcade_gacha", Vector3(7.0, 1.85, 2.3), Vector3(5.78, 1.1, 3.6))
 	lounge._arcade.hoop.running = true
 	lounge._arcade.hoop.until = lounge.now() + 21.0
 	lounge._arcade.hoop.scores = {1: 6, -1: 4}
 	await capture("16_arcade_hoop", Vector3(11.0, 1.75, 1.2), Rules.HOOP_RING + Vector3(0, -0.4, 0))
+	# 골 직후(그물 출렁 · GOAL!) + 바닥 3점 선이 보이게 뒤에서.
+	lounge._arcade.hoop.goal = lounge.now() - 0.2
+	await capture("16b_arcade_hoop_goal_3pt", Vector3(11.15, 2.9, 0.45), Vector3(11.15, 0.6, 3.2), 0.05)
 	await capture("17_arcade_board_lane", Vector3(2.4, 2.0, -2.4), Vector3(0, 2.0, TableView.BOARD_CENTER.z))
+	# 2026-11-07 아수라장 머신: 회전 + 피자 분리 + 셔터를 한꺼번에 건 모양(그림만 — 판정은 test_board_chaos).
+	var chaos: Dictionary = BoardChaos.pose(1.5, 1.0, BoardChaos.SPLIT_OPEN, 1.0)
+	game.table.board.show_chaos(chaos)
+	game.table.machine.show_chaos(chaos, 1.0)
+	await capture("17b_machine_chaos", Vector3(0.6, 2.2, -5.0), Vector3(0, 2.0, TableView.BOARD_CENTER.z))
+	game.table.board.show_chaos(BoardChaos.rest())
+	game.table.machine.show_chaos(BoardChaos.rest(), 1.0)
 	await capture("18_arcade_prize", Vector3(-2.2, 1.9, 1.2), Vector3(-6.5, 1.3, 4.6))
 	# 깨지는 병: 세게 던져 바에 부딪히는 순간.
 	var bottle: int = 1

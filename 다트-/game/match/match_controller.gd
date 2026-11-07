@@ -34,6 +34,10 @@ var _phase_end: float = 0.0
 var _received_at: float = 0.0
 var _remote_seconds: float = 0.0
 var _pending_hit: Dictionary = {}
+## 아수라장 머신(2026-11-07): 방장이 마지막으로 보낸 "효과가 걸린 지 몇 초"(MatchCards.chaos_ages)와 받은 시각.
+## 손님 화면은 받은 뒤 흐른 시간을 더해 같은 회전·벌어짐을 재생한다(프레임마다 RPC 를 보내지 않는다).
+var _chaos_ages: Dictionary = {}
+const BoardChaos = preload("res://game/board/board_chaos.gd")
 ## 지금 날아가는 다트의 조준·충전. 날아가는 중에 궤적 카드가 걸리면 같은 값으로 다시 계산한다.
 var _flight_input: Dictionary = {}
 var _request_number: int = 0
@@ -172,6 +176,10 @@ func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 		for offset in [Vector2(-0.09, 0.03), Vector2(0.09, 0.03)]:
 			var alternate: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id)
 			if int(alternate.points) > int(data.points): data = alternate
+	# 셔터(가림판 카드)가 닫힌 왼쪽에 꽂히는 다트는 과녁 면이 아니라 셔터 날개 앞면에 박힌다(2026-11-07).
+	# 보이는 자리만 앞으로 당긴다 — 점수는 꽂힐 때 BoardChaos.locate 가 어차피 0점으로 센다(x 99 = 판 밖은 그대로).
+	if mods.get("cover", false) and float(data.x) < 0.0 and float(data.x) > -50.0:
+		data.target = (data.target as Vector3) + Vector3(0, 0, BoardChaos.SHUTTER_FRONT)
 	return data
 
 
@@ -503,6 +511,7 @@ func _publish() -> void:
 	snapshot["config"] = config.to_snapshot()
 	snapshot["seconds"] = remaining_seconds()
 	snapshot["notice"] = notice
+	snapshot["chaos"] = cards.chaos_ages() if cards != null else {}
 	if session != null:
 		session.receive_game_event.rpc("match", snapshot)
 	changed.emit()
@@ -516,7 +525,22 @@ func _receive_state(snapshot: Dictionary) -> void:
 	_remote_seconds = snapshot.seconds
 	_received_at = _now()
 	notice = snapshot.notice
+	var chaos: Variant = snapshot.get("chaos", {})
+	_chaos_ages = chaos if chaos is Dictionary else {}
 	changed.emit()
+
+
+## 지금 다트 머신 과녁 모양(BoardChaos.pose). 방장은 직접 세고, 손님은 받은 값에 흐른 시간을 더한다.
+## 다트 단계(조준·비행)가 아니면 늘 제자리 모양이다.
+func chaos_shape() -> Dictionary:
+	if state.phase not in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]:
+		return BoardChaos.rest()
+	if multiplayer.is_server() or session == null:
+		return cards.shape_now() if cards != null else BoardChaos.rest()
+	var passed: float = _now() - _received_at
+	var age := func(kind: String) -> float:
+		return float(_chaos_ages[kind]) + passed if _chaos_ages.has(kind) else -1.0
+	return BoardChaos.pose(age.call("spin"), float(_chaos_ages.get("dir", 1.0)), age.call("split"), age.call("cover"))
 
 
 func _now() -> float:

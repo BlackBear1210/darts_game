@@ -15,12 +15,19 @@ const FLIGHT_KINDS: Array[String] = ["heavy", "wind", "power", "triple"]
 const BOT_USE_CHANCE: float = 0.6
 ## 차례가 시작되고 봇이 카드를 꺼내기까지의 시간 범위(초). 시연값.
 const BOT_THINK_SECONDS := Vector2(1.0, 6.0)
+## 아수라장 다트 머신 효과(2026-11-07): 과녁 모양을 바꾸는 카드. 시작 시각을 재서 회전각·벌어짐을 시간으로 계산한다.
+const BoardChaos = preload("res://game/board/board_chaos.gd")
+const CHAOS_KINDS: Array[String] = ["spin", "split", "cover"]
 var controller: MatchController
 var rules: RefCounted
 var peers: Array[int] = []
 ## 봇 peer ID → 이번 다트 턴에 카드를 꺼낼 시각(-1 = 이번 차례엔 안 씀).
 var _bot_plans: Dictionary = {}
 var _random := RandomNumberGenerator.new()
+## 이번 차례에 켜진 머신 효과의 시작 시각(방장 시계): "spin"·"split"·"cover" → 초. 차례가 바뀌면 비운다.
+var _chaos_from: Dictionary = {}
+## 회전 방향(+1 = 앞에서 볼 때 반시계). 카드를 쓸 때마다 번갈아 정해 같은 방향만 외우지 못하게 한다.
+var _spin_direction: float = 1.0
 
 ## F5 경기 규칙: 무효(×0) 말고는 누가 쓰든 대상이 지금 던지는 사람 하나다. 효과 계산은 RoundRules 그대로 쓴다.
 class MatchRules extends "res://game/card_round/rules/round_rules.gd":
@@ -100,11 +107,34 @@ func _use(seat: int, type: int, value: int) -> Dictionary:
 	return rules.use(seat, target, controller._now())
 
 ## 쓰는 순간 바로 건다: 숫자 섞기는 과녁을 지금 섞고, 날아가는 다트에 걸린 궤적 카드는 꽂히는 자리를 다시 계산한다.
-## 점수 카드·가림판은 꽂히는 순간 계산(landing_points·score)이라 따로 할 일이 없다.
+## 점수 카드는 꽂히는 순간 계산(landing_points·score)이라 따로 할 일이 없다.
+## 머신 효과(셔터·회전·분리)는 지금 시각을 시작으로 적어 둔다 — 꽂히는 순간 그 시각의 모양으로 판정한다.
 func _apply_now(effect) -> void:
 	var thrower: MatchPlayer = controller.state.active_player()
 	if effect.kind == "shuffle": thrower.layout.numbers.shuffle()
 	if effect.kind in FLIGHT_KINDS and controller.state.phase == MatchState.Phase.FLIGHT: controller.redirect_flight()
+	if effect.kind in CHAOS_KINDS: _start_chaos(effect.kind)
+
+## 머신 효과 하나를 켠다. 이미 켜진 효과를 또 쓰면 시작 시각은 그대로(모양이 덜컥 튀지 않게) 두고 카드만 소모된다.
+func _start_chaos(kind: String) -> void:
+	if _chaos_from.has(kind): return
+	_chaos_from[kind] = controller._now()
+	if kind == "spin": _spin_direction = -_spin_direction
+
+## 공개용: 켜진 머신 효과마다 "걸린 지 몇 초"(방장 시계) + 회전 방향. MatchController._publish 가 스냅샷에 싣는다.
+func chaos_ages() -> Dictionary:
+	var now: float = controller._now()
+	var ages: Dictionary = {"dir": _spin_direction}
+	for kind: String in _chaos_from:
+		ages[kind] = now - float(_chaos_from[kind])
+	return ages
+
+## 방장이 보는 지금 과녁 모양(BoardChaos.pose). 점수 판정과 방장 화면이 같이 쓴다.
+func shape_now() -> Dictionary:
+	var now: float = controller._now()
+	var age := func(kind: String) -> float:
+		return now - float(_chaos_from[kind]) if _chaos_from.has(kind) else -1.0
+	return BoardChaos.pose(age.call("spin"), _spin_direction, age.call("split"), age.call("cover"))
 
 func begin_dart_turn() -> void:
 	var active: MatchPlayer = controller.state.active_player()
@@ -114,6 +144,10 @@ func begin_dart_turn() -> void:
 	var mods: Dictionary = rules.dart_modifiers(seat)
 	active.layout.reset()
 	if mods.shuffle: active.layout.numbers.shuffle()
+	# 머신은 차례마다 제자리에서 시작한다. 차례 시작에 켜지는 효과(미리 걸어 둔 "차례 동안" 카드)는 지금부터 움직인다.
+	_chaos_from.clear()
+	for kind in CHAOS_KINDS:
+		if bool(mods.get(kind, false)): _start_chaos(kind)
 	for player in controller.state.players:
 		if player.is_bot:
 			_bot_plans[player.peer_id] = controller._now() + _random.randf_range(BOT_THINK_SECONDS.x, BOT_THINK_SECONDS.y) if _random.randf() < BOT_USE_CHANCE else -1.0
@@ -167,6 +201,7 @@ func _bot_use(player: MatchPlayer, seat: int, type: int) -> void:
 
 func end_dart_turn() -> void:
 	rules.end_turn()
+	_chaos_from.clear()
 	_sync()
 
 ## 몸으로 막은 사람에게 주는 방해 성공 보상(계산은 RoundRules.disrupt). 점수판까지 맞추고
@@ -188,13 +223,15 @@ func modifiers(peer_id: int) -> Dictionary:
 	var seat: int = peers.find(peer_id)
 	return rules.dart_modifiers(seat) if seat >= 0 else {}
 
-## 꽂히는 순간의 과녁(숫자 섞기·가림판)으로 기본 점수를 다시 센다. 날아가는 중에 쓴 과녁 카드도 그 다트에 걸린다.
-## 벽·바닥(정규화 좌표 99)은 과녁 밖이라 0점이다.
+## 꽂히는 순간의 과녁(숫자 섞기·셔터·회전·분리)으로 기본 점수를 다시 센다. 날아가는 중에 쓴 과녁 카드도 그 다트에 걸린다.
+## 벽·바닥(정규화 좌표 99)은 과녁 밖이라 0점이다. 판정 순서는 BoardChaos.locate(셔터 → 회전 → 조각).
 func landing_points(hit: Dictionary) -> int:
 	var player: MatchPlayer = controller.state.active_player()
 	var aim := Vector2(float(hit.x), float(hit.y))
-	if bool(modifiers(player.peer_id).get("cover", false)) and aim.x < 0: return 0
-	return BoardScorer.score(aim, player.layout)
+	var shape: Dictionary = shape_now()
+	# 셔터는 카드를 쓴 순간부터 가린다(닫히는 그림이 덜 끝났어도 — 기존 가림판 규칙).
+	shape.cover = bool(modifiers(player.peer_id).get("cover", false))
+	return BoardChaos.score(aim, shape, player.layout)
 
 func score(base: int) -> Dictionary:
 	var player: MatchPlayer = controller.state.active_player()

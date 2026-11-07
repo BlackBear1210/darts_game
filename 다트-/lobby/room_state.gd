@@ -6,6 +6,11 @@ enum Phase { LOBBY, LOADING, PLAYING }
 
 const MIN_PLAYERS: int = 2
 const MAX_PLAYERS: int = 4
+## 인원수(capacity)별로 먼저 채우는 자리 순서(2026-11-07 사용자 요청 "정해진 인원수대로 테이블 카드·의자 세팅").
+## 자리 번호는 TableView.SEATS 순서(0 왼쪽 · 1 안쪽 · 2 오른쪽 · 3 바깥쪽 = 다트 홀 쪽)다.
+##   2명 = 왼쪽·오른쪽(테이블을 사이에 두고 마주 본다) · 3명 = 왼쪽·안쪽·오른쪽(다트 홀 쪽 바깥 자리를 비워 길을 연다) · 4명 = 전부.
+## 뒤에 붙은 번호는 예비 자리다(인원보다 사람이 많아지는 일은 없지만 자리가 꼬여도 빈자리를 찾게).
+const SEAT_ORDER := {1: [0, 2, 1, 3], 2: [0, 2, 1, 3], 3: [0, 1, 2, 3], 4: [0, 1, 2, 3]}
 
 var settings := RoomSettings.new()
 var room_code: String = ""
@@ -32,13 +37,36 @@ func add_player(peer_id: int, display_name: String) -> bool:
 	var occupied_seats: Array[int] = []
 	for player in players:
 		occupied_seats.append(player.seat)
-	for seat in range(MAX_PLAYERS):
+	# 인원수에 맞는 자리부터 채운다(2인 방이면 0 → 2번 자리).
+	for seat: int in seat_order(settings.capacity):
 		if not occupied_seats.has(seat):
 			players.append(RoomPlayer.new(peer_id, display_name, seat))
 			if host_peer_id == 0:
 				host_peer_id = peer_id
 			return true
 	return false
+
+
+## 인원수별 자리 채우는 순서(SEAT_ORDER). 범위를 벗어난 인원은 4명 순서를 쓴다.
+static func seat_order(capacity: int) -> Array[int]:
+	var order: Array[int] = []
+	order.assign(SEAT_ORDER.get(clampi(capacity, 1, MAX_PLAYERS), SEAT_ORDER[MAX_PLAYERS]))
+	return order
+
+
+## 테이블에 깔아 둘 자리(의자·매트·바닥 자리 표시): 인원수만큼의 기본 자리 + 지금 앉아 있는 사람 자리.
+## 빈자리는 그대로 깔려 있어야 "누가 들어올 수 있는 자리"가 보이므로 사람 수가 아니라 방 인원수로 정한다.
+## 인원수를 줄였는데 이미 다른 자리에 앉은 사람이 있으면 그 자리도 남긴다(의자가 사라져 허공에 앉지 않게).
+func shown_seats() -> Array[int]:
+	var seats: Array[int] = []
+	var order: Array[int] = seat_order(settings.capacity)
+	for index in range(clampi(settings.capacity, 1, MAX_PLAYERS)):
+		seats.append(order[index])
+	for player in players:
+		if not seats.has(player.seat):
+			seats.append(player.seat)
+	seats.sort()
+	return seats
 
 
 func remove_player(peer_id: int) -> void:

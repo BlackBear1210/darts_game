@@ -57,7 +57,11 @@ func _check_table_scene() -> void:
 	# 바닥2·천장2·벽8·레인 벽6(가로막이 2 + 옆벽 4 — 2026-11-02 몸막 구역만큼 끊어 두어 둘로 나뉜다)
 	# ·테이블·바·NPC 테이블·당구대·럼주통4·작은 통4·NPC 스툴2 = 32
 	# + 도면 v3 가구 상자(TableView.decor_blocks: 생맥주 통·뒤 조리대·연습 과녁·양동이·소파·안락의자·낮은 탁자·상자·자루·냉장고)
-	assert(bodies == 32 + TableView.decor_blocks().size(), "충돌 몸체 수 %d" % bodies)
+	# + 다트 머신 몸체 1(2026-11-07 — 과녁 면 0.12m 뒤부터 과녁 벽까지)
+	assert(bodies == 33 + TableView.decor_blocks().size(), "충돌 몸체 수 %d" % bodies)
+	# 다트 머신 그림: 셔터 날개 양쪽 8장씩 + 상태 화면. 보이기만 하므로 충돌 몸체가 아니다.
+	assert(table.machine != null and table.machine.find_child("ShutterLeft", true, false).get_child_count() == 8)
+	assert(table.machine.find_child("StatusText", true, false) is Label3D)
 	table.set_chalk_scores("점 수\n\n● 시험  42")
 	assert((table.find_child("ChalkScores", true, false) as Label3D).text.contains("42"))
 	table.queue_free()
@@ -181,16 +185,17 @@ func _check_board_follows_layout() -> void:
 	root.add_child(board)
 	await process_frame
 	var face := board.get_node("Face")
-	assert(face.get_node_or_null("Number_20") != null and face.get_node_or_null("Triple_20") != null)
+	# 2026-11-07: 칸·숫자는 Face/Spin/SectorGroup0~4(피자 조각) 아래에 있다 → 깊이 찾기.
+	assert(face.find_child("Number_20", true, false) != null and face.find_child("Triple_20", true, false) != null)
 	var shuffled := BoardLayout.new()
 	shuffled.numbers = BoardLayout.DEFAULT_NUMBERS.duplicate()
 	shuffled.numbers.reverse()
 	board.show_layout(shuffled)
 	await process_frame
 	# 12시(0번 칸) 숫자 글자가 새 순서의 첫 숫자와 같다.
-	var top := face.get_node("Number_%d" % shuffled.numbers[0]) as Label3D
+	var top := face.find_child("Number_%d" % shuffled.numbers[0], true, false) as Label3D
 	assert(top.text == str(shuffled.numbers[0]) and top.position.x > -0.001 and top.position.x < 0.001 and top.position.y > 0)
-	assert(face.find_children("Triple_*", "MeshInstance3D", false, false).size() == 20)
+	assert(face.find_children("Triple_*", "MeshInstance3D", true, false).size() == 20)
 	board.queue_free()
 	await process_frame
 
