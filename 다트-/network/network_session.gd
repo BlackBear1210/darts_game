@@ -494,7 +494,10 @@ func _request_settings(data: Dictionary) -> void:
 func _accept_settings(sender: int, data: Dictionary) -> void:
 	if sender != room.host_peer_id: return
 	var updated := RoomSettings.from_snapshot(data)
-	# 참가자 수·방 공개 여부는 개설 시 결정한다. UI를 우회해도 개발자 수치는 바꿀 수 없다.
+	# 2026-11-08: 인원수·연습 봇 수는 대기실에서 방장이 다시 정할 수 있다(사용자 요청). 값은 room.resize 가 검사해 넣는다.
+	var wanted_capacity: int = updated.capacity
+	var wanted_bots: int = updated.bot_count
+	# 방 종류(연습·공개 여부·소셜 대기실)는 개설 시 결정한다. UI를 우회해도 개발자 수치는 바꿀 수 없다.
 	for field in ["solo", "capacity", "bot_count", "private_room", "social_lobby"]:
 		updated.set(field, room.settings.get(field))
 	if not (developer_authorized and sender == HOST_ID):
@@ -507,6 +510,8 @@ func _accept_settings(sender: int, data: Dictionary) -> void:
 			room.settings.set(field, updated.get(field))
 	else:
 		room.settings = updated
+		# 사람 수보다 적게는 못 줄이고, 넘치는 봇은 빼고, 연습 방은 봇 수만큼 봇을 채운다(RoomState.resize).
+		room.resize(wanted_capacity, wanted_bots)
 		# 규칙을 읽고 동의한 준비만 유효하다. 규칙이 바뀌면 다시 참여해야 한다.
 		for player in room.players: player.is_ready = player.is_bot
 	_publish_room()

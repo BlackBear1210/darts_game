@@ -13,8 +13,15 @@ const GlassShards = preload("res://art/fx/glass_shards.gd")
 const GLASS_GLINTS: int = 18
 ## 술 웅덩이 크기(m, 평균 반지름)·테두리 점 수·옆에 튄 작은 방울 수(2026-10-31 완벽한 원판 → 흘러나간 모양).
 const PUDDLE_RADIUS: float = 0.32
-const PUDDLE_STEPS: int = 36
 const PUDDLE_DROPS: int = 4
+## 2026-11-08 사용자 지적 "병을 테이블 카펫 위에 던지면 쏟아진 음료 그래픽이 깨져 보인다":
+##   예전 웅덩이 = 바닥 높이(0.012m)에 띄운 반투명 원판. 러그 윗면(0.012m)과 같은 높이라 깜빡였고(z-fighting),
+##   자리 깔개(윗면 0.0245m)·오락실 카펫(0.018m) 아래로는 아예 묻혀 잘려 보였다.
+##   → Decal(위에서 아래로 그림을 비추는 상자)로 바꿨다. 바닥이든 러그든 카펫이든 그 윗면에 그대로 칠해져 높이 문제가 없다.
+##   PUDDLE_DEPTH = 비추는 상자 높이(m). 바닥 위아래로 이만큼 안의 윗면만 젖는다(의자 다리 옆면은 normal_fade 로 뺀다).
+const PUDDLE_DEPTH: float = 0.16
+## 웅덩이 그림 크기(px). 한 번 깨질 때 한 장 그린다(96×96 → 수 ms).
+const PUDDLE_PIXELS: int = 96
 
 ## kind → 조각 수·크기·속도·수명·바닥에 남는지. 숫자는 보기 좋게 맞춘 연출값이다.
 const KINDS := {
@@ -33,7 +40,10 @@ static var _materials: Dictionary = {}
 var _pieces: Array[Dictionary] = []
 var _age: float = 0.0
 var _life: float = 1.0
-var _puddle: MeshInstance3D
+var _puddle: Decal
+## 웅덩이 그림 전체 폭(m, 방울 포함) · 처음 색(투명도 포함) — _process 가 퍼지고 흐려지게 쓴다.
+var _puddle_extent: float = 1.0
+var _puddle_color: Color = Color.WHITE
 
 
 ## 효과 하나를 띄운다. 화면 없는 시험(--headless)에서는 아무것도 만들지 않는다.
@@ -76,15 +86,23 @@ func _build(kind: String, push: Vector3, tint: Color) -> void:
 			"rest": bool(spec.rest), "drag": 2.2 if kind == "confetti" else 0.0, "scale": rng.randf_range(0.6, 1.4)})
 	# 깨진 병은 바닥에 술(음료) 웅덩이를 남긴다.
 	if kind == "splash":
-		_puddle = MeshInstance3D.new()
-		_puddle.mesh = _puddle_mesh(rng)
-		_puddle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var puddle_color := tint
-		puddle_color.a = 0.55
-		_puddle.material_override = _material(puddle_color, "puddle")
+		_puddle = Decal.new()
+		_puddle.name = "Puddle"
+		_puddle_extent = PUDDLE_RADIUS * 4.0
+		_puddle.texture_albedo = _puddle_texture(rng)
+		# 젖은 윤기: 거칠기 낮은 ORM(그림의 알파가 그대로 가림막이 돼 웅덩이 모양 안쪽만 반짝인다).
+		_puddle.texture_orm = _wet_orm()
+		_puddle_color = Color(tint.r, tint.g, tint.b, 0.85)
+		_puddle.modulate = _puddle_color
+		_puddle.albedo_mix = 1.0
+		# 위를 보는 면에만 칠한다(의자 다리·테이블 받침 옆면에 세로 줄이 생기지 않게).
+		_puddle.normal_fade = 0.6
+		_puddle.upper_fade = 0.2
+		_puddle.lower_fade = 0.2
 		add_child(_puddle)
 		_puddle.global_position = Vector3(global_position.x, FLOOR_Y, global_position.z)
-		_puddle.scale = Vector3(0.1, 1, 0.1)
+		_puddle.global_rotation = Vector3(0, rng.randf() * TAU, 0)
+		_puddle.size = Vector3(_puddle_extent * 0.1, PUDDLE_DEPTH, _puddle_extent * 0.1)
 		_life = 7.0
 
 
@@ -164,46 +182,64 @@ func _process(delta: float) -> void:
 		var sparkle: float = 1.0 if twinkle < 0.0 else (0.35 + 0.65 * absf(sin(_age * 26.0 + twinkle))) * clampf(1.0 - _age / 0.7, 0.0, 1.0)
 		node.scale = Vector3.ONE * float(piece.scale) * fade * sparkle
 	if _puddle != null:
-		var grow: float = minf(1.0, _age * 3.0)
-		_puddle.scale = Vector3(grow, 1, grow) * maxf(0.05, fade)
+		# 퍼지기(0.33초) → 그대로 → 마지막 0.6초에 흐려지며 조금 줄어든다.
+		var grow: float = minf(1.0, _age * 3.0) * lerpf(0.85, 1.0, fade)
+		var width: float = maxf(0.02, _puddle_extent * grow)
+		_puddle.size = Vector3(width, PUDDLE_DEPTH, width)
+		_puddle.modulate = Color(_puddle_color, _puddle_color.a * fade)
 	if _age >= _life:
 		queue_free()
 
 
-## 술 웅덩이 바닥 모양: 각도마다 반지름이 조금씩 다른 납작한 부채꼴 메시 + 옆으로 튄 작은 방울 몇 개.
-## 완벽한 원판은 바닥에 붙인 스티커처럼 보였다. 낮은 주파수 사인 세 개를 겹쳐 흘러나간 듯한 혹을 만든다.
-## 한 장짜리 메시라 반투명 원판 여러 개를 겹칠 때처럼 겹친 곳만 진해지는 일이 없다.
-static func _puddle_mesh(rng: RandomNumberGenerator) -> ArrayMesh:
-	var tool := SurfaceTool.new()
-	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	tool.set_normal(Vector3.UP)
+## 술 웅덩이 그림(데칼에 쓰는 흰 모양 + 알파): 각도마다 반지름이 조금씩 다른 흘러나간 모양 + 옆으로 튄 작은 방울 몇 개.
+## 완벽한 원은 바닥에 붙인 스티커처럼 보였다. 낮은 주파수 사인 세 개를 겹쳐 흘러나간 듯한 혹을 만든다.
+## 색은 데칼 modulate(음료 색)로 입힌다. 가장자리는 1.5px 부드럽게, 안쪽 테두리는 조금 진하게(액체가 고인 가장자리).
+## 그림 전체 폭 = PUDDLE_RADIUS × 4. 본체는 최대 약 1.4배, 방울은 1.85배 + 반지름까지라 그 안(2배)에 든다.
+static func _puddle_texture(rng: RandomNumberGenerator) -> ImageTexture:
+	var size: int = PUDDLE_PIXELS
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	image.fill(Color(1, 1, 1, 0))
+	var half: float = size / 2.0
+	var meters_per_pixel: float = PUDDLE_RADIUS * 4.0 / size
 	var phases := Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
-	var outline: Array[Vector3] = []
-	for step in range(PUDDLE_STEPS):
-		var angle: float = TAU * step / PUDDLE_STEPS
-		var wobble: float = 0.2 * sin(angle * 2.0 + phases.x) + 0.12 * sin(angle * 3.0 + phases.y) + 0.06 * sin(angle * 5.0 + phases.z)
-		outline.append(Vector3(cos(angle), 0, sin(angle)) * PUDDLE_RADIUS * (1.0 + wobble) * rng.randf_range(0.95, 1.05))
-	_fan(tool, Vector3.ZERO, outline)
-	# 웅덩이 밖에 떨어진 작은 방울. 본체 테두리(최대 약 1.4배)보다 바깥에 둬서 겹치지 않는다.
+	var jitter: float = rng.randf_range(0.95, 1.05)
+	# 방울: (x, z, 반지름) 미터.
+	var drops: Array[Vector3] = []
 	for drop in range(PUDDLE_DROPS):
 		var angle: float = rng.randf() * TAU
-		var center := Vector3(cos(angle), 0, sin(angle)) * PUDDLE_RADIUS * rng.randf_range(1.55, 1.9)
-		var radius: float = PUDDLE_RADIUS * rng.randf_range(0.07, 0.14)
-		var ring: Array[Vector3] = []
-		for step in range(10):
-			var around: float = TAU * step / 10.0
-			ring.append(center + Vector3(cos(around), 0, sin(around)) * radius * rng.randf_range(0.85, 1.15))
-		_fan(tool, center, ring)
-	return tool.commit()
+		var center := Vector2(cos(angle), sin(angle)) * PUDDLE_RADIUS * rng.randf_range(1.55, 1.8)
+		drops.append(Vector3(center.x, center.y, PUDDLE_RADIUS * rng.randf_range(0.07, 0.14)))
+	for y in range(size):
+		for x in range(size):
+			var point := Vector2(x + 0.5 - half, y + 0.5 - half) * meters_per_pixel
+			var angle: float = point.angle()
+			var wobble: float = 0.2 * sin(angle * 2.0 + phases.x) + 0.12 * sin(angle * 3.0 + phases.y) + 0.06 * sin(angle * 5.0 + phases.z)
+			var edge: float = PUDDLE_RADIUS * (1.0 + wobble) * jitter
+			# inside > 0 = 웅덩이 안(미터). 방울은 원 하나씩.
+			var inside: float = edge - point.length()
+			for drop: Vector3 in drops:
+				inside = maxf(inside, drop.z - point.distance_to(Vector2(drop.x, drop.y)))
+			var alpha: float = clampf(inside / (meters_per_pixel * 1.5) + 0.5, 0.0, 1.0)
+			if alpha <= 0.0:
+				continue
+			# 테두리 쪽(안쪽 3cm)은 조금 진하게 → 고인 액체의 가장자리처럼 보인다.
+			var rim: float = 1.0 - clampf(inside / 0.03, 0.0, 1.0)
+			var shade: float = 1.0 - 0.25 * rim
+			image.set_pixel(x, y, Color(shade, shade, shade, alpha * (0.78 + 0.22 * rim)))
+	image.generate_mipmaps()
+	return ImageTexture.create_from_image(image)
 
 
-## 가운데 점과 둘레 점들로 바닥에 눕는 부채꼴 삼각형을 쌓는다.
-## Godot 은 시계 방향이 앞면이다: 위(+Y)에서 내려다보면 각도가 커지는 쪽이 시계 방향이라 (가운데, i, i+1) 순서가 위를 향한다.
-static func _fan(tool: SurfaceTool, center: Vector3, ring: Array[Vector3]) -> void:
-	for step in range(ring.size()):
-		tool.add_vertex(center)
-		tool.add_vertex(ring[step])
-		tool.add_vertex(ring[(step + 1) % ring.size()])
+## 젖은 윤기용 ORM 그림(R 가림 1 · G 거칠기 0.12 · B 금속 0). 모든 웅덩이가 같이 쓴다.
+static var _wet_orm_texture: ImageTexture
+
+
+static func _wet_orm() -> ImageTexture:
+	if _wet_orm_texture == null:
+		var image := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+		image.fill(Color(1.0, 0.12, 0.0, 1.0))
+		_wet_orm_texture = ImageTexture.create_from_image(image)
+	return _wet_orm_texture
 
 
 static func _round_mesh(diameter: float) -> SphereMesh:
@@ -225,8 +261,8 @@ static func _material(color: Color, kind: String) -> StandardMaterial3D:
 		_materials[key] = material
 		return material
 	material.albedo_color = color
-	material.roughness = 0.25 if kind in ["glass", "splash", "puddle"] else 0.8
-	if color.a < 0.99 or kind in ["glass", "puddle"]:
+	material.roughness = 0.25 if kind in ["glass", "splash"] else 0.8
+	if color.a < 0.99 or kind == "glass":
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		if kind == "glass":
 			material.albedo_color.a = 0.8

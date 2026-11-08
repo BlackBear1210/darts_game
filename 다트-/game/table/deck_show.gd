@@ -8,7 +8,10 @@ extends Node3D
 ##   - 이번에 새로 받은 카드는 매트(SeatCards)에서 숨겼다가, 덱에서 날아와 닿는 순간 뒤집히며 보인다.
 ##   - 쓴 카드가 덱으로 돌아오는 모습(drop_in) → 섞기 → 한 바퀴에 한 사람 한 장씩 나눠 주기 순서는 시연과 같다.
 ##   - MatchCards.VIEW_SECONDS(5초) 안에 끝나도록 섞기는 SHUFFLE_SECONDS 에 맞춰 빠르게 돈다. 다트 단계가 먼저 오면 바로 마무리한다.
-## 내 손패(왼쪽 아래 1인칭 부채)는 스냅샷이 오자마자 바로 보인다 — 연출 때문에 카드 확인이 늦어지지 않는다.
+## 2026-11-08 사용자 지적 "카드가 섞이며 한 장씩 손에 들어오는 게 아니라 한 번에 들어온다":
+##   예전에는 내 손패(왼쪽 아래 1인칭 부채)와 남이 든 부채가 스냅샷이 오자마자 7장 다 보였다(매트만 한 장씩).
+##   → 새 카드는 덱에서 날아와 닿을 때까지 손 부채에서도 숨긴다. 닿을 때마다 dealt 신호 → GameView 가 그 칸만 부채에 넣는다.
+##   보이는 손패 = visible_hand(자리, 손패) — 아직 안 닿은 칸은 -1. 다트 단계가 먼저 오면(_finish) 모두 한 번에 보인다.
 
 const CardView = preload("res://game/card_round/cards/card_view.gd")
 const ShuffleMotions = preload("res://game/card_round/cards/shuffle_motions.gd")
@@ -40,6 +43,11 @@ var _run: int = 0
 var _playing: bool = false
 ## 이 화면에서 연출을 시작한 횟수(시험용 — tests/run_deck_show_remote.py).
 var played: int = 0
+## 아직 덱에서 안 닿은 칸: 자리 → [칸 번호…]. 매트·손 부채가 이 칸을 숨긴다.
+var _held: Dictionary = {}
+
+## 카드 한 장이 자리 seat 의 index 칸에 닿았다(-1, -1 = 남은 카드를 한꺼번에 놓았다).
+signal dealt(seat: int, index: int)
 
 
 ## 스냅샷마다 부른다(GameView._apply_state, seat_cards.show_hands 바로 뒤).
@@ -96,6 +104,7 @@ func _play(state: MatchState, deals: Array[Vector2i]) -> void:
 		var list: Array = by_seat.get(step.x, [])
 		list.append(step.y)
 		by_seat[step.x] = list
+	_held = by_seat.duplicate(true)
 	if seat_cards != null:
 		for seat: int in by_seat:
 			seat_cards.hold(seat, by_seat[seat])
@@ -135,6 +144,8 @@ static func _shuffle_estimate(style: int, n: int) -> float:
 func _finish() -> void:
 	_run += 1
 	_playing = false
+	_held.clear()
+	dealt.emit(-1, -1)
 	if seat_cards != null:
 		seat_cards.release_all()
 	while _pile.size() > DECK_REST:
@@ -153,8 +164,11 @@ func _deal_one(seat: int, index: int) -> void:
 	var tween: Tween = ShuffleMotions.move(self, card, to, DEAL_FLIGHT, 0.0, DEAL_ARC)
 	tween.finished.connect(func() -> void:
 		card.queue_free()
+		var waiting: Array = _held.get(seat, [])
+		waiting.erase(index)
 		if seat_cards != null and is_instance_valid(seat_cards):
-			seat_cards.release(seat, index))
+			seat_cards.release(seat, index)
+		dealt.emit(seat, index))
 
 
 ## 쓴 카드가 덱으로 돌아온다: 덱 위로 count 장이 떨어져 흩어진다(시연 TableCards.drop_in 과 같은 모양).
@@ -190,6 +204,15 @@ func _deck_center() -> Vector3:
 
 func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds, false).timeout
+
+
+## 손 부채에 보일 손패: 아직 덱에서 안 닿은 칸은 -1(그 칸은 비워 둔다).
+func visible_hand(seat: int, hand: Array[int]) -> Array[int]:
+	var result: Array[int] = hand.duplicate()
+	for index in _held.get(seat, []):
+		if int(index) < result.size():
+			result[int(index)] = -1
+	return result
 
 
 ## 시험용: 지금 연출이 도는 중인지 · 덱 장수.

@@ -50,7 +50,7 @@ func _floor_plan() -> void:
 		["과녁", Vector3(0, 0, TableView.BOARD_CENTER.z + 0.3)], ["연습 과녁", TableView.PRACTICE_TARGET_AT], ["럼주통 탁자", TableView.BARRELS[2]],
 		["양동이·빗자루", TableView.BUCKET_AT], ["바 (맥주잔·병·종)", Vector3(-5.4, 0, 3.7)], ["바 끝 냉장고", TableView.BAR_FRIDGE_AT], ["바 뒤 (생맥주 통·조리대)", Vector3(-7.2, 0, 2.6)],
 		["카드 테이블", TableView.TABLE_CENTER], ["구경 소파", TableView.SOFA_AT], ["NPC 자리 (저녁상)", TableView.NPC_TABLE_BOX.get_center()],
-		["주크박스", Vector3(7.8, 0, 1.1)], ["당구대", TableView.POOL_TABLE_BOX.get_center()], ["안락의자·축음기", TableView.ARMCHAIR_AT],
+		["주크박스", Vector3(8.6, 0, 0.5)], ["당구대", TableView.POOL_TABLE_BOX.get_center()], ["안락의자·축음기", TableView.ARMCHAIR_AT],
 		["입구·짐", TableView.CRATES_AT + Vector3(0.8, 0, 0)]]
 	for zone in zones:
 		var label := Label.new()

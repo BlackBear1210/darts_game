@@ -197,8 +197,11 @@ func _prepare_hand_fan() -> void:
 	deck_show.seat_cards = seat_cards
 	add_child(deck_show)
 	deck_show.sync(controller.state)
+	# 2026-11-08: 덱에서 카드가 닿을 때마다 손 부채(내 것·남의 것)에 그 한 장을 넣는다.
+	deck_show.dealt.connect(_on_card_dealt)
 	held_cards = HeldCards.new()
 	held_cards.name = "HeldCards"
+	held_cards.deck_show = deck_show
 	add_child(held_cards)
 	held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 
@@ -210,17 +213,29 @@ func _sync_hand_fan() -> void:
 	var me := controller.state.find_player(controller.local_peer_id)
 	var hand: Array[int] = []
 	if me != null: hand.assign(me.hand)
+	# 카드 충전 라운드: 덱에서 아직 안 날아온 카드(-1)는 부채에 넣지 않는다 → 섞기 뒤 한 장씩 손에 들어온다.
+	if me != null and deck_show != null:
+		hand = deck_show.visible_hand(me.seat, hand)
 	if hand != _shown_hand:
 		_shown_hand = hand.duplicate()
 		for slot in range(CardHandRules.HAND_LIMIT):
-			if slot < hand.size():
-				_fan.set_card(slot, hand[slot])
+			if slot < hand.size() and hand[slot] >= 0:
+				# 바뀐 칸만 새로 놓는다(예전에는 매번 7장을 다 새로 만들어 한꺼번에 튀어 들어왔다).
+				if not _fan.has_card(slot) or _fan.cards[slot].type != hand[slot]:
+					_fan.set_card(slot, hand[slot])
 			else:
 				_fan.remove_card(slot)
 	var pending_slot: int = me.pending_slot if me != null else -1
 	if pending_slot != _fan.lifted_slot:
 		if pending_slot >= 0: _fan.lift(pending_slot)
 		else: _fan.lower()
+
+
+## 덱에서 카드 한 장이 닿았다 → 내 손 부채와 남이 든 부채를 다시 맞춘다(바뀐 칸만 새로 들어온다).
+func _on_card_dealt(_seat: int, _index: int) -> void:
+	_sync_hand_fan()
+	if held_cards != null:
+		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 
 
 ## 1인칭 손을 자기 자리 색 소매로 바꾸고, 손에 든 다트 깃도 자리 색으로 칠한다.
@@ -405,7 +420,7 @@ func _drive_bot(actor: PlayerView, delta: float) -> void:
 func _walk_bot_home(actor: PlayerView, delta: float) -> void:
 	if actor.seated:
 		return
-	var seat: Vector3 = TableView.SEATS[actor.identity.seat]
+	var seat: Vector3 = TableView.seat_spot(actor.identity.seat)
 	if BotDriver.arrived(actor.position, seat):
 		_sit(actor)
 		actor.rotation.y = BotDriver.facing_board(actor.position)
@@ -490,7 +505,7 @@ func force_seat(id: int) -> void:
 func _sit(actor: PlayerView) -> void:
 	actor.seated = true
 	actor.crouched = false
-	actor.position = TableView.SEATS[actor.identity.seat]
+	actor.position = TableView.seat_spot(actor.identity.seat)
 	actor.velocity = Vector3.ZERO
 	actor.update_posture()
 
@@ -510,7 +525,7 @@ func can_sit(id: int) -> bool:
 	var actor := actors.get(id) as PlayerView
 	if actor == null:
 		return false
-	return actor.position.distance_to(TableView.SEATS[actor.identity.seat]) <= TableView.SEAT_DISTANCE and absf(actor.velocity.y) < 0.5
+	return actor.position.distance_to(TableView.seat_spot(actor.identity.seat)) <= TableView.SEAT_DISTANCE and absf(actor.velocity.y) < 0.5
 
 
 func is_seated(id: int) -> bool:
@@ -603,12 +618,13 @@ func _apply_state() -> void:
 			_controls.erase(id)
 		else:
 			(actors[id] as PlayerView).show_state(player)
-	_sync_hand_fan()
 	if seat_cards != null:
 		seat_cards.show_hands(controller.state.players)
 	# 카드 충전 라운드로 들어오면 덱 섞기·나눠 주기를 각 화면에서 재생한다(새 카드는 닿을 때까지 매트에서 숨김).
 	if deck_show != null:
 		deck_show.sync(controller.state)
+	# 손 부채는 덱 연출이 "아직 안 닿은 칸"을 정한 뒤에 맞춘다(2026-11-08 — 순서가 반대면 7장이 한꺼번에 보인다).
+	_sync_hand_fan()
 	if held_cards != null:
 		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 	table.set_chalk_scores(_chalk_text())
@@ -809,7 +825,15 @@ func sync_room(room: RoomState) -> void:
 		controller.config.turn_seconds = room.settings.dart_seconds
 	controller.sync_roster(room)
 	# 방 인원수만큼만 의자·매트를 깐다(2인 방 = 마주 보는 두 자리). 사람이 들고 나도 빈자리는 남는다.
-	table.show_seats(room.shown_seats())
+	# 2026-11-08: 깔린 자리 수만큼 원형 테이블을 똑같이 나눈 자리로 옮긴다(3인 = 120도씩). 앉기·봇 자리·카드 매트가 모두 이 배치를 본다.
+	# 배우(PlayerView)를 만들기 전에 정해야 봇이 처음부터 새 자리에 앉는다.
+	var seats: Array[int] = room.shown_seats()
+	TableView.arrange_seats(seats)
+	table.show_seats(seats)
+	# 대기실에서 인원수가 바뀌면 이미 앉아 있던 사람·봇도 옮겨진 의자로 같이 옮겨 앉는다.
+	for view: PlayerView in actors.values():
+		if view.seated and view.identity != null:
+			view.position = TableView.seat_spot(view.identity.seat)
 	if room.phase == RoomState.Phase.LOBBY:
 		for player in controller.state.players:
 			if actors.has(player.peer_id): continue

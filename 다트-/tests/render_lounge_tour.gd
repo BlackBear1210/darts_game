@@ -45,7 +45,8 @@ func _run() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var lounge: Node3D = game.lounge
 	await capture("08_arcade_table_ready", Vector3(3.5, 2.7, 1.5), Vector3(0, 1.0, 4.4))
-	await capture("09_arcade_jukebox", Vector3(6.7, 1.65, 3.0), Vector3(7.8, 1.0, 1.1))
+	# 2026-11-08: 주크박스를 화분과 안 겹치게 (8.6, 0.5) 로 옮겼다 → 정면(+Z) 조금 왼쪽에서 찍는다.
+	await capture("09_arcade_jukebox", Vector3(7.7, 1.65, 2.7), Vector3(8.6, 1.0, 0.5))
 	await capture("10_arcade_monitor", Vector3(-2.5, 1.65, 3.3), Vector3(-4.35, 1.2, 2))
 	await capture("13_arcade_overview", Vector3(-1.5, 3.2, 0.6), Vector3(7.5, 0.8, 5.0))
 	# 2026-11-07: 인형뽑기 조종 중(조이스틱 기울기 · 조준 고리 · 남은 초 간판)을 찍는다.

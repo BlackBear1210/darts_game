@@ -141,7 +141,7 @@ func _watch_heckle(state: MatchState, now: float) -> void:
 		return
 	_heckler = _pick(bots)
 	# 자기 자리 쪽 레인 옆으로 나온다(가운데 자리는 아무 쪽이나).
-	var seat_x: float = TableView.SEATS[(game.actors[_heckler] as PlayerView).identity.seat].x
+	var seat_x: float = TableView.seat_spot((game.actors[_heckler] as PlayerView).identity.seat).x
 	_heckle_side = signf(seat_x) if absf(seat_x) > 0.1 else (1.0 if _random.randf() < 0.5 else -1.0)
 	# 가끔은 옆에서 놀리는 대신 레인 안(몸막 구역)으로 들어가 다트 앞을 몸으로 막는다.
 	_heckle_block = _random.randf() < BLOCK_CHANCE

@@ -220,6 +220,7 @@ func _room() -> void:
 		Style.secondary(_body, "초대 코드 복사", func() -> void:
 			DisplayServer.clipboard_set(session.invitation())
 			_note.text = "초대 코드를 복사했어요. 친구에게 전달하세요.")
+	_capacity_rows()
 	Style.row(_body, "한 번에 설정", Style.select(RoomSettings.PRESETS, _draft.preset, func(v: int) -> void: _draft.apply_preset(v); _render()))
 	var description := Style.label(_body, RoomSettings.DESCRIPTIONS[_draft.preset], 17, Style.MUTED)
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -242,6 +243,37 @@ func _room() -> void:
 	Style.row(_body, "공간 효과음 %", Style.number(_draft.object_volume * 100, 0, 100, 5, func(v: float) -> void: _draft.object_volume = v / 100))
 	if session.room.phase != RoomState.Phase.LOBBY:
 		_note.text = "경기 중 변경: 라운드 상한, 다음 턴부터 제한 시간, 다음 배부부터 특수 카드 확률. 나머지는 대기실에서 바꿔요."
+
+## 2026-11-08 사용자 요청 "인원수를 방장이 다시 정할 수 없는 것도 설정에서 다시 정할 수 있게":
+## 방장 탭 맨 위에 인원수 칸. 대기실에서만 바꿀 수 있고(경기 중엔 자리·턴 순서가 꼬인다) 지금 들어온 사람 수보다 적게는 못 줄인다.
+## 연습 방은 "연습 상대 봇" 수로 정한다(인원 = 봇 + 나). 서버도 같은 검사를 한다(RoomState.resize).
+func _capacity_rows() -> void:
+	var room: RoomState = session.room
+	var humans: int = session.human_count()
+	var lobby: bool = room.phase == RoomState.Phase.LOBBY
+	if room.settings.solo:
+		var bots := Style.number(_draft.bot_count, 0, RoomState.MAX_PLAYERS - humans, 1, func(v: float) -> void:
+			_draft.bot_count = int(v)
+			_draft.capacity = int(v) + humans)
+		Style.row(_body, "연습 상대 봇", bots)
+		_lock_when_playing(bots, lobby)
+	else:
+		var low: int = maxi(RoomState.MIN_PLAYERS, room.players.size())
+		var seats := Style.number(clampi(_draft.capacity, low, RoomState.MAX_PLAYERS), low, RoomState.MAX_PLAYERS, 1, func(v: float) -> void: _draft.capacity = int(v))
+		Style.row(_body, "최대 인원", seats)
+		_lock_when_playing(seats, lobby)
+	var hint: String = "지금 %d명이 들어와 있어요. 인원수만큼 테이블 의자·카드 매트가 깔려요." % room.players.size()
+	if not lobby:
+		hint = "인원수는 대기실에서만 바꿀 수 있어요(경기 중에는 자리 순서가 꼬여요)."
+	elif not room.settings.solo:
+		hint += " 들어온 사람보다 적게는 줄일 수 없어요."
+	Style.label(_body, hint, 16, Style.MUTED)
+
+
+## 경기 중이면 숫자 칸(Style.number = SpinBox)을 잠근다.
+static func _lock_when_playing(control: SpinBox, lobby: bool) -> void:
+	control.editable = lobby
+
 
 func _developer() -> void:
 	Style.section(_body, "개발자 · 밸런스 실험실", Style.PINK)

@@ -129,5 +129,9 @@ func _run() -> void:
 	look_at_actor(bot.peer_id, 1.6)
 	await create_timer(0.35).timeout
 	await capture("06_bot_emote")
-	print("PASS: round banner, face-up mat cards, bot hand fan + lifted card, F card use, T emote wheel + bubble — screenshots in ", ProjectSettings.globalize_path(_output))
+	# 2026-11-08 사용자 지적 "감정표현을 했을 때 아래 이모지가 UI 를 가린다": 내 감정이 화면 아래 UI 와 겹치지 않는지 찍어 둔다.
+	game.emotes.wheel.show_mine(2)
+	await create_timer(0.45).timeout
+	await capture("07_my_emote_clear_of_hud")
+	print("PASS: round banner, face-up mat cards, bot hand fan + lifted card, F card use, T emote wheel + bubble, my emote — screenshots in ", ProjectSettings.globalize_path(_output))
 	quit()

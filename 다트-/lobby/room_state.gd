@@ -54,19 +54,51 @@ static func seat_order(capacity: int) -> Array[int]:
 	return order
 
 
-## 테이블에 깔아 둘 자리(의자·매트·바닥 자리 표시): 인원수만큼의 기본 자리 + 지금 앉아 있는 사람 자리.
+## 테이블에 깔아 둘 자리(의자·매트·바닥 자리 표시): 지금 앉아 있는 사람 자리 + 빈자리를 인원수만큼 채운다.
 ## 빈자리는 그대로 깔려 있어야 "누가 들어올 수 있는 자리"가 보이므로 사람 수가 아니라 방 인원수로 정한다.
-## 인원수를 줄였는데 이미 다른 자리에 앉은 사람이 있으면 그 자리도 남긴다(의자가 사라져 허공에 앉지 않게).
+## 빈자리는 add_player 가 다음 사람을 앉힐 순서(seat_order)대로 고른다 → 깔린 빈 의자 = 실제로 다음 사람이 앉을 자리.
+## 2026-11-08: 방장이 대기실에서 인원수를 줄이면(resize) 이미 앉은 사람 자리는 남기고 빈자리만 줄인다
+##   (예: 0·1번에 둘이 있는데 4명 → 2명 = 0·1번만. 예전 계산은 0·2번 + 1번 = 의자 3개가 남았다).
 func shown_seats() -> Array[int]:
 	var seats: Array[int] = []
-	var order: Array[int] = seat_order(settings.capacity)
-	for index in range(clampi(settings.capacity, 1, MAX_PLAYERS)):
-		seats.append(order[index])
 	for player in players:
 		if not seats.has(player.seat):
 			seats.append(player.seat)
+	for seat: int in seat_order(settings.capacity):
+		if seats.size() >= clampi(settings.capacity, 1, MAX_PLAYERS):
+			break
+		if not seats.has(seat):
+			seats.append(seat)
 	seats.sort()
 	return seats
+
+
+## 2026-11-08 사용자 요청 "인원수를 방장이 다시 정할 수 없는 것도 설정에서 다시 정할 수 있게":
+## 대기실(LOBBY)에서만 인원수를 바꾼다. 경기 중에는 자리·턴 순서가 꼬이므로 무시한다.
+##   - 지금 들어와 있는 사람 수보다 적게는 줄이지 않는다(사람을 내쫓지 않는다).
+##   - 인원이 넘치면 번호가 큰 봇부터 뺀다.
+##   - 연습 방(solo)은 봇 수 = 인원 − 사람 수로 맞춰 봇을 더 넣거나 뺀다.
+## 이미 앉은 사람의 자리 번호(= 색·모양)는 바꾸지 않는다. 빈 의자만 shown_seats 가 다시 고른다.
+func resize(capacity: int, bot_count: int) -> void:
+	if phase != Phase.LOBBY:
+		return
+	var humans: int = 0
+	for player in players:
+		if not player.is_bot:
+			humans += 1
+	settings.capacity = clampi(capacity, maxi(humans, 1 if settings.solo else MIN_PLAYERS), MAX_PLAYERS)
+	settings.bot_count = clampi(bot_count, 0, settings.capacity - humans) if settings.solo else 0
+	var bot_limit: int = settings.capacity - humans
+	if settings.solo:
+		bot_limit = settings.bot_count
+	for index in range(MAX_PLAYERS - 1, 0, -1):
+		if players.size() - humans <= bot_limit:
+			break
+		var bot := find_player(-index)
+		if bot != null and bot.is_bot:
+			players.erase(bot)
+	if settings.solo:
+		add_bots(settings.bot_count)
 
 
 func remove_player(peer_id: int) -> void:

@@ -14,10 +14,22 @@ var head_tilt := 0.0
 var head_scale := 1.0
 var left: Arm
 var right: Arm
+## 앉은 다리 자세 비율(0 = 모션 그대로, 1 = 허벅지는 방석 위에 수평 · 정강이는 아래로 · 발은 의자 발걸이 위).
+## 2026-11-08 사용자 지적 "의자에 앉아 있는 모션이 이상하다": Seated_Stool 모션은 낮은 의자용이라 허벅지가
+## 35도 아래로 기울어 무릎(높이 0.43m)이 앉는 면 0.6m 의자 방석을 뚫었다. CharacterMotion 이 넣는다.
+var seat_legs := 0.0
+
+## 앉은 다리 방향(모델 기준, 오른쪽 다리 = +X 쪽. 왼쪽은 x 를 뒤집는다).
+## 허벅지: 앞(−Z)으로 거의 수평(무릎이 조금 벌어진다). 정강이: 아래로, 발이 의자 밑으로 25도 들어간다.
+## 발은 모션의 발 방향(바닥과 평행)을 그대로 지켜 발걸이에 평평하게 얹힌다.
+const SEAT_THIGH := Vector3(0.1, -0.02, -1.0)
+const SEAT_SHIN := Vector3(0.05, -0.906, 0.423)
 
 var _spine: int
 var _neck: int
 var _head: int
+## [허벅지, 정강이, 발, 좌우 부호] — 왼쪽 -1, 오른쪽 +1.
+var _legs: Array = []
 
 
 ## 팔 하나의 덧씌운 자세. 회전만 덮어쓴다(팔 뼈는 위치 이동이 없다).
@@ -64,6 +76,11 @@ func setup(rig: Skeleton3D, left_arm: Arm, right_arm: Arm) -> void:
 	_spine = rig.find_bone("spine")
 	_neck = rig.find_bone("neck")
 	_head = rig.find_bone("head")
+	_legs.clear()
+	for side: String in ["L", "R"]:
+		var bones := [rig.find_bone("thigh." + side), rig.find_bone("shin." + side), rig.find_bone("foot." + side), -1.0 if side == "L" else 1.0]
+		if bones[0] >= 0 and bones[1] >= 0 and bones[2] >= 0:
+			_legs.append(bones)
 
 
 func _process_modification() -> void:
@@ -75,12 +92,38 @@ func _process_modification() -> void:
 			for index in range(arm.bones.size()):
 				var bone: int = arm.bones[index]
 				rig.set_bone_pose_rotation(bone, rig.get_bone_pose_rotation(bone).slerp(arm.pose[index], arm.weight))
+	if seat_legs > 0.001:
+		for leg: Array in _legs:
+			_seat_leg(rig, leg[0], leg[1], leg[2], leg[3])
 	# 오른쪽(+X)으로 기우는 것은 앞에서 봤을 때 모델 Z 축 음의 방향 회전이다.
 	_turn(rig, _spine, Vector3.BACK, -lean)
 	_turn(rig, _neck, Vector3.BACK, -head_tilt)
 	_turn(rig, _neck, Vector3.RIGHT, look_pitch * 0.5)
 	_turn(rig, _head, Vector3.RIGHT, look_pitch * 0.5)
 	rig.set_bone_pose_scale(_head, Vector3.ONE * head_scale)
+
+
+## 다리 하나를 앉은 자세로: 허벅지 → 정강이 순서로 뼈 방향을 SEAT_THIGH·SEAT_SHIN 쪽으로 seat_legs 만큼 돌리고,
+## 발은 돌리기 전(모션)의 바닥과 평행한 방향을 그대로 지킨다.
+func _seat_leg(rig: Skeleton3D, thigh: int, shin: int, foot: int, side: float) -> void:
+	var foot_facing := rig.get_bone_global_pose(foot).basis.get_rotation_quaternion()
+	_aim(rig, thigh, shin, SEAT_THIGH * Vector3(side, 1, 1), seat_legs)
+	_aim(rig, shin, foot, SEAT_SHIN * Vector3(side, 1, 1), seat_legs)
+	var shin_facing := rig.get_bone_global_pose(shin).basis.get_rotation_quaternion()
+	rig.set_bone_pose_rotation(foot, rig.get_bone_pose_rotation(foot).slerp(shin_facing.inverse() * foot_facing, seat_legs))
+
+
+## bone(→ child 방향)을 모델 기준 direction 쪽으로 amount 만큼 돌린다(가장 짧게 도는 회전이라 다리가 비틀리지 않는다).
+func _aim(rig: Skeleton3D, bone: int, child: int, direction: Vector3, amount: float) -> void:
+	var from := rig.get_bone_global_pose(bone)
+	var current := (rig.get_bone_global_pose(child).origin - from.origin).normalized()
+	var target := current.slerp(direction.normalized(), amount)
+	if current.is_equal_approx(target):
+		return
+	var facing := Quaternion(current, target) * from.basis.get_rotation_quaternion()
+	var parent := rig.get_bone_parent(bone)
+	var parent_facing := rig.get_bone_global_pose(parent).basis.get_rotation_quaternion() if parent >= 0 else Quaternion.IDENTITY
+	rig.set_bone_pose_rotation(bone, parent_facing.inverse() * facing)
 
 
 ## bone 을 모델 기준 axis 둘레로 돌린다. 뼈마다 로컬 축이 달라 모델 축을 뼈 축으로 옮겨 쓴다.

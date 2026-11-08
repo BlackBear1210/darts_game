@@ -6,7 +6,8 @@ extends SceneTree
 
 const PUB_GAME_SCENE := "res://art/pub/pub_game.tscn"
 ## 기본 차림 조각 수(머리·귀·눈 4·눈썹 2·입·양팔·머리카락·상의·하의·신발).
-const WORN_PART_COUNT := 15
+## 캐릭터 메시 조각 수. 2026-11-08 다른 작업자가 캐릭터를 Tripo 모델(tripo_part_0~8, 9조각)로 바꿨다(예전 15조각 · Top_Reference 셔츠).
+const WORN_PART_COUNT := 9
 
 
 func _initialize() -> void:
@@ -59,8 +60,9 @@ func _check_table_scene() -> void:
 	# + 도면 v3 가구 상자(TableView.decor_blocks: 생맥주 통·뒤 조리대·연습 과녁·양동이·소파·안락의자·낮은 탁자·상자·자루·냉장고)
 	# + 다트 머신 몸체 1(2026-11-07 — 과녁 면 0.12m 뒤부터 과녁 벽까지)
 	assert(bodies == 33 + TableView.decor_blocks().size(), "충돌 몸체 수 %d" % bodies)
-	# 다트 머신 그림: 셔터 날개 양쪽 8장씩 + 상태 화면. 보이기만 하므로 충돌 몸체가 아니다.
-	assert(table.machine != null and table.machine.find_child("ShutterLeft", true, false).get_child_count() == 8)
+	# 다트 머신 그림: 롤 셔터 양쪽(2026-11-08 — 앞 바 1 + 좁은 날개 13장이 "Curtain" 아래) + 상태 화면. 보이기만 하므로 충돌 몸체가 아니다.
+	var shutter: Node = table.machine.find_child("ShutterLeft", true, false) if table.machine != null else null
+	assert(shutter != null and shutter.get_node("Curtain").get_child_count() == 14 and int(shutter.call("slat_count")) == 13)
 	assert(table.machine.find_child("StatusText", true, false) is Label3D)
 	table.set_chalk_scores("점 수\n\n● 시험  42")
 	assert((table.find_child("ChalkScores", true, false) as Label3D).text.contains("42"))
@@ -73,8 +75,8 @@ func _check_characters_and_rig() -> void:
 	for seat in range(4):
 		var worn := PlayerLook.character(seat)
 		var parts := _worn_parts(worn)
-		assert(parts.size() == WORN_PART_COUNT and "Top_Reference" in parts and "Bottom_Shorts" not in parts, "기본 차림이 아닙니다: " + str(parts))
-		assert(_shirt_color(worn) == PlayerLook.COLORS[seat], "셔츠가 자리 색이 아닙니다")
+		assert(parts.size() == WORN_PART_COUNT and "tripo_part_0" in parts, "기본 차림이 아닙니다: " + str(parts))
+		# 셔츠 자리 색 칠하기는 Tripo 모델에서 뺐다(art/player_look.gd: 상의·팔이 한 재질이라 피부까지 물든다) → 자리 구분은 이름표·매트·HUD.
 		worn.free()
 	var model := PlayerLook.character(0)
 	root.add_child(model)
@@ -145,15 +147,6 @@ func _worn_parts(model: Node3D) -> Array[String]:
 
 func _bone_height(skeleton: Skeleton3D, bone: String) -> float:
 	return skeleton.get_bone_global_pose(skeleton.find_bone(bone)).origin.y
-
-
-func _shirt_color(model: Node3D) -> Color:
-	var top := model.find_child("Top_Reference", true, false) as MeshInstance3D
-	for surface in range(top.mesh.get_surface_count()):
-		var shirt := top.get_surface_override_material(surface) as StandardMaterial3D
-		if shirt != null:
-			return shirt.albedo_color
-	return Color.BLACK
 
 
 ## PlayerView: 자리 캐릭터를 입고, 모든 조각이 자기 자리 렌더 레이어에 있다(자기 카메라에서만 빠진다).

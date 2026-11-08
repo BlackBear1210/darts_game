@@ -30,7 +30,13 @@ const Rules = preload("res://game/lounge/arcade/arcade_rules.gd")
 const StaticBatch = preload("res://art/static_batch.gd")
 ## 천장 보 자리를 펍 생성기와 같이 쓴다(둘이 어긋나면 네온 관이 보에서 떨어진다).
 const RoomBuilder = preload("res://art/pub/game_room_builder.gd")
-const VENDOR_SCENE := "res://art/characters/chr_bartender.tscn"
+const NpcIdle = preload("res://art/pub/npc_idle.gd")
+## 주스 가게 직원 옷(2026-11-08).
+const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
+## 물레로 깎는 둥근 메시(오락실 테이블 러그).
+const RoundKit = preload("res://art/pub/round_kit.gd")
+## 벽 간판·메뉴판을 벽에서 띄우는 거리(m) — 펍 벽 기둥(0.05)·허리 난간(0.078) 앞.
+const SIGN_STANDOFF: float = 0.1
 
 const CYAN := Color("3be5db")
 const MAGENTA := Color("ef65cb")
@@ -188,9 +194,12 @@ func _neon_sign(text: String, at: Vector3, yaw: float, size: int, color: Color, 
 	var root := Node3D.new()
 	root.name = "NeonSign"
 	_static.add_child(root)
-	root.position = at
 	root.rotation.y = yaw
 	var extent: Vector2 = text_size(text, size, pixel) + Vector2(pad, pad) * 2.0
+	# 2026-11-08: 펍 벽에 월넛 기둥·아치 틀·코니스가 생겨(art/pub/game_room_builder.gd) 벽에 딱 붙이면 판이 기둥에 묻힌다 →
+	# 판을 벽에서 SIGN_STANDOFF 만큼 띄우고, 위 끝이 코니스 아래(천장 − 0.82m)에 오도록 필요하면 내린다.
+	root.position = at + Basis(Vector3.UP, yaw) * Vector3(0, 0, SIGN_STANDOFF)
+	root.position.y = minf(at.y, TableView.CEILING_HEIGHT - 0.82 - extent.y / 2.0)
 	Kit.box(root, "SignBoard", Vector3(extent.x, extent.y, 0.04), Vector3(0, 0, 0.02), _mat("sign_board", Color("0d0a1c"), 0.0, 0.6))
 	var tube := _neon_mat(color, 2.0)
 	for y: float in [-1.0, 1.0]:
@@ -243,6 +252,21 @@ func _carpet() -> void:
 		plane.size = room.size
 		# 펍 바닥 널빤지 윗면(0.01m)보다 살짝 위.
 		Kit.mesh_node(self, "Carpet", plane, Vector3(room.get_center().x, 0.018, room.get_center().y), material)
+	_table_rug()
+
+
+## 2026-11-08 사용자 지적 "오락실 맵에는 테이블 아래에 카펫이 없어":
+##   펍의 둥근 러그(TableRug, 윗면 0.012m)가 오락실 블랙라이트 카펫(0.018m) 아래에 묻혀 안 보였다.
+##   → 카펫 위(윗면 0.022m)에 오락실 색 둥근 러그를 따로 깐다: 진한 보라 바탕 + 청록·분홍 네온 줄 두 겹.
+##   자리 깔개(SeatRug, 윗면 0.0245m)는 이보다 높아 그대로 위에 보인다. 크기는 펍 러그와 같다(반지름 2.55m).
+func _table_rug() -> void:
+	var center: Vector3 = TableView.TABLE_CENTER
+	var base := PackedVector2Array([Vector2(0, 0.019), Vector2(2.5, 0.019), Vector2(2.55, 0.02), Vector2(2.5, 0.022), Vector2(0, 0.022)])
+	Kit.mesh_node(_static, "ArcadeTableRug", RoundKit.lathe_mesh(base, 64), Vector3(center.x, 0, center.z), _mat("arcade_rug", Color("221a3f"), 0.0, 0.95))
+	# 네온 줄: 위에서 보이는 얇은 고리(바탕 윗면보다 0.5mm 위 → 깜빡임 없음).
+	for ring: Array in [[2.38, 2.31, CYAN], [2.2, 2.16, MAGENTA]]:
+		var stripe := PackedVector2Array([Vector2(ring[0], 0.0225), Vector2(ring[1], 0.0225)])
+		Kit.mesh_node(_static, "ArcadeRugStripe", RoundKit.lathe_mesh(stripe, 64), Vector3(center.x, 0, center.z), _neon_mat(ring[2], 0.9))
 
 
 ## 코드 무늬: 남색 바탕에 형광 고리·지그재그·점을 256px 에 찍는다.
@@ -279,20 +303,23 @@ func _ceiling_neon() -> void:
 	var lounge: Rect2 = TableView.LOUNGE
 	var f := _faces()
 	var ceiling: float = TableView.CEILING_HEIGHT
-	var top: float = ceiling - 0.25
-	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, hall.size.y), Vector3(f.hall_x0 + 0.03, top, hall.get_center().y), _neon_mat(CYAN))
-	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, hall.size.y), Vector3(f.hall_x1 - 0.03, top, hall.get_center().y), _neon_mat(MAGENTA))
-	Kit.box(_static, "NeonRail", Vector3(f.hall_x1 - f.hall_x0, 0.05, 0.05), Vector3(0, top, f.board_z + 0.03), _neon_mat(YELLOW))
-	Kit.box(_static, "NeonRail", Vector3(f.lounge_x1 - f.lounge_x0, 0.05, 0.05), Vector3(lounge.get_center().x, top, f.back_z - 0.03), _neon_mat(VIOLET))
-	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, lounge.size.y), Vector3(f.lounge_x0 + 0.03, top, lounge.get_center().y), _neon_mat(CYAN))
-	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, lounge.size.y), Vector3(f.lounge_x1 - 0.03, top, lounge.get_center().y), _neon_mat(MAGENTA))
-	# 천장 보(펍 생성기 _shell 과 같은 자리) 바로 아래 네온 관.
+	# 2026-11-08: 펍 벽 위가 코니스(선반 띠)+코브(곡면)로 바뀌어 예전 높이(천장 − 0.25)의 레일은 코브 속에 묻힌다 →
+	# 코니스 바로 아래, 코니스 앞 끝(벽에서 0.135m)보다 조금 앞에 띄워 "코니스 아랫선 네온"으로 보이게 한다.
+	var top: float = ceiling - 0.8
+	var off: float = 0.16
+	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, hall.size.y), Vector3(f.hall_x0 + off, top, hall.get_center().y), _neon_mat(CYAN))
+	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, hall.size.y), Vector3(f.hall_x1 - off, top, hall.get_center().y), _neon_mat(MAGENTA))
+	Kit.box(_static, "NeonRail", Vector3(f.hall_x1 - f.hall_x0 - off * 2.0, 0.05, 0.05), Vector3(0, top, f.board_z + off), _neon_mat(YELLOW))
+	Kit.box(_static, "NeonRail", Vector3(f.lounge_x1 - f.lounge_x0 - off * 2.0, 0.05, 0.05), Vector3(lounge.get_center().x, top, f.back_z - off), _neon_mat(VIOLET))
+	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, lounge.size.y), Vector3(f.lounge_x0 + off, top, lounge.get_center().y), _neon_mat(CYAN))
+	Kit.box(_static, "NeonRail", Vector3(0.05, 0.05, lounge.size.y), Vector3(f.lounge_x1 - off, top, lounge.get_center().y), _neon_mat(MAGENTA))
+	# 천장 줄 자리(펍 생성기 ceiling_beams())에 천장에 붙인 네온 관. 2026-11-08 펍 천장 보가 없어져 천장 바로 아래(−0.06m)로 올렸다.
 	# 2026-11-02: 자리를 여기 또 적어 두면 홀 길이가 바뀔 때 어긋나므로 생성기의 ceiling_beams() 를 같이 쓴다.
 	var index := 0
 	for entry: Array in RoomBuilder.ceiling_beams():
 		var room: Rect2 = entry[0]
 		for z: float in entry[1]:
-			Kit.box(_static, "BeamNeon", Vector3(room.size.x - 0.8, 0.035, 0.05), Vector3(room.get_center().x, ceiling - 0.19, z), _neon_mat(CYAN if index % 2 == 0 else PINK, 2.0))
+			Kit.box(_static, "BeamNeon", Vector3(room.size.x - 0.8, 0.035, 0.05), Vector3(room.get_center().x, ceiling - 0.06, z), _neon_mat(CYAN if index % 2 == 0 else PINK, 2.0))
 			index += 1
 	# 2026-11-07: 과녁 둘레 분홍 고리(BoardHalo)는 뺐다 — 다트 머신(art/dart_machine/dart_machine.gd)이
 	# 오락실 스킨에서 자기 테두리 조명(시안/마젠타 반쪽씩)을 켠다. 고리가 둘이면 과녁 숫자보다 눈에 띈다(요청서 가독성 위계).
@@ -375,11 +402,13 @@ func _juice_bar() -> void:
 		PubParts.asset(_static, "milk", Vector3(f.lounge_x0 + 0.3, shelf_top, 1.18), 0.3, Vector3.ONE)
 	for z: float in [5.6, 6.55]:
 		PubParts.asset(_static, "prep_sink", Vector3(f.lounge_x0 + 0.46, 0, z), PI / 2, Vector3.ONE)
-	_menu_board(Vector3(f.lounge_x0 + 0.02, 1.85, 1.9))
+	_menu_board(Vector3(f.lounge_x0 + SIGN_STANDOFF, 1.85, 1.9))
 	# 차양: 벽에서 방 쪽으로 내려오는 줄무늬 지붕(2.25~3.1m). 노랑 둘 + 빨강 하나.
 	for spec: Array in [["juice_awning", 1.6], ["juice_awning", 4.4], ["juice_awning_red", 7.1]]:
 		PubParts.asset(_static, str(spec[0]), Vector3(f.lounge_x0 + 0.62, 2.25, float(spec[1])), 0.0, Vector3.ONE)
-	_neon_sign("FRESH JUICE\n생과일 주스 · 음료", Vector3(f.lounge_x0 + 0.02, 3.8, 3.7), PI / 2, 80, ORANGE, 0.006)
+	# 2026-11-08: 벽 위에 코니스가 생겨 간판 위 끝이 천장 − 0.82m 로 내려왔다 → 두 줄이면 아래 줄이 차양(위 끝 3.1m)에 가려진다.
+	# 한 줄로 줄여 차양과 코니스 사이(3.3~3.9m)에 들어가게 한다.
+	_neon_sign("FRESH JUICE · 생과일 주스", Vector3(f.lounge_x0 + 0.02, 3.6, 3.7), PI / 2, 64, ORANGE, 0.005, 0.12)
 	_juice_vendor(Vector3(-6.6, 0, 4.0))
 
 
@@ -399,31 +428,12 @@ func _menu_board(at: Vector3) -> void:
 	items.shaded = false
 
 
-## 주스 가게 직원: 펍 바텐더 모델을 옷만 바꿔 쓴다(조끼·나비넥타이·콧수염 숨김 → 청록 후드 · 분홍 앞치마 · 분홍 모자).
-## 서 있기만 한다(펍 바텐더와 같다). 재질은 모델에서 장면마다 따로라(resource_local_to_scene) 펍 바텐더 색은 안 바뀐다.
+## 주스 가게 직원(2026-11-08): 펍 바텐더·손님과 같은 리깅 캐릭터(art/pub/npc_idle.gd)에 청록 셔츠만 입힌다.
+## 예전에는 옛 상자 바텐더 모델(chr_bartender)의 옷을 갈아입혔다 — 선수와 생김새가 달라 보인다는 사용자 지적으로 바꿨다.
+## 카운터 뒤에 서서 방 쪽(+X)을 보고, 가끔 손님 쪽을 가리킨다. 충돌 없음(지나갈 수 있다).
 func _juice_vendor(at: Vector3) -> void:
-	var vendor := (load(VENDOR_SCENE) as PackedScene).instantiate() as Node3D
-	vendor.name = "JuiceVendor"
-	add_child(vendor)
-	vendor.position = at
-	vendor.rotation.y = PI / 2
-	for path in ["Body/Vest", "Body/BowTieR", "Body/BowTieL", "Body/Neck/MoustacheR", "Body/Neck/MoustacheL"]:
-		var node := vendor.get_node_or_null(path) as Node3D
-		if node != null: node.visible = false
-	var top := _mat("vendor_top", Color("2fc6b6"), 0.0, 0.8)
-	for path in ["Body/Hoodie", "Body/Hood", "Body/Pocket", "Body/ArmR/Sleeve", "Body/ArmL/Sleeve"]:
-		var mesh := vendor.get_node_or_null(path) as MeshInstance3D
-		if mesh != null: mesh.material_override = top
-	var body := vendor.get_node_or_null("Body") as Node3D
-	if body != null:
-		var apron := _mat("vendor_apron", PINK, 0.0, 0.8)
-		Kit.box(body, "Apron", Vector3(0.3, 0.4, 0.02), Vector3(0, 0.08, 0.2), apron)
-		Kit.box(body, "ApronStrap", Vector3(0.2, 0.18, 0.015), Vector3(0, 0.36, 0.19), apron)
-	var neck := vendor.get_node_or_null("Body/Neck") as Node3D
-	if neck != null:
-		var cap := _mat("vendor_cap", PINK, 0.0, 0.6)
-		Kit.cylinder(neck, "Cap", 0.19, 0.1, Vector3(0, 0.56, 0.01), cap, 16)
-		Kit.box(neck, "CapBrim", Vector3(0.26, 0.02, 0.16), Vector3(0, 0.52, 0.2), cap)
+	# 2026-11-08: 가게 색 야구 모자 + 가슴 앞치마(art/pub/npc_outfit.gd) — 손님·선수와 구분된다.
+	NpcIdle.spawn(self, "JuiceVendor", at, at + Vector3(3.0, 0, 0), Color("2fc6b6"), false, 1, 0.9, NpcIdle.SEAT_TOP, false, NpcOutfit.Outfit.JUICE_VENDOR)
 
 
 ## 바 끝 냉장고 자리(TableView.BAR_FRIDGE_AT): 하얀 음료 냉장고 + 빛나는 유리문 + 색색 캔 4칸 + "COLD DRINKS".

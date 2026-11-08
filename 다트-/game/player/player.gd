@@ -27,6 +27,10 @@ const PEEK_ROLL_RATIO: float = 0.55
 const PEEK_HEAD_TILT: float = 0.2
 ## 이 정도(0~1) 넘게 기울면 이름표에 "엿보는 중"이 붙는다. game/table/seat_cards.gd 의 PEEK_REVEAL 과 같은 값.
 const PEEK_TAG: float = 0.6
+## 앉아 있을 때 몸(모델)이 의자 정면에서 돌 수 있는 한계(라디안, 약 55도). 2026-11-08 사용자 지적
+## "의자에 등받이가 있는데 왜 등받이를 뚫고 캐릭터들이 뒤를 돌아보는가": 앉은 사람의 몸이 시선(yaw)을 360도 따라 돌았다.
+## → 보이는 몸만 이 각도까지 돌고, 1인칭 시선(rotation.y)·엿보기 계산은 그대로다(다른 화면에서만 몸이 덜 돈다).
+const SEATED_TURN_LIMIT: float = 0.96
 ## 마시는 중 고개를 젖히는 각도(라디안, 약 17도). 1인칭 카메라(GameView)와 병 위치(LoungeWorld)가 같이 쓴다.
 const DRINK_LOOK_UP: float = 0.3
 ## 머리 위 이름표 높이(m). 캐릭터 키(약 1.6~1.75m) 바로 위. 앉거나 숙이면 LOW_LABEL_RATIO 만큼 내린다.
@@ -98,7 +102,7 @@ func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false
 	# 캐릭터마다 고유 렌더 레이어. 각 카메라에서 자기 몸만 제외한다(모델의 모든 조각 + 이름표).
 	_set_layers(self, 1 << (player.seat + 1))
 	if player.is_bot:
-		position = TableView.SEATS[player.seat]
+		position = TableView.seat_spot(player.seat)
 		seated = true
 		look_at(Vector3(TableView.BOARD_CENTER.x, position.y, TableView.BOARD_CENTER.z))
 	show_state(player)
@@ -133,12 +137,35 @@ func _process(delta: float) -> void:
 	var peek: float = peek_amount()
 	_rig.lean = peek * PEEK_ANGLE
 	_rig.head_tilt = peek * PEEK_HEAD_TILT
+	_turn_body_in_chair(delta)
 	_rig.animate(delta, ground_speed, posture, airborne, pitch, aiming)
 	# 옆자리 카드가 뒤집힐 만큼 기울었을 때만 이름표에 표시한다(SeatCards 와 같은 기준).
 	var tagged: bool = absf(peek) >= PEEK_TAG
 	if tagged != _peek_tagged and identity != null:
 		_peek_tagged = tagged
 		_refresh_label()
+
+
+## 앉아 있으면 보이는 몸(Model)을 의자 정면(테이블 쪽) ± SEATED_TURN_LIMIT 안으로 되돌린다. 서 있으면 0(시선 그대로).
+func _turn_body_in_chair(delta: float) -> void:
+	if _model == null:
+		return
+	var turn: float = 0.0
+	var chair_yaw: float = 0.0
+	var in_chair: bool = seated and identity != null
+	if in_chair:
+		var to_table: Vector3 = TableView.TABLE_CENTER - TableView.seat_spot(identity.seat)
+		# 모델 정면 = -Z. -Z 가 테이블을 보는 yaw.
+		chair_yaw = atan2(-to_table.x, -to_table.z)
+		var offset: float = wrapf(rotation.y - chair_yaw, -PI, PI)
+		turn = clampf(offset, -SEATED_TURN_LIMIT, SEATED_TURN_LIMIT) - offset
+	var model_turn: float = lerp_angle(_model.rotation.y, turn, 1.0 - exp(-12.0 * delta))
+	# 시선이 한 번에 크게 돌면(마우스를 휙) 부드럽게 따라가는 사이에 몸이 잠깐 등받이 쪽으로 넘어간다
+	# (실측 최대 68도). → 따라가는 중에도 몸 방향은 매 프레임 한계 안으로 자른다.
+	if in_chair:
+		var body_offset: float = wrapf(rotation.y + model_turn - chair_yaw, -PI, PI)
+		model_turn += clampf(body_offset, -SEATED_TURN_LIMIT, SEATED_TURN_LIMIT) - body_offset
+	_model.rotation.y = model_turn
 
 
 ## 음성 채팅으로 말하는 중이면 머리 옆에 스피커를 띄운다(level 0~1 = 목소리 크기, 음수 = 숨김).
@@ -238,7 +265,7 @@ func simulate(delta: float, controls: Dictionary) -> void:
 	if seated:
 		velocity = Vector3.ZERO
 		knockback = Vector3.ZERO
-		position = TableView.SEATS[identity.seat]
+		position = TableView.seat_spot(identity.seat)
 	else:
 		var axis: Vector2 = controls.get("move", Vector2.ZERO)
 		var direction := Basis(Vector3.UP, rotation.y) * Vector3(axis.x, 0, axis.y)

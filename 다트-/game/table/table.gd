@@ -58,7 +58,15 @@ const CEILING_HEIGHT: float = 4.8
 const TABLE_CENTER := Vector3(0, 0, 4.4)
 const TABLE_SIZE := Vector2(2.15, 1.55)
 const TABLE_HEIGHT: float = 0.85
-const SEATS: Array[Vector3] = [Vector3(-1.5, 0, 4.4), Vector3(0, 0, 5.65), Vector3(1.5, 0, 4.4), Vector3(0, 0, 3.2)]
+## 4인 자리(F6 카드 라운드 시연과 방 생성기가 쓰는 기본 배치). F5 경기는 인원수에 맞춘 seat_spot() 을 쓴다.
+## 2026-11-08: 원형 테이블이라 모든 자리를 가운데에서 같은 거리(SEAT_RADIUS)에 둔다
+## (예전 왼쪽·오른쪽 1.5m · 안쪽 1.25m · 바깥쪽 1.2m 는 네모 테이블 시절 값이었다).
+const SEAT_RADIUS: float = 1.4
+const SEATS: Array[Vector3] = [Vector3(-1.4, 0, 4.4), Vector3(0, 0, 5.8), Vector3(1.4, 0, 4.4), Vector3(0, 0, 3.0)]
+## 인원수별 첫 자리 방향(도). 자리 방향 = atan2(x, z)(테이블 가운데 기준 — 0 = 안쪽 +Z, 90 = 오른쪽 +X, −90 = 왼쪽, 180 = 다트 홀 쪽).
+## 깔린 자리를 번호 순서로 360/인원 도씩 돌려 놓는다 → 2인 = 왼쪽·오른쪽 마주 보기, 3인 = 안쪽 하나 + 다트 홀 쪽 양옆(120도씩),
+## 4인 = 왼쪽·안쪽·오른쪽·바깥쪽(SEATS 와 같다).
+const SEAT_START_YAW := {1: -90.0, 2: -90.0, 3: -120.0, 4: -90.0}
 const SEAT_DISTANCE: float = 1.0
 const RAISED_HEIGHT: float = 1.6
 
@@ -102,6 +110,11 @@ const GRAIN_BAG_AT := Vector3(6.35, 0, 8.5)
 ## 그 틈으로 바 뒤에 들어가지 못하게 음료 냉장고로 막는다(펍 = 유리문 음료 냉장고, 오락실 = 주스 자판기). 문은 방 쪽(+X).
 const BAR_FRIDGE_AT := Vector3(-5.375, 0, 8.12)
 const BAR_FRIDGE_SIZE := Vector3(0.95, 1.95, 1.44)
+## 주크박스(라운지 오른쪽 앞벽). 그림은 LoungeWorld._build_jukebox 가 이 자리에 그린다(LoungeWorld.JUKEBOX = 이 값).
+## 2026-11-08 사용자 지적 "펍 느낌의 주크박스가 왜 플레이어가 통과되는 거야?": 그림만 있고 충돌 상자가 없었다 →
+## decor_blocks() 에 넣어 사람이 막힌다. 크기 = 받침(폭 1.42) × 아치 꼭대기(2.08m) × 몸통 깊이. 앞 버튼(z +0.42)은 상자 밖에 둬 누를 수 있다.
+const JUKEBOX_AT := Vector3(8.6, 0, 0.5)
+const JUKEBOX_SIZE := Vector3(1.42, 2.1, 0.62)
 ## 바 위 물건 자리(바 윗면 높이 1.1m). 맥주잔 = 집어 마시고 던지는 소품(LoungeWorld), 컵받침은 그 아래에 그려 둔다.
 const BAR_TOP_Y: float = 1.1
 const BAR_MUGS: Array[Vector3] = [Vector3(-5.2, 1.1, 1.4), Vector3(-5.2, 1.1, 1.9), Vector3(-5.2, 1.1, 6.2), Vector3(-5.2, 1.1, 6.7)]
@@ -115,7 +128,7 @@ static func decor_blocks() -> Array[AABB]:
 			[PRACTICE_TARGET_AT, Vector3(0.62, 1.35, 0.6)], [BUCKET_AT, Vector3(0.45, 0.4, 0.45)],
 			[SOFA_AT, Vector3(2.6, 0.9, 0.95)], [ARMCHAIR_AT, Vector3(1.16, 0.9, 0.95)],
 			[SIDE_TABLE_AT, Vector3(0.56, 0.4, 0.56)], [CRATES_AT, Vector3(0.75, 1.2, 0.75)], [GRAIN_BAG_AT, Vector3(0.56, 0.62, 0.56)],
-			[BAR_FRIDGE_AT, BAR_FRIDGE_SIZE]]:
+			[BAR_FRIDGE_AT, BAR_FRIDGE_SIZE], [JUKEBOX_AT, JUKEBOX_SIZE]]:
 		var at: Vector3 = spec[0]
 		var size: Vector3 = spec[1]
 		blocks.append(AABB(at - Vector3(size.x / 2.0, 0, size.z / 2.0), size))
@@ -184,9 +197,49 @@ static func in_throw_zone(point: Vector3) -> bool:
 	return DART_HALL.has_point(Vector2(point.x, point.z)) and point.z >= THROW_LINE_Z
 
 
+## 깔린 자리들(자리 번호)을 원형 테이블 둘레에 똑같은 간격으로 놓은 위치: 자리 번호 → 바닥 위치(의자 가운데).
+## 2026-11-08 사용자 요청 "4명에서 3명으로 줄면 원형 테이블을 정확하게 3등분해 그곳에 앉게":
+## 자리 번호(= 색·모양)는 그대로 두고 위치만 인원수에 맞춰 다시 나눈다. 번호 순서대로 시계 방향이다.
+static func seat_layout(shown: Array[int]) -> Dictionary:
+	var seats: Array[int] = shown.duplicate()
+	seats.sort()
+	var result: Dictionary = {}
+	if seats.is_empty():
+		return result
+	var start: float = float(SEAT_START_YAW.get(clampi(seats.size(), 1, SEATS.size()), -90.0))
+	for rank in range(seats.size()):
+		var yaw: float = deg_to_rad(start + 360.0 * rank / seats.size())
+		# 1μm 로 반올림한다: 4.4+1.4 같은 계산 찌꺼기(float 끝자리)가 남으면 4인 자리가 SEATS 상수와 정확히 같지 않다.
+		result[seats[rank]] = Vector3(snappedf(TABLE_CENTER.x + sin(yaw) * SEAT_RADIUS, 0.000001), 0.0,
+			snappedf(TABLE_CENTER.z + cos(yaw) * SEAT_RADIUS, 0.000001))
+	return result
+
+
+## 지금 경기에 깔린 자리 위치(자리 번호 → 위치). GameView.sync_room 이 방 인원수로 정한다(arrange_seats).
+## 경기 규칙(앉기 거리·봇이 걸어갈 곳·일어설 곳)과 그림(카드 매트·엿보기)이 모두 이 값을 본다.
+static var _seat_spots: Dictionary = {}
+
+
+## 경기 자리 배치를 바꾼다. shown = RoomState.shown_seats(). 방장·손님 모두 같은 방 상태로 부르므로 같은 결과다.
+static func arrange_seats(shown: Array[int]) -> void:
+	_seat_spots = seat_layout(shown)
+
+
+## 자리 seat 의 바닥 위치(의자 가운데). 지금 배치에 없는 번호면 4인 배치 자리.
+static func seat_spot(seat: int) -> Vector3:
+	if _seat_spots.has(seat):
+		return _seat_spots[seat]
+	return SEATS[clampi(seat, 0, SEATS.size() - 1)]
+
+
+## 자리에서 테이블 가운데를 등지는 방향(rotation.y) — 이 각도로 돌리면 로컬 +Z 가 자리 바깥쪽을 본다(방 생성기와 같다).
+static func seat_yaw(at: Vector3) -> float:
+	return atan2(at.x - TABLE_CENTER.x, at.z - TABLE_CENTER.z)
+
+
 ## 각 자리에서 테이블 바깥쪽으로 일어선다. 고정 +Z는 4번 자리를 상판 안에 넣는다.
 static func standing_spot(seat: int) -> Vector3:
-	var origin: Vector3 = SEATS[seat]
+	var origin: Vector3 = seat_spot(seat)
 	var outward: Vector3 = (origin - TABLE_CENTER).normalized()
 	return clamp_floor(origin + outward * 0.8 + Vector3.UP * 0.05)
 
@@ -311,13 +364,38 @@ func show_seats(seats: Array[int]) -> void:
 
 
 ## 자리 노드 이름은 1부터 센다(SeatMat_1 … — art/pub/game_room_builder.gd _table_and_seats).
+## 2026-11-08: 보이는 자리는 인원수만큼 똑같이 나눈 자리(seat_layout)로 옮긴다. 방 생성기는 4인 자리(SEATS)에 만들어 두므로
+## 그 자리에서 테이블 가운데를 축으로 (새 방향 − 만든 방향)만큼 돌린다 → 의자·깔개·글자·매트가 함께 돈다.
+## 자리 노드는 정적 묶기에서 빠져 있어(StaticBatch "Seat") 실행 중에 옮길 수 있다.
 func _apply_seats(pub: Node) -> void:
+	var layout: Dictionary = seat_layout(_shown_seats)
 	for seat in range(SEATS.size()):
 		var shown: bool = _shown_seats.has(seat)
+		var turn: float = 0.0
+		if shown:
+			turn = seat_yaw(layout[seat]) - seat_yaw(SEATS[seat])
 		for part: String in ["SeatMat_%d", "SeatRug_%d", "SeatStool_%d", "SeatLabel_%d"]:
 			var node := pub.find_child(part % (seat + 1), true, false) as Node3D
-			if node != null:
-				node.visible = shown
+			if node == null:
+				continue
+			node.visible = shown
+			if not node.has_meta("built_transform"):
+				node.set_meta("built_transform", node.transform)
+			var built: Transform3D = node.get_meta("built_transform")
+			# 테이블 가운데를 이 노드 부모 좌표로 옮겨 그 둘레로 돌린다(매트는 테이블 노드 아래라 부모 원점이 곧 가운데다).
+			var pivot: Vector3 = _table_space(node.get_parent()).affine_inverse() * TABLE_CENTER
+			var spin := Basis(Vector3.UP, turn)
+			node.transform = Transform3D(spin, pivot - spin * pivot) * built
+
+
+## node 좌표 → 이 TableView 좌표 변환(트리 밖에서도 부모를 따라 곱한다).
+func _table_space(node: Node) -> Transform3D:
+	var result := Transform3D.IDENTITY
+	while node != null and node != self:
+		if node is Node3D:
+			result = (node as Node3D).transform * result
+		node = node.get_parent()
+	return result
 
 
 ## 방 그림이 지금 규칙 좌표로 만들어졌는지 확인하고, 화면이 있을 때만 메시를 묶는다.

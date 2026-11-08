@@ -8,6 +8,7 @@ extends RefCounted
 ##           gulp(꿀꺽 — 병 마시기, 2026-10-31) · tick(남은 시간 째깍 — 위 가운데 라운드 표시, 2026-10-31 저녁)
 ##           pop_up(감정표현 말풍선이 뜰 때 톡)
 ##           riffle(덱 섞기 촤라락) · deal(카드 한 장 휙 — 나눠 주기) — 2026-10-31 늦은 밤 카드 충전 라운드 연출(game/table/deck_show.gd)
+##           shutter(롤 셔터 촤라락…쾅 — 2026-11-08 다트 머신 가림판 카드, art/dart_machine/roll_shutter.gd)
 
 const SAMPLE_RATE := 22050
 static var _cache: Dictionary = {}
@@ -54,7 +55,7 @@ static func _synth(kind: String) -> AudioStreamWAV:
 	var seconds: float = {"whoosh": 0.22, "thunk": 0.26, "glass": 0.95, "crack": 0.4, "bounce": 0.18,
 		"crank": 0.5, "pop": 0.3, "coin": 0.35, "buzzer": 0.8, "swish": 0.45, "squeak": 0.3,
 		"motor": 0.6, "fanfare": 0.9, "gulp": 0.8, "tick": 0.06, "pop_up": 0.14, "ding": 1.1,
-		"riffle": 0.7, "deal": 0.09}.get(kind, 0.25)
+		"riffle": 0.7, "deal": 0.09, "shutter": 0.75}.get(kind, 0.25)
 	var count := int(SAMPLE_RATE * seconds)
 	var data := PackedByteArray()
 	data.resize(count * 2)
@@ -116,6 +117,17 @@ static func _synth(kind: String) -> AudioStreamWAV:
 			"deal":
 				# 카드 한 장이 공기를 가르는 짧은 "휙" + 끝의 가벼운 탁.
 				value = noise * sin(PI * t / seconds) * 0.35 + noise_low * exp(-maxf(0.0, t - seconds * 0.8) * 60.0) * (0.3 if t > seconds * 0.8 else 0.0)
+			"shutter":
+				# 롤 셔터: 얇은 금속 날개가 레일에서 빠르게 덜컹거리는 "촤라락"(딸깍 간격이 점점 촘촘해짐, 금속 울림 섞음)
+				# → 0.31초(앞 바가 가운데에 닿는 순간, roll_shutter.gd SLAM_AT) 에 낮은 "쾅" + 짧은 금속 떨림.
+				var slam: float = 0.31
+				if t < slam:
+					var rattle := fmod(t * (34.0 + 120.0 * t), 1.0)
+					value = (noise * 0.55 + sin(TAU * 2350.0 * t) * 0.3) * exp(-rattle * 28.0) * minf(1.0, t * 30.0) * 0.5
+				else:
+					var after: float = t - slam
+					value = sin(TAU * 78.0 * after) * exp(-after * 13.0) * 0.75 + noise_low * exp(-after * 22.0) * 0.9 \
+						+ sin(TAU * 610.0 * after) * exp(-after * 9.0) * 0.16 + noise * exp(-after * 40.0) * 0.25
 			"ding":
 				# 바 종(2026-10-31 밤 건드리기): 맑은 기음 + 어긋난 배음 두 개가 천천히 사라진다(작은 종 "딩~").
 				value = (sin(TAU * 1320 * t) * 0.5 + sin(TAU * 3170 * t) * 0.22 * exp(-t * 5.0) + sin(TAU * 2640 * t) * 0.12) * exp(-t * 3.2) * 0.5

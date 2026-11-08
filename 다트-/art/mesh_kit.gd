@@ -128,6 +128,9 @@ static func rounded_box_mesh(size: Vector3, radius: float, steps := 4) -> ArrayM
 						var normal: Vector3 = (p - q).normalized()
 						surface.set_normal(normal)
 						surface.add_vertex(q + normal * r)
+	# 2026-11-08: 위치·법선이 같은 꼭짓점을 하나로 합친다(index) — 모양은 그대로, 저장 크기·메모리는 몇 분의 일.
+	# (경기 방 pub_game.tscn 에 크기가 다른 둥근 상자가 수십 개 저장되면서 파일이 5MB 로 커졌다.)
+	surface.index()
 	var mesh := surface.commit()
 	_rounded_cache[key] = mesh
 	return mesh

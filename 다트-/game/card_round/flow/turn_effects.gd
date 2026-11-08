@@ -1,5 +1,5 @@
 extends RefCounted
-## 차례 동안 눈에 보이는 효과: 과녁 숫자 섞기 · 가림판(왼쪽 절반) · 바람 표시 · 졸림(내 화면 눈꺼풀),
+## 차례 동안 눈에 보이는 효과: 과녁 숫자 섞기 · 가림판(왼쪽 절반 — 다트 머신 롤 셔터) · 바람 표시 · 졸림(내 화면 눈꺼풀),
 ## 그리고 사람을 맞힌 벌(그 사람의 차례가 끝날 때까지: 취기·마우스·난시 중 무작위 하나 + 목소리 변조).
 ## 무엇이 걸렸는지는 규칙(rules.dart_modifiers)이 정하고, 여기는 보이게만 한다.
 
@@ -27,7 +27,9 @@ func setup(ctx: Context) -> void:
 	_ctx = ctx
 
 
-## 과녁 소품을 한 번 만든다: 가림판(왼쪽 절반을 가리는 판자)과 바람 표시. 평소에는 숨겨 둔다.
+## 과녁 소품을 한 번 만든다: 가림판(다트 머신이 없을 때만 쓰는 예비 판자)과 바람 표시. 평소에는 숨겨 둔다.
+## 2026-11-08 사용자 요청 "판때기로 가리지 말고 가게 셔터처럼 옆에서 촤라락" → 가림판은 다트 머신의 롤 셔터
+## (art/dart_machine/roll_shutter.gd, F5 본 게임과 같은 그림)로 닫는다. 판자는 머신이 없는 장면을 위한 예비다.
 func build_props() -> void:
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	_cover = MeshInstance3D.new()
@@ -70,7 +72,7 @@ func apply(seat: int) -> void:
 		layout = BoardLayout.new()
 		layout.shuffle_with(_ctx.random)
 		_ctx.table.board.show_layout(layout)
-	_cover.visible = bool(mods.cover)
+	_show_cover(bool(mods.cover))
 	_wind.visible = float(mods.push) > 0.0
 	if seat == Context.LOCAL_SEAT:
 		_ctx.debuff.drowsy = bool(mods.drowsy)
@@ -80,9 +82,19 @@ func apply(seat: int) -> void:
 func restore() -> void:
 	layout = BoardLayout.new()
 	_ctx.table.board.show_layout(layout)
-	_cover.visible = false
+	_show_cover(false)
 	_wind.visible = false
 	_ctx.debuff.drowsy = false
+
+
+## 가림판 켜기/끄기: 다트 머신이 있으면 롤 셔터를 옆에서 밀어 닫고(촤라락), 없으면 예비 판자를 보인다.
+func _show_cover(closed: bool) -> void:
+	var machine: Node = _ctx.table.machine if _ctx.table != null else null
+	if machine != null:
+		machine.call("slide_shutter", closed)
+		_cover.visible = false
+	else:
+		_cover.visible = closed
 
 
 ## 사람을 맞힌 벌: thrower 의 차례가 끝날 때까지 취기·마우스·난시 중 하나(같은 확률, 내 화면일 때 보인다) + 목소리 변조.

@@ -145,7 +145,7 @@ func peeked_seat(viewer: PlayerView) -> int:
 	for seat: int in _rows:
 		if seat == viewer.identity.seat:
 			continue
-		var to_mat: Vector3 = _mat_center(seat) - TableView.SEATS[viewer.identity.seat]
+		var to_mat: Vector3 = _mat_center(seat) - TableView.seat_spot(viewer.identity.seat)
 		to_mat.y = 0.0
 		var dot: float = to_mat.normalized().dot(side)
 		if dot > best_dot:
@@ -205,6 +205,7 @@ func _mat_center(seat: int) -> Vector3:
 
 ## 자리 쪽을 +Z 로 보는 방향(테이블 가운데 기준). 펍 생성기 game_room_builder.gd 의 자리 매트와 같은 각도다.
 func _seat_basis(seat: int) -> Basis:
-	var seat_position: Vector3 = TableView.SEATS[seat]
+	# 2026-11-08: 인원수에 맞춰 나눈 자리(TableView.seat_spot) — 방 그림의 매트도 같은 각도로 돈다(TableView._apply_seats).
+	var seat_position: Vector3 = TableView.seat_spot(seat)
 	var toward := Vector3(seat_position.x - TableView.TABLE_CENTER.x, 0, seat_position.z - TableView.TABLE_CENTER.z).normalized()
 	return Basis(Vector3.UP, atan2(toward.x, toward.z))

@@ -23,6 +23,12 @@ const LIFT: float = 20.0
 const TAP_SECONDS: float = 0.25
 ## 내 감정을 화면 아래에 보여 주는 시간(초).
 const MINE_SECONDS: float = 1.8
+## 내 감정 그림의 세로 자리(화면 높이 비율)와 크기(px).
+## 2026-11-08 사용자 지적 "감정표현 이모지가 아래 UI 를 가린다": 예전 자리(바닥에서 210px)는 F5 라운지의
+## 준비 칩 줄(바닥 ~140px)·키 안내와 겹쳤다 → 조준점(0.5)과 아래 UI 사이 빈 띠(0.64)로 올리고 조금 줄였다.
+## 경기 중에도 이 띠는 비어 있다(손 카드 부채 = 왼쪽 아래, 안내 띠 = 바닥 ~130px).
+const MINE_HEIGHT_RATIO: float = 0.64
+const MINE_SIZE: float = 44.0
 
 ## 열려 있는가.
 var is_open: bool = false
@@ -151,8 +157,8 @@ func _draw_pad() -> void:
 	var age: float = _time - _mine_at
 	if _mine >= 0 and age < MINE_SECONDS:
 		var pop: float = clampf(age / 0.18, 0.0, 1.0)
-		var size: float = 52.0 * (lerpf(0.3, 1.15, pop) if pop < 1.0 else lerpf(1.15, 1.0, clampf((age - 0.18) / 0.1, 0.0, 1.0)))
-		var at := Vector2(_pad.size.x * 0.5, _pad.size.y - 210.0 - sin(age * 5.0) * 4.0)
+		var size: float = MINE_SIZE * (lerpf(0.3, 1.15, pop) if pop < 1.0 else lerpf(1.15, 1.0, clampf((age - 0.18) / 0.1, 0.0, 1.0)))
+		var at := Vector2(_pad.size.x * 0.5, _pad.size.y * MINE_HEIGHT_RATIO - sin(age * 5.0) * 4.0)
 		_pad.draw_circle(at, size * 1.35, Color(1.0, 0.97, 0.92, 0.92 * clampf((MINE_SECONDS - age) / 0.35, 0.0, 1.0)))
 		EmoteArt.draw(_pad, _mine, at, size)
 	if not is_open and _time - _notice_at < MINE_SECONDS:

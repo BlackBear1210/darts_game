@@ -13,6 +13,8 @@ const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
 var _fans: Dictionary = {}
 ## peer_id → 지금 부채에 꽂힌 손패(같으면 다시 만들지 않는다)
 var _shown: Dictionary = {}
+## 덱 나눠 주기 연출(game/table/deck_show.gd). 있으면 아직 덱에서 안 닿은 카드는 부채에 넣지 않는다(2026-11-08 — 한 장씩 들어오게).
+var deck_show: Node
 
 
 ## 자기 부채도 자기 몸과 같은 렌더 레이어라 1인칭에는 안 보이고 3인칭에만 보인다.
@@ -28,10 +30,12 @@ func sync(actors: Dictionary, players: Array[MatchPlayer], _local_id: int) -> vo
 			continue
 		var hand: Array[int] = []
 		hand.assign(player.hand)
+		if deck_show != null:
+			hand = deck_show.call("visible_hand", player.seat, hand)
 		if hand != _shown.get(player.peer_id, []):
 			_shown[player.peer_id] = hand.duplicate()
 			for slot in range(CardHandRules.HAND_LIMIT):
-				if slot < hand.size():
+				if slot < hand.size() and hand[slot] >= 0:
 					if not fan.has_card(slot) or fan.cards[slot].type != hand[slot]:
 						fan.set_card(slot, hand[slot])
 				else:

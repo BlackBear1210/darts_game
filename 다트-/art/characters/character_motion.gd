@@ -58,6 +58,8 @@ const BLINK_EVERY := 3.4
 const BLINK_TIME := 0.12
 ## 왕머리가 커지는 빠르기.
 const HEAD_SCALE_RATE := 8.0
+## 앉은 다리 자세(CharacterPoseLayer.seat_legs)로 바뀌는 빠르기. 앉는 모션(Sit_Stool)과 비슷하게 0.5초쯤 걸린다.
+const SEAT_LEGS_RATE := 5.0
 ## 카드 앞면이 보는 방향(모델 기준): 든 사람 쪽(+Z)에서 몸 안쪽(+X)과 위로 비스듬히.
 ## 눈을 곧바로 보게 하면 손이 눈 바로 아래라 부채가 눕는다. 앉거나 걸어도 같은 각도로 세워 둔다.
 const CARD_FAN_FACING := Vector3(0.45, 0.55, 0.7)
@@ -172,6 +174,8 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	_layer.look_pitch = lerpf(_layer.look_pitch, head_pitch, amount)
 	_layer.lean = lean
 	_layer.head_tilt = head_tilt
+	# 앉아 있으면 허벅지는 방석 위 수평, 발은 의자 발걸이 위(2026-11-08 — 모션 그대로면 무릎이 방석을 뚫는다).
+	_layer.seat_legs = lerpf(_layer.seat_legs, 1.0 if posture == Posture.SEAT else 0.0, 1.0 - exp(-SEAT_LEGS_RATE * delta))
 	_layer.head_scale = lerpf(_layer.head_scale, head_scale, minf(1.0, delta * HEAD_SCALE_RATE))
 	if is_instance_valid(_card_fan):
 		_card_fan.position = _model.to_local(_card_socket.global_position)
@@ -200,6 +204,9 @@ func _update_body(speed_ratio: float, posture: Posture, airborne: bool) -> void:
 			_player.seek(JUMP_TAKEOFF, true)
 		elif first:
 			_player.seek(fmod(_seed, _player.get_animation(next).length), true)
+			# 처음부터 앉아 있던 사람(봇·NPC)은 다리도 바로 앉은 자세다.
+			if next == SEATED:
+				_layer.seat_legs = 1.0
 	if moving:
 		_player.speed_scale = clampf(speed_ratio * WALK_RATE, WALK_RATE_MIN, WALK_RATE_MAX)
 	else:

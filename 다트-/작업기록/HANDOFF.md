@@ -1,3 +1,34 @@
+# 최신 인수인계 — 인원수만큼 자리 똑같이 나누기 · 앉은 다리 · 발걸이 (2026-11-08 저녁)
+
+- 상세: `작업기록/2026-11-08_자리균등배치_앉은자세_발걸이.md`. 결정: `docs/DECISIONS.md` 2026-11-08(저녁).
+- **경기 자리는 `TableView.seat_spot(자리)` 로 읽는다.** `SEATS[자리]` 를 직접 쓰면 3인·2인 방에서 의자와 어긋난다. `SEATS` 는 이제 4인 기본 자리(모두 반지름 1.4m)이고 F6 카드 라운드 시연과 방 생성기만 쓴다.
+- 배치는 `GameView.sync_room` 이 방 상태가 올 때마다 `TableView.arrange_seats(room.shown_seats())` 로 정한다(정적 변수 — 방장·손님 모두 같은 방 상태로 같은 계산). 시험에서 배치를 바꿨으면 끝에 `arrange_seats([0,1,2,3])` 로 되돌릴 것.
+- `seat_layout` 은 1μm 로 반올림한다. 안 하면 4.4+1.4 같은 float 끝자리 때문에 4인 자리가 `SEATS` 와 `==` 로 안 같아져 `test_prototype` 이 실패한다.
+- **의자 옮기기**: `_apply_seats` 가 자리 노드(`SeatMat/SeatRug/SeatStool/SeatLabel_n`)의 생성 때 변환을 메타 `built_transform` 에 한 번 저장하고, 거기서 테이블 가운데 축으로 (새 방향 − 4인 방향)만큼 돌린다. 방을 다시 만들면 메타도 새로 잡힌다. `Seat` 로 시작하는 노드는 정적 묶기에서 빠져 있어야 움직인다.
+- **앉은 다리**는 `CharacterPoseLayer._seat_leg` 가 AnimationPlayer 뒤에 허벅지·정강이를 `SEAT_THIGH`·`SEAT_SHIN` 방향으로 돌리고 발은 원래 방향을 지킨다. 세기 `seat_legs` 는 `CharacterMotion` 이 앉기 자세면 1 로(약 0.5초), 처음부터 앉아 있으면 바로 1.
+- **발걸이 높이는 다리 각도에서 나온 값**이다: 고리 윗면 = 앉는 면 − `SEATED_SOLE_DROP`(0.378m). `SEAT_THIGH`·`SEAT_SHIN` 이나 캐릭터를 바꾸면 발바닥 높이를 다시 재서 이 값을 고치고 `pub_game.tscn` 만 다시 만든다(`pub_builder.gd` 통째 실행 금지).
+- 남은 판단: 직접 앉았다 일어설 때 다리 바뀌는 속도(`SEAT_LEGS_RATE` 5), 3인 첫 자리 방향(`SEAT_START_YAW`), 발걸이 색.
+
+---
+
+# 최신 인수인계 — 카드 한 장씩 분배 · 앉은 몸 · 웅덩이 Decal · 창밖 셰이더 · 인원수 다시 정하기 · NPC 옷 (2026-11-08)
+
+- 상세: `작업기록/2026-11-08_맵리디자인_롤셔터_NPC_감정표시.md`(오전) · `작업기록/2026-11-08_카드분배_바텐더옷_창풍경_인원수.md`(오후). 결정: `docs/DECISIONS.md` 2026-11-08.
+- **손 부채는 덱 연출 뒤에 맞춘다.** `GameView._apply_state` 에서 `deck_show.sync` → `_sync_hand_fan` 순서다. 바꾸면 카드 7장이 한꺼번에 보인다. 아직 안 닿은 칸은 `DeckShow.visible_hand()` 가 -1 로 돌려주고, 한 장 닿을 때마다 `dealt` 신호가 온다. 새로 손패를 보여 주는 곳도 `visible_hand` 를 거칠 것.
+- **앉은 몸 돌리기**는 `PlayerView._turn_body_in_chair` 가 `Model` 노드의 `rotation.y` 만 바꾼다(±`SEATED_TURN_LIMIT`). `PlayerView.rotation.y`(시선)는 건드리지 않는다. 모델 루트의 `rotation.y` 를 다른 데서 쓰면 서로 덮으니 주의.
+- **창밖 그림 `WindowView`** 는 정적 묶기에서 빠진다(`StaticBatch.NO_BATCH_NAMES`). 묶이면 로컬 좌표(VERTEX)가 사라져 시차가 깨진다. 이름을 바꾸면 목록도 같이 바꿀 것. 원화 그림을 쓰려면 같은 메시에 텍스처 재질을 붙이면 된다.
+- **웅덩이는 Decal** 이다(`BurstFx` splash). 바닥 높이 ±0.08m(`PUDDLE_DEPTH` 0.16)만 찍힌다 — 테이블 위처럼 높은 곳에는 안 찍힌다.
+- **주크박스 충돌**은 `TableView.decor_blocks()` 의 `JUKEBOX_AT`·`JUKEBOX_SIZE`. `LoungeWorld.JUKEBOX` 는 이 상수를 가리킨다 — 주크박스를 옮기면 table.gd 한 곳만 바꾸고 방을 다시 만든다(`pub_game.tscn` 만, `pub_builder.gd` 통째 실행 금지).
+- **인원수 바꾸기**: 대기실에서만 `RoomState.resize(capacity, bot_count)`. 서버 `_accept_settings` 는 방 종류(solo·private·social)는 잠그고 인원·봇 수만 `resize` 로 넣는다. 사람 수보다 적게는 못 줄이고, 넘치는 봇은 번호 큰 봇부터 뺀다. 빈 의자는 `shown_seats()` 가 `seat_order` 로 다시 고른다(2인 = 0·2번 마주 보기).
+- **NPC 옷** `art/pub/npc_outfit.gd`: 뼈마다 `BoneAttachment3D "Outfit_<뼈>"` + 자식 `"Rest"`(그 뼈 쉬는 자세의 역변환) 아래에 메시를 둔다 → 옷 좌표는 **뼈대 공간**(서 있는 몸 기준 m)으로 적는다. Tripo 몸 치수는 오후 작업기록 8절. 차림은 `NpcIdle.spawn(..., dress_as)` 와 `@export outfit` 으로 고른다.
+  - `MeshKit.own_tree` 는 인스턴스 씬 안으로 안 내려가서 옷 노드는 `pub_game.tscn` 에 저장되지 않는다 — 실행 때 `NpcIdle._ready` 가 입힌다.
+  - `NpcIdle.spawn` 은 캐릭터를 홀더에 넣은 **뒤에** 장면에 붙인다(반대면 `_ready` 가 일찍 끝나 T 자세·옷 없음).
+- **Tripo 캐릭터(8091f9c)**: 조각 9개 `tripo_part_0~8`, 셔츠 색 칠하기 없음. 자리 구분은 이름표·매트·HUD. 새 GLB·텍스처는 에디터가 다시 훑기 전까지 "invalid UID" 경고가 난다(실행 지장 없음).
+- **시험 주의**: 사용자가 게임을 띄워 두면 포트 7000 이 잡혀 `test_prototype`(개발자 시작)이 멈춘다. 그 게임을 끄지 말고 포트를 바꾼 사본으로 돌린다.
+- 남은 판단: 창밖을 셰이더 밤거리로 둘지 원화 이미지로 바꿀지, 앉은 몸 한계 55도가 손맛에 맞는지, 바텐더·손님 옷 색.
+
+---
+
 # 최신 인수인계 — 아수라장 다트 머신 · 인원수 좌석 · 오락실 기계 조작 (2026-11-07)
 
 - 상세: `작업기록/2026-11-07_로비배경_인원좌석_다트머신_오락실기계.md`. 결정: `docs/DECISIONS.md` 2026-11-07.

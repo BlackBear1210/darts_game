@@ -17,6 +17,8 @@ extends Node3D
 ## 건드리기(touch): 바 종 · 럼주통 · 생맥주 통 · 연습 과녁 · 축음기에 다가가 상호작용 키(F) → 소리 + 그 물건이 흔들린다.
 ##   모든 화면에서 같은 소리·흔들림(방장이 fx 이벤트로 알린다). 점수·규칙에는 영향이 없는 "만지는 재미"용이다.
 const Kit = preload("res://art/mesh_kit.gd")
+## 둥근 점토 느낌 모델 도구(물레 깎기·단면 밀기) — 주크박스·모니터를 깎는다(2026-11-08).
+const RoundKit = preload("res://art/pub/round_kit.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
 const Bridge = preload("res://game/lounge/youtube_bridge.gd")
 const Rules = preload("res://game/lounge/arcade/arcade_rules.gd")
@@ -25,7 +27,10 @@ const Looks = preload("res://game/lounge/prop_looks.gd")
 const BurstFx = preload("res://art/fx/burst_fx.gd")
 const Sfx = preload("res://art/audio/sfx.gd")
 const MONITOR := Vector3(-4.35, 1.35, 2.0)
-const JUKEBOX := Vector3(7.8, 0, 1.1)
+## 2026-11-08 사용자 지적 "주크박스랑 화분이랑 겹친다": 예전 (7.8, 0, 1.1)은 다트 홀 입구 모서리 화분과 몸통이 겹쳤다 →
+## 요청서 3.3 표 자리(8.5, 0, 0.6) 근처 오른쪽 앞벽에 붙였다. 펍 생성기(art/pub/game_room_builder.gd JUKEBOX_X)가 이 벽 칸을 비워 둔다.
+## 충돌 상자는 TableView.decor_blocks() 의 JUKEBOX_AT·JUKEBOX_SIZE(2026-11-08 — 예전에는 충돌이 없어 사람이 통과했다).
+const JUKEBOX := TableView.JUKEBOX_AT
 const REACH: float = 2.2
 ## 주크박스 볼륨 버튼 한 번에 오르는 양(0 → 25 → 50 → 75 → 100 → 0%).
 const VOLUME_STEP: float = 0.25
@@ -62,7 +67,8 @@ const WOBBLE_SECONDS: float = 0.7
 const WOBBLE_ANGLE: float = 0.12
 ## 오락실 테마에서 펍 그림에서 빼는 묶음(같은 자리에 기계를 세운다).
 ## Windows(2026-10-31 늦은 밤): 오락실은 창 없는 방 — 창을 빼고 그 벽에 네온 간판을 단다(간판이 창에 겹쳐 잘리던 문제).
-const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows"]
+## Guests(2026-11-08): 펍 손님은 NPC 테이블 의자·바 스툴에 앉아 있어서, 그 가구가 빠지는 오락실에서는 허공에 앉게 된다 → 같이 뺀다.
+const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests"]
 ## 소품 → 킬로그 아이콘.
 const FEED_ICONS := {"bottle": "bottle", "mug": "bottle", "ball": "hoop", "cue": "cue", "hoop_ball": "hoop", "plush": "plush", "capsule": "capsule"}
 
@@ -120,11 +126,7 @@ func now() -> float:
 # ─────────────────────────────── 만들기 ───────────────────────────────
 
 func _build() -> void:
-	var dark: Material = Kit.material("lounge_dark", "162039", 0.2)
-	Kit.box(self, "MonitorStand", Vector3(0.14, 1.2, 0.2), MONITOR - Vector3(0, 0.55, 0), dark)
-	Kit.box(self, "MonitorScreen", Vector3(1.0, 0.64, 0.12), MONITOR, dark)
-	# 상호작용 키는 2026-10-31 부터 F(설정에서 바꿀 수 있다) — 예전 글자 "[E]" 가 남아 있었다.
-	Kit.label(self, "MonitorText", "DARTY / ROOM\n[%s] 방장 설정" % OS.get_keycode_string(Preferences.interact_key), MONITOR + Vector3(0, 0, 0.08), 26, Color("79f2ce"), 0.004)
+	_build_monitor()
 	_build_jukebox()
 	# 2026-10-31 밤: 예전 자리(x -4.76, 높이 1.3)는 카운터 앞면(x -4.9) 밖 허공이라 병이 떠 보였다 → 바 윗면 위로.
 	for index in range(TableView.BAR_BOTTLES_Z.size()):
@@ -148,36 +150,77 @@ func _build() -> void:
 	add_child(_theme_root)
 	apply_theme()
 
-## 레트로 주크박스: 둥근 머리 · 무지개 빛 띠 · 스피커 그릴 · 버튼 3개(전원 · 볼륨 · 링크). 버튼 자리는 상호작용 좌표와 같다.
+## 방장 설정 모니터(2026-11-08 다시 깎음): 둥근 받침 원판 + 화면 뒤로 올라가는 기둥 + 모서리가 둥근 화면 테.
+## 예전에는 받침 기둥 상자(0.2m 두께)가 화면 앞까지 튀어나와 화면 글자 가운데를 가렸다 → 기둥을 화면 뒤로 뺐다.
+## 상호작용 자리는 그대로 MONITOR(화면 가운데)다.
+func _build_monitor() -> void:
+	var dark: Material = RoundKit.clay("lounge_dark", "1b2233", 0.45, 0.2)
+	var brass: Material = RoundKit.clay("AgedBrass", "b58a4a", 0.4, 0.75)
+	var back := MONITOR + Vector3(0, 0, -0.1)
+	var foot := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, 0), Vector2(0.24, 0), Vector2(0.24, 0.025), Vector2(0.08, 0.06), Vector2(0, 0.065)]), 0.015, 3)
+	RoundKit.lathe(self, "MonitorFoot", foot, Vector3(back.x, 0, back.z), dark, 28)
+	RoundKit.rod(self, "MonitorStand", Vector3(back.x, 0.05, back.z), Vector3(back.x, MONITOR.y - 0.1, back.z), 0.03, dark, 0.026, 14)
+	Kit.mesh_node(self, "MonitorCollar", RoundKit.ring_mesh("monitor_collar", 0.034, RoundKit.circle_profile(0.01, 6), 20), Vector3(back.x, 0.75, back.z), brass)
+	Kit.rounded_box(self, "MonitorScreen", Vector3(1.04, 0.68, 0.08), MONITOR + Vector3(0, 0, -0.02), dark, 0.035)
+	Kit.rounded_box(self, "MonitorGlass", Vector3(0.94, 0.58, 0.01), MONITOR + Vector3(0, 0, 0.022), Kit.material("monitor_glass", "0c1a24", 0.0, 0.25), 0.004)
+	# 상호작용 키는 2026-10-31 부터 F(설정에서 바꿀 수 있다) — 예전 글자 "[E]" 가 남아 있었다.
+	Kit.label(self, "MonitorText", "DARTY / ROOM\n[%s] 방장 설정" % OS.get_keycode_string(Preferences.interact_key), MONITOR + Vector3(0, 0, 0.04), 26, Color("79f2ce"), 0.004)
+
+
+## 레트로 주크박스(2026-11-08 다시 깎음): 둥근 머리 월넛 몸통(앞에서 본 아치 모양을 깊이만큼 낸 판) + 크롬 테 +
+## 무지개 빛 전구 5개·옆 빛 관 2개(색이 천천히 돈다 — _jukebox_lights) + 노래 창 + 스피커 그릴 + 버튼 3개(전원 · 볼륨 · 링크).
+## 버튼 자리는 상호작용 좌표(focus 의 power·volume·link)와 같다. 앞면 = +Z(방 쪽).
 func _build_jukebox() -> void:
-	var wood := Kit.material("jukebox_wood", "5a2e2a", 0.0)
+	var wood := RoundKit.clay("jukebox_wood", "6a3326", 0.5)
 	var chrome := Kit.material("jukebox_chrome", "d8d8e4", 0.8)
-	var grille := Kit.material("jukebox_grille", "1a1420", 0.0)
-	Kit.box(self, "JukeboxCabinet", Vector3(1.4, 1.5, 0.6), JUKEBOX + Vector3(0, 0.75, 0), wood)
-	var arch := Kit.cylinder(self, "JukeboxArch", 0.7, 0.6, JUKEBOX + Vector3(0, 1.5, 0), wood, 18)
-	arch.rotation.x = PI / 2
-	Kit.box(self, "JukeboxWindow", Vector3(0.9, 0.36, 0.04), JUKEBOX + Vector3(0, 1.62, 0.3), Kit.material("jukebox_window", "f6e7b8", 0.0, 0.8))
-	Kit.box(self, "JukeboxGrille", Vector3(1.0, 0.55, 0.04), JUKEBOX + Vector3(0, 0.55, 0.3), grille)
-	for side in [-0.5, 0.5]:
-		Kit.sphere(self, "Speaker", 0.2, JUKEBOX + Vector3(side * 0.9, 0.55, 0.3), chrome, Vector3(1, 1, 0.25))
-	# 무지개 빛 띠(색이 천천히 돈다).
+	var grille := RoundKit.clay("jukebox_grille", "1a1420", 0.7)
+	var half := 0.66
+	var spring := 1.42
+	var depth := 0.56
+	var face: float = depth / 2.0
+	Kit.rounded_box(self, "JukeboxPlinth", Vector3(half * 2.0 + 0.1, 0.12, depth + 0.08), JUKEBOX + Vector3(0, 0.06, 0), RoundKit.clay("jukebox_plinth", "2a1a14", 0.6), 0.04)
+	var outline := PackedVector2Array([Vector2(-half, 0.12), Vector2(half, 0.12)])
+	for s in range(17):
+		var angle := PI * s / 16.0
+		outline.append(Vector2(cos(angle) * half, spring + sin(angle) * half))
+	Kit.mesh_node(self, "JukeboxCabinet", RoundKit.panel_mesh("jukebox_body", outline, depth), JUKEBOX + Vector3(0, 0, -face), wood)
+	var rim := RoundKit.arch_path(half * 2.0, 0.12, spring + half, half, 16)
+	Kit.mesh_node(self, "JukeboxRim", RoundKit.sweep_mesh("jukebox_rim", RoundKit.bead_profile(0.07, 0.035),
+		RoundKit.wall_path_rails(rim, Vector3.ZERO, Vector3.RIGHT, Vector3.BACK), false, false), JUKEBOX + Vector3(0, 0, face), chrome)
+	var inset := PackedVector2Array([Vector2(-0.5, 0.26), Vector2(0.5, 0.26)])
+	for s in range(17):
+		var angle := PI * s / 16.0
+		inset.append(Vector2(cos(angle) * 0.5, spring + sin(angle) * 0.5))
+	Kit.mesh_node(self, "JukeboxInset", RoundKit.panel_mesh("jukebox_inset", inset, 0.012), JUKEBOX + Vector3(0, 0, face), RoundKit.clay("jukebox_inset", "3a1d18", 0.6))
+	# 노래 창(빛나는 둥근 네모) + 스피커 그릴(어두운 판 + 크롬 살 7개).
+	var window := RoundKit.rounded_polygon(PackedVector2Array([Vector2(-0.4, -0.15), Vector2(0.4, -0.15), Vector2(0.4, 0.15), Vector2(-0.4, 0.15)]), PackedFloat32Array([0.06, 0.06, 0.06, 0.06]), 4)
+	Kit.mesh_node(self, "JukeboxWindow", RoundKit.panel_mesh("jukebox_window", window, 0.012), JUKEBOX + Vector3(0, 1.62, face + 0.012), Kit.material("jukebox_window", "f6e7b8", 0.0, 0.8))
+	Kit.rounded_box(self, "JukeboxGrille", Vector3(0.84, 0.58, 0.03), JUKEBOX + Vector3(0, 0.62, face + 0.02), grille, 0.04)
+	for k in range(7):
+		var x: float = -0.33 + k * 0.11
+		RoundKit.rod(self, "GrilleBar", JUKEBOX + Vector3(x, 0.38, face + 0.04), JUKEBOX + Vector3(x, 0.86, face + 0.04), 0.011, chrome, -1.0, 8)
+	# 무지개 빛 전구(아치를 따라 5개) + 옆 빛 관 2개. 색은 _process 에서 천천히 돈다.
 	for index in range(5):
 		var material := StandardMaterial3D.new()
 		material.emission_enabled = true
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_jukebox_lights.append(material)
 		var angle: float = PI * (0.1 + index * 0.2)
-		var at := JUKEBOX + Vector3(cos(angle) * 0.62, 1.5 + sin(angle) * 0.62, 0.31)
-		Kit.sphere(self, "JukeboxBulb", 0.06, at, material)
+		var at := JUKEBOX + Vector3(cos(angle) * 0.58, spring + sin(angle) * 0.58, face + 0.03)
+		Kit.mesh_node(self, "JukeboxBulb", RoundKit.sphere_mesh(0.055, 14), at, material)
 	for side in [-1.0, 1.0]:
-		Kit.box(self, "JukeboxTube", Vector3(0.07, 1.3, 0.07), JUKEBOX + Vector3(side * 0.66, 0.7, 0.3), _jukebox_lights[0 if side < 0 else 4])
-	Kit.label(self, "JukeboxTitle", "DARTY / JUKEBOX", JUKEBOX + Vector3(0, 2.0, 0.32), 30, Color("ffd34d"), 0.003)
+		RoundKit.rod(self, "JukeboxTube", JUKEBOX + Vector3(side * 0.58, 0.26, face + 0.03), JUKEBOX + Vector3(side * 0.58, spring, face + 0.03), 0.03,
+			_jukebox_lights[0 if side < 0 else 4], -1.0, 12)
+	Kit.label(self, "JukeboxTitle", "DARTY / JUKEBOX", JUKEBOX + Vector3(0, 1.9, face + 0.02), 26, Color("ffd34d"), 0.003)
 	var buttons := Kit.material("jukebox_button", "ff6b5b", 0.0, 0.6)
+	var dome := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, 0), Vector2(0.075, 0), Vector2(0.07, 0.03), Vector2(0.035, 0.055), Vector2(0, 0.06)]), 0.015, 3)
 	for spec in [["power", "전원", -0.48], ["volume", "볼륨", 0.0], ["link", "링크", 0.48]]:
 		var at: Vector3 = JUKEBOX + Vector3(float(spec[2]), 1.2, 0.42)
-		Kit.cylinder(self, str(spec[0]), 0.08, 0.06, at, buttons, 14).rotation.x = PI / 2
-		Kit.box(self, str(spec[0]) + "Plate", Vector3(0.3, 0.2, 0.1), at + Vector3(0, 0, -0.08), chrome)
+		Kit.rounded_box(self, str(spec[0]) + "Plate", Vector3(0.3, 0.2, 0.1), at + Vector3(0, 0, -0.08), chrome, 0.03)
+		# 둥근 버튼(물레 깎은 돔)이 앞(+Z)을 보게 눕힌다.
+		RoundKit.lathe(self, str(spec[0]), dome, at + Vector3(0, 0, -0.03), buttons, 18).rotation.x = PI / 2
 		Kit.label(self, str(spec[0]) + "Label", str(spec[1]), at + Vector3(0, 0.17, 0), 24, Color.WHITE, 0.003)
+
 
 func _add_prop(kind: String, at: Vector3, theme: int, slot: int, locked: bool = false) -> void:
 	var node := Looks.make(kind, slot)
@@ -891,10 +934,17 @@ func _recolor(node: Node, arcade: bool) -> void:
 	if node is MeshInstance3D and node.material_override is StandardMaterial3D:
 		if not _base_materials.has(node): _base_materials[node] = node.material_override
 		var base: StandardMaterial3D = _base_materials[node]
-		var palette: Dictionary = {"PlasterCream": "1d1838", "ForestPanel": "151233", "InsetGreen": "120f2a", "WoodWalnut": "2a2148", "WoodDark": "151126", "FloorOak": "1a1530", "TableFelt": "2a1f5c"}
+		# 2026-11-08 라운드하우스 펍 새 재질(art/pub/game_room_builder.gd)도 오락실 색으로: 누빔 가죽 → 자두색, 코브 → 어두운 보라,
+		# 숨은 빛 띠 → 시안(요청서 2장 "시안·마젠타는 얇은 테두리에만"). glow 표 = 스스로 빛나는 색도 같이 바꾸는 재질.
+		var palette: Dictionary = {"PlasterCream": "1d1838", "ForestPanel": "151233", "InsetGreen": "120f2a", "WoodWalnut": "2a2148", "WoodDark": "151126",
+			"FloorOak": "1a1530", "TableFelt": "2a1f5c", "LeatherTeal": "382743", "WoodPanel": "2a2148", "CeilingPlaster": "141226", "CovePlaster": "231d40",
+			"RugTeal": "1d1838", "CoveGlow": "3be5db"}
+		var glow: Dictionary = {"CovePlaster": "5a4aa8", "CoveGlow": "3be5db"}
 		if arcade and palette.has(base.resource_name):
 			var tinted: StandardMaterial3D = base.duplicate()
 			tinted.albedo_color = Color(palette[base.resource_name])
+			if glow.has(base.resource_name):
+				tinted.emission = Color(glow[base.resource_name])
 			node.material_override = tinted
 		else: node.material_override = base
 	if node is Light3D:
