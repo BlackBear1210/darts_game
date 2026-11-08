@@ -127,6 +127,59 @@ static func used() -> Dictionary:
 		"waffle": ["rest:Waffels_Ready", 0.0, {}],
 		"juice_bowl": ["rest:Bowl_1_A", 0.1, {}],
 	})
+	# 2026-11-08 사용자가 에셋 구경판(바탕화면 DARTY_프로젝트\에셋구경, P = 고른_모델.txt)에서 고른 모델 —
+	# 축음기·시가·커피 머신·토스터·캔 음료 5종·접시·음식 + 바 뒤 주방 전자레인지(사용자 요청 "주방의 전자레인지 같은 가구").
+	# 원본 = Restaurant_Godot(= rest, KitchenRestaurant, RG Poly CC0). 구경판에서 본 색 그대로 보이게 팔레트 당김을 0~0.15 로 낮췄다.
+	# 쓰는 곳: art/pub/game_room_builder.gd(펍) · art/pub/pub_service.gd(서빙) · game/lounge/arcade/arcade_room.gd(오락실).
+	list.merge({
+		"gramophone_classic": ["rest:Gramophone", 0.1, {}],
+		"cigar": ["rest:Cigar", 0.0, {}],
+		"coffee_machine_g": ["rest:CoffeeMachine_1_G", 0.1, {}],
+		"toaster": ["rest:Toster_2_F", 0.1, {}],
+		# 전자레인지: 펍 = 빨간 몸(F)을 펍 팔레트(벽돌색·놋쇠) 쪽으로 · 오락실 = 주황·보라(E) 원래 색. 문(창)은 로컬 -X 쪽이다.
+		"microwave": ["rest:Microvawe_F", 0.6, {"purple": Color("cdbf9f"), "blue": Color("cdbf9f"), "red": Color("8e4a3e")}],
+		"microwave_neon": ["rest:Microvawe_E", 0.0, {}],
+		# 오락실 판매대(사용자 요청 "에셋 도구로 간판대와 서랍·음료 전시대를 넣어 자연스럽게"): 서랍장 4모양(파랑 서랍 · 분홍 테 ·
+		# 크림 윗판, 정면 +Z) · 금속 아치 진열대 2크기 · 조리대(전자레인지·토스터 받침) · 거리 카페 A형 간판.
+		"drawer_counter_a": ["rest:Furnit_A_1", 0.0, {}],
+		"drawer_counter_b": ["rest:Furnit_A_2", 0.0, {}],
+		"drawer_counter_c": ["rest:Furnit_A_4", 0.0, {}],
+		"drawer_counter_d": ["rest:Furnit_A_6", 0.0, {}],
+		"drink_rack": ["rest:StandShelf_1_A", 0.05, {}],
+		"drink_rack_small": ["rest:StandShelf_2_A", 0.05, {}],
+		"kitchen_station": ["rest:StationTable_1_A", 0.05, {}],
+		"cafe_board": ["city:CafeBoard_A", 0.0, {}],
+		"plate": ["rest:Plate_1_A", 0.05, {}],
+		"pizza_plate": ["rest:Pizza_Ready", 0.0, {}],
+		"steak": ["rest:Steak_Ready", 0.0, {}],
+		"pancakes": ["rest:Pancake_Ready", 0.0, {}],
+		"hotdog": ["rest:HotDog_Full", 0.0, {}],
+		"burger_ready": ["rest:ChessBurger_Ready", 0.0, {}],
+		"fries_box": ["rest:FriesBox", 0.0, {}],
+		"roast_chicken": ["rest:ChickenRoasted_A", 0.0, {}],
+		"donut": ["rest:Donat", 0.0, {}],
+		"croissant": ["rest:Cruassant", 0.0, {}],
+		"cake_slice": ["rest:Cake_1_A", 0.0, {}],
+		"eggs_ready": ["rest:Eggs_Ready", 0.0, {}],
+		"bread_egg": ["rest:BreadEgg", 0.0, {}],
+		"mashed_potato": ["rest:Potato_Ready", 0.0, {}],
+		"dish_1": ["rest:Dish_1_PlateReady", 0.0, {}],
+		"dish_2": ["rest:Dish_2_Ready", 0.0, {}],
+		"dish_3": ["rest:Dish_3_Ready", 0.0, {}],
+		"dish_4": ["rest:Dish_4_Ready", 0.0, {}],
+		"dish_5": ["rest:Dish_5_Ready", 0.0, {}],
+		"dish_6": ["rest:Dish_6_Ready", 0.0, {}],
+		"coffee_cup_a": ["rest:Coffy_A", 0.0, {}],
+		"coffee_cup_b": ["rest:Coffy_B", 0.0, {}],
+		"ketchup": ["rest:Ketchup", 0.05, {}],
+		"mustard": ["rest:Mustard", 0.05, {}],
+		"salt": ["rest:Salt", 0.05, {}],
+		"pepper": ["rest:Pepper", 0.05, {}],
+		"jar_pickles": ["rest:Jar_2_A", 0.05, {}],
+		"bag_food": ["rest:BagFood_1_A", 0.0, {}],
+	})
+	for letter: String in ["a", "b", "c", "d", "e"]:
+		list["soda_can_" + letter] = ["rest:SodaCan_1_" + letter.to_upper(), 0.0, {}]
 	# 음료 캔: 빨간 몸통(띠 "red")을 네온 색으로 바꿔 4색.
 	for i in range(SODA_COLORS.size()):
 		list["soda_can_%d" % i] = ["rest:SodaCan_1_A", 0.0, {"red": Color(SODA_COLORS[i])}]

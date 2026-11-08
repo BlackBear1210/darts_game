@@ -67,8 +67,19 @@ const WOBBLE_SECONDS: float = 0.7
 const WOBBLE_ANGLE: float = 0.12
 ## 오락실 테마에서 펍 그림에서 빼는 묶음(같은 자리에 기계를 세운다).
 ## Windows(2026-10-31 늦은 밤): 오락실은 창 없는 방 — 창을 빼고 그 벽에 네온 간판을 단다(간판이 창에 겹쳐 잘리던 문제).
+## BistroTables(2026-11-08): 펍 뒤쪽 비스트로 테이블 2개 — 오락실은 그 자리가 오락기 앞이라 빼고 충돌도 끈다(TableView.rebuild_pub).
 ## Guests(2026-11-08): 펍 손님은 NPC 테이블 의자·바 스툴에 앉아 있어서, 그 가구가 빠지는 오락실에서는 허공에 앉게 된다 → 같이 뺀다.
-const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests"]
+const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests", "BistroTables"]
+## 오락실 테마에서 바꾸는 펍 재질 색(재질 이름 → 색). 2026-11-08 라운드하우스 펍 재질(art/pub/game_room_builder.gd)도 포함:
+## 누빔 가죽 → 자두색, 코브 → 어두운 보라, 숨은 빛 띠 → 시안(요청서 2장 "시안·마젠타는 얇은 테두리에만").
+## 라운드하우스 GLB 가구(안락의자 LeatherTeal · 탁자 WoodWalnut/WoodPanel · 축음기 WoodDark …)도 같은 이름이라 같은 색을 받는다.
+const ARCADE_PALETTE := {"PlasterCream": "1d1838", "ForestPanel": "151233", "InsetGreen": "120f2a", "WoodWalnut": "2a2148", "WoodDark": "151126",
+	"FloorOak": "1a1530", "TableFelt": "2a1f5c", "LeatherTeal": "382743", "WoodPanel": "2a2148", "CeilingPlaster": "141226", "CovePlaster": "231d40",
+	"RugTeal": "1d1838", "CoveGlow": "3be5db"}
+## 스스로 빛나는 색도 같이 바꾸는 재질.
+const ARCADE_GLOW := {"CovePlaster": "5a4aa8", "CoveGlow": "3be5db"}
+## 라운드하우스 GLB 폴더(2026-11-08). 이 아래 모델의 메시는 면마다 재질이 붙어 있어 _recolor_surfaces 로 따로 칠한다.
+const ROUNDHOUSE_DIR := "res://art/environments/roundhouse/"
 ## 소품 → 킬로그 아이콘.
 const FEED_ICONS := {"bottle": "bottle", "mug": "bottle", "ball": "hoop", "cue": "cue", "hoop_ball": "hoop", "plush": "plush", "capsule": "capsule"}
 
@@ -90,6 +101,8 @@ var _arcade_room: Node3D
 var _arcade: RefCounted
 var _base_materials: Dictionary = {}
 var _base_lights: Dictionary = {}
+## 라운드하우스 GLB 재질 → 오락실용 복제 재질(_arcade_variant). 원본 재질 하나에 한 번만 만든다(테마를 몇 번 바꿔도 재사용).
+var _arcade_variants: Dictionary = {}
 var _drink_labels: Array[Label3D] = []
 var _feed_dirty: bool = false
 var music: Dictionary = {"video": "", "playing": false, "volume": 0.5}
@@ -136,7 +149,9 @@ func _build() -> void:
 		_add_prop("mug", TableView.BAR_MUGS[index] + Vector3(0, float(Looks.REST.mug), 0), 0, index)
 	for index in range(3):
 		_add_prop("ball", Vector3(10.65, 0.91, 3.5 + index * 0.15), 0, index)
-	_add_prop("cue", Vector3(10.28, 0.78, 4.7), 0, 0)
+	# 큐대 홈(당구대 옆에 기대 세움). 2026-11-08: 새 큐대 모델(art/props/cue.tscn)은 원점이 길이 한가운데(손잡이 끝 −0.71m)라
+	# 예전 도형 큐대(손잡이 끝 −0.76m)보다 5cm 짧게 내려온다 → 홈 높이를 0.78 → 0.73 으로 내려 손잡이 끝이 예전처럼 바닥 2.5cm 위에 온다.
+	_add_prop("cue", Vector3(10.28, 0.73, 4.7), 0, 0)
 	for index in range(Rules.BALL_HOMES.size()):
 		_add_prop("hoop_ball", Rules.BALL_HOMES[index], 1, index)
 	for index in range(Rules.PLUSH_SPOTS.size()):
@@ -271,12 +286,14 @@ func apply_theme() -> void:
 		_theme_root.add_child(_arcade_room)
 		_arcade_room.build()
 
-## 오락실: 바·NPC 자리·당구대 위에 걸린 펍 펜던트 등을 뺀다(가챠·농구 기계 앞을 가린다). 과녁 쪽 등은 둔다.
+## 오락실: 펍 놋쇠 펜던트를 모두 뺀다. 2026-11-08 사용자 "펍과 오락실 전부 전등이 안 어울리거나 무규칙적" —
+## 예전엔 x 4m 밖(바·NPC 자리·당구대 위)만 빼서 홀·소파 위 놋쇠 등이 오락실 네온 사이에 띄엄띄엄 남았다.
+## 카드 테이블 등("TablePendant…")만 남기고, 오락실 빛은 천장 네온 관 줄 아래에 규칙 간격으로 단다(arcade_room.gd _lights).
 static func _trim_arcade(pub: Node) -> void:
 	var lights := pub.get_node_or_null("Lights")
 	if lights == null: return
 	for node in lights.get_children():
-		if str(node.name).begins_with("Pendant") and node is Node3D and absf((node as Node3D).position.x) > 4.0:
+		if str(node.name).begins_with("Pendant"):
 			lights.remove_child(node)
 			node.free()
 
@@ -934,21 +951,69 @@ func _recolor(node: Node, arcade: bool) -> void:
 	if node is MeshInstance3D and node.material_override is StandardMaterial3D:
 		if not _base_materials.has(node): _base_materials[node] = node.material_override
 		var base: StandardMaterial3D = _base_materials[node]
-		# 2026-11-08 라운드하우스 펍 새 재질(art/pub/game_room_builder.gd)도 오락실 색으로: 누빔 가죽 → 자두색, 코브 → 어두운 보라,
-		# 숨은 빛 띠 → 시안(요청서 2장 "시안·마젠타는 얇은 테두리에만"). glow 표 = 스스로 빛나는 색도 같이 바꾸는 재질.
-		var palette: Dictionary = {"PlasterCream": "1d1838", "ForestPanel": "151233", "InsetGreen": "120f2a", "WoodWalnut": "2a2148", "WoodDark": "151126",
-			"FloorOak": "1a1530", "TableFelt": "2a1f5c", "LeatherTeal": "382743", "WoodPanel": "2a2148", "CeilingPlaster": "141226", "CovePlaster": "231d40",
-			"RugTeal": "1d1838", "CoveGlow": "3be5db"}
-		var glow: Dictionary = {"CovePlaster": "5a4aa8", "CoveGlow": "3be5db"}
-		if arcade and palette.has(base.resource_name):
+		if arcade and ARCADE_PALETTE.has(base.resource_name):
 			var tinted: StandardMaterial3D = base.duplicate()
-			tinted.albedo_color = Color(palette[base.resource_name])
-			if glow.has(base.resource_name):
-				tinted.emission = Color(glow[base.resource_name])
+			tinted.albedo_color = Color(ARCADE_PALETTE[base.resource_name])
+			if ARCADE_GLOW.has(base.resource_name):
+				tinted.emission = Color(ARCADE_GLOW[base.resource_name])
 			node.material_override = tinted
 		else: node.material_override = base
+	elif node is MeshInstance3D and node.owner != null and node.owner.scene_file_path.begins_with(ROUNDHOUSE_DIR):
+		_recolor_surfaces(node, arcade)
 	if node is Light3D:
 		if not _base_lights.has(node): _base_lights[node] = [node.light_color, node.light_energy]
 		node.light_color = Color("a58cff") if arcade else _base_lights[node][0]
 		node.light_energy = float(_base_lights[node][1]) * (0.55 if arcade else 1.0)
 	for child in node.get_children(): _recolor(child, arcade)
+
+
+## 라운드하우스 GLB 메시(2026-11-08 Codex 묶음 1 v2 — 안락의자·낮은 탁자·축음기·화분 등 오락실에도 남는 가구).
+## 재질이 material_override 가 아니라 메시 면(surface)마다 붙어 있고, 원래 색(청록 가죽·월넛)이 바탕 그림에 구워져 있다.
+## 오락실: 팔레트에 있는 재질 면만 복제 재질로 덮는다. 펍: 덮개를 걷어 GLB 원본 재질로 돌아간다(공유 원본은 고치지 않는다).
+func _recolor_surfaces(mesh_node: MeshInstance3D, arcade: bool) -> void:
+	if mesh_node.mesh == null: return
+	for surface in range(mesh_node.mesh.get_surface_count()):
+		var base := mesh_node.mesh.surface_get_material(surface) as StandardMaterial3D
+		var themed: bool = arcade and base != null and ARCADE_PALETTE.has(base.resource_name)
+		mesh_node.set_surface_override_material(surface, _arcade_variant(base) if themed else null)
+
+
+## 오락실용 복제 재질. 구워진 청록·갈색 그림에 자두·남색을 그냥 곱하면 거의 검게 뭉개지므로,
+## 바탕 그림을 회색 명암판(_neutral_shade)으로 바꾸고 그 평균이 팔레트 색이 되게 색을 곱한다 → 나뭇결·가죽 명암은 남는다.
+## 노멀·거칠기·금속성·UV 는 원본 그대로다. 그림을 읽지 못하면(화면 없는 시험 등) 바탕 그림만 빼고 팔레트 단색.
+func _arcade_variant(base: StandardMaterial3D) -> StandardMaterial3D:
+	if _arcade_variants.has(base): return _arcade_variants[base]
+	var tinted := base.duplicate() as StandardMaterial3D
+	var target: Color = Color(ARCADE_PALETTE[base.resource_name])
+	var shade: Dictionary = _neutral_shade(base.albedo_texture)
+	if shade.is_empty():
+		tinted.albedo_texture = null
+		tinted.albedo_color = target
+	else:
+		# 셰이더는 선형 공간에서 (그림 × 색)을 곱한다 → 색(선형) = 팔레트(선형) / 명암판 평균(선형).
+		var linear: Color = target.srgb_to_linear()
+		var mean: float = float(shade.mean)
+		tinted.albedo_texture = shade.texture
+		tinted.albedo_color = Color(linear.r / mean, linear.g / mean, linear.b / mean).linear_to_srgb()
+	_arcade_variants[base] = tinted
+	return tinted
+
+
+## 바탕 그림 → 회색(밝기만) 그림 + 그 평균 밝기(선형). 실패하면 빈 사전.
+static func _neutral_shade(texture: Texture2D) -> Dictionary:
+	if texture == null: return {}
+	var image := texture.get_image()
+	if image == null or image.is_empty(): return {}
+	image = image.duplicate() as Image
+	if image.is_compressed() and image.decompress() != OK: return {}
+	image.clear_mipmaps()
+	image.convert(Image.FORMAT_L8)
+	# 평균: 16×16 으로 줄여(란초스 = 넓은 범위 평균) 256칸만 더한다 — 768×768 칸을 하나씩 더하면 느리다.
+	var small := image.duplicate() as Image
+	small.resize(16, 16, Image.INTERPOLATE_LANCZOS)
+	var total := 0.0
+	for y in range(16):
+		for x in range(16):
+			total += small.get_pixel(x, y).srgb_to_linear().r
+	image.generate_mipmaps()
+	return {"texture": ImageTexture.create_from_image(image), "mean": maxf(total / 256.0, 0.02)}

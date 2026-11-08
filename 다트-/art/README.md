@@ -68,6 +68,8 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | `pub/pub.tscn`, `pub/pub_game.tscn` | 위 도구가 만든 결과 | **아니오 — 생성물** |
 | `pub/pictures/*.svg` | 펍 만화 그림: 창 밖 층 4장(`window_*`) + 벽 포스터 3장(`poster_*`) | 예 — 벡터 도구로 바로 고친다(아래) |
 | `pub/window_view.gdshader` | 창 밖 그림 층을 깊이별로 붙이고 하늘·별·길바닥을 그린다(시차) | 예 |
+| `environments/roundhouse/**/<이름>.glb` | 라운드하우스 모델 23종(Codex 묶음 1 v2·2·3, 2026-11-08). 펍 가구 9 · 오락실 7 · 손 소품 7 | **아니오 — 받은 원본.** 같은 이름 GLB 로 통째 교체만(아래) |
+| `props/<kind>.tscn` | 손 소품 7종 래퍼(위 GLB 를 감싼 씬). `game/lounge/prop_looks.gd` 가 먼저 찾는다 | 예(보통 손댈 일 없음) |
 | `showcase/*` | 쇼케이스 데모(카메라·투척·카드 예시·효과음) | 예 |
 
 ## 펍 만화 그림(창 밖 · 벽 포스터) 고치기
@@ -87,6 +89,56 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 - SVG 의 `<text>` 글자는 Godot 가 못 그린다 — 글자는 선(path)으로 그린다("180!", "CHEERS!", "LUCKY!" 가 그렇게 되어 있다). 흐림(blur) 필터도 안 된다. 빛무리는 투명해지는 방사형 그라데이션으로.
 - 같은 이름으로 저장하면 에디터가 다시 가져오므로 방을 다시 만들 필요가 없다(방 그림은 경로로 읽는다). `.import` 설정(밉맵 켬·3D 압축 감지 끔)은 그대로 둔다.
 - 새 그림 파일을 더할 때만 `game_room_builder.gd` 의 `WINDOW_PICTURES`·`POSTER_PICTURES` 를 고치고 `pub_game.tscn` 을 다시 만든다.
+
+## 라운드하우스 모델(GLB) — 2026-11-08 Codex 묶음
+
+디자인 담당이 Codex 로 만든 텍스처 있는 모델 23종이다. 출처 기록은 [ASSET_REGISTER](../docs/ASSET_REGISTER.md)의 "라운드하우스" 세 줄이다.
+
+| 묶음 | 폴더 | 쓰는 곳 |
+|---|---|---|
+| 1 v2 펍 가구 9 | `environments/roundhouse/pub/` | `pub/game_room_builder.gd` `_model()` |
+| | | · 소파 `Sofa` · 안락의자 `Armchair` · 낮은 탁자 `SideTable` · 축음기 `Gramophone` |
+| | | · 창마다 커튼 `CurtainPair`(8쌍) · 옷걸이 `CoatRack`(옛 고리 3개 대신) |
+| | | · 화분 `Plant`(중·대) · 바 위 `BarPlant`(소) |
+| 2 오락실 7 | `environments/roundhouse/arcade/` | `game/lounge/arcade/arcade_room.gd` |
+| | | · 오락기 A/B 를 번갈아 10대 · 경품 진열장 2 · 벤치 1 · 선반 인형 16 |
+| 3 손 소품 7 | `environments/roundhouse/common/props/` | `props/<kind>.tscn` 래퍼 → `game/lounge/prop_looks.gd` |
+
+- **가져오기 설정**: `.glb.import` 의 `gltf/embedded_image_handling=2` 다(텍스처를 Basis Universal 로 GLB 가져오기 안에 묶음).
+  - 기본값(1)이면 PNG 330장(약 100MB)이 낱개 파일로 풀려 나온다. 새 GLB 도 같은 값으로 둔다.
+- **정적 묶기에서 뺀다**: `static_batch.gd` 의 `ROUNDHOUSE_DIR`.
+  - 묶기는 UV·탄젠트·면별 재질을 버리기 때문에, 묶으면 텍스처가 사라진다.
+- **오락실 테마 색**: `game/lounge/lounge_world.gd` 의 `_recolor_surfaces` 가 맡는다.
+  - 면마다 재질 복제본을 덮는다. 텍스처는 회색 명암으로 바꾸고, 그 위에 오락실 팔레트 색을 곱한다.
+  - 펍으로 돌아오면 덮개를 지워 원래 재질로 돌아간다.
+- **오락기 화면**: 대마다 재질을 따로 복제해 발광 색을 준다. 간판 글자는 모델 안 `MarqueeBlank` 판 크기에 맞춘다.
+- **변형 색**: 인형·병·당구공·캡슐은 모델 안 `M_Variant` 재질 면만 다시 칠한다.
+- **큐대만 예외**: 원점이 길이 한가운데(±0.71m)다. 집 자리 높이가 0.78 → 0.73 으로 바뀌었다(`lounge_world.gd`).
+- **교체하는 법**: 같은 경로·이름의 GLB 로 덮어쓰면 에디터가 다시 가져온다.
+  - 크기가 바뀌면 `arcade_room.gd` 의 `CABINET_SIZE`·`SHOWCASE_SIZE`·`BENCH_SIZE` 와 TableView 충돌 상수도 같이 고친다.
+  - 펍 가구는 `pub_game.tscn` **만** 다시 만든다(`game_room_builder.gd` `build()` → 저장, `pub_builder.gd` 3단계와 같음).
+  - `pub_builder.gd` 통째 실행은 금지 — 다른 작업자의 `chr_*.tscn` 까지 덮는다.
+  - 오락실·손 소품은 실행 때 만들어지니 다시 만들 것이 없다.
+- **에셋 묶음(`에셋.zip`)에서 새 모델 고르기**: 저장소 밖 구경용 프로젝트(바탕화면 `DARTY_프로젝트/에셋구경/`)에서 고른다.
+  - 고른 것만 옮긴다. 원본 팩은 저장소에 넣지 않는다.
+
+## 펍 연출 — 서빙 · 손님 앞 음식 · 시가 (2026-11-08)
+
+실행 중에만 움직이는 장식이다. 방(`pub_game.tscn`)을 다시 만들지 않아도 아래 숫자만 고치면 바로 바뀐다.
+
+| 고칠 것 | 파일 · 이름 |
+|---|---|
+| 손님 앞에 랜덤으로 나오는 요리·음식·음료·양념과 크기 | `pub/npc_table_food.gd` 의 `DISHES` · `PLATE_FOODS` · `DRINKS` · `CONDIMENTS` (`["모델 이름", 배율]`) |
+| 바텐더가 꺼내는 것(맥주 꼭지 · 커피 머신 · 전자레인지)과 손님 자리 | `pub/game_room_builder.gd` `_bar` 의 `sources` · `customers` |
+| 오락실 직원이 꺼내는 것(주스 · 캔 · 음식) | `game/lounge/arcade/arcade_room.gd` `_juice_service` |
+| 걷는 빠르기 · 다 먹고 치우기까지 초 · 내려놓는 초 | `pub/pub_service.gd` 의 `walk_speed` · `KEEP_SECONDS` · `PLACE_SECONDS` |
+| 시가 연기 양 · 퍼짐 · 진하기 | `pub/cigar_smoke.gd` 의 `wisp()`(시가 끝) · `puff()`("후") |
+| 시가 피우는 박자(올리기 · 물기 · 내뿜기) | `pub/npc_idle.gd` 의 `SMOKE_LIFT` · `SMOKE_HOLD_END` · `SMOKE_EXHALE` |
+
+- 모델 이름은 `vendor/rg_poly/rg_poly_catalog.gd` 에 있고, 구운 메시가 `vendor/rg_poly/meshes/<이름>.res` 에 있어야 한다.
+- 새 모델 굽기: `rg_poly_baker.gd -- --keys=이름1,이름2`. 이미 구운 것은 다시 쓰지 않는다.
+- 놓는 자리·서빙 동선(바 · 조리대 · 스툴 · 비스트로 테이블)을 바꾸면 방을 다시 만든다(아래 "바꾸고 다시 만들기").
+- 전등 규칙(높이 · 가구마다 하나 · 등간격)은 `pub/game_room_builder.gd` `_lighting` 머리 주석에 있다.
 
 ## 바꾸고 다시 만들기
 

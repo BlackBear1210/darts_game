@@ -33,6 +33,9 @@ const BUBBLE_SIDE: float = 0.48
 const BOT_HAPPY_POINTS: int = 40
 ## 모션 재생 중 자기 모습을 보여 주는 카메라 거리(m).
 const MOTION_CAMERA_OFFSET := Vector3(1.0, 1.45, -3.0)
+## 싱글: 사람이 춤추면 봇 한 명이 따라 출 확률과, 따라 출 때 고르는 모션 수(MotionEmotes.CLIPS 앞쪽 = 댄스 3·환호·겁먹기·코믹).
+const BOT_DANCE_CHANCE: float = 0.6
+const BOT_DANCE_CLIPS: int = 6
 
 var game: GameView
 var wheel: EmoteWheel
@@ -90,7 +93,7 @@ func handle(event: InputEvent) -> bool:
 func request(index: int) -> void:
 	if index >= EmoteArt.COUNT and index < EmoteArt.COUNT + MotionEmotes.STOP and not _can_motion(game.controller.local_peer_id):
 		if wheel != null:
-			wheel.show_notice("일어나서 사용하세요 · 조준/소품은 내려놓기")
+			wheel.show_notice("조준 중·숙인 채·소품을 든 채로는 못 춰요")
 		return
 	if game.session == null or game.session.is_host():
 		_accept(game.controller.local_peer_id, index)
@@ -126,6 +129,22 @@ func _accept(sender: int, index: int) -> void:
 	# 싱글 플레이: 사람이 보낸 감정에 봇이 답한다(game/player/bot_social.gd, 2026-11-01).
 	if not motion and game.bot_social != null and not actor.identity.is_bot:
 		game.bot_social.heard(sender, index)
+	# 싱글 플레이: 사람이 춤을 추면 봇도 몇 명 따라 춘다(2026-11-08 사용자 지적 "춤이 싱글에서 안 보인다").
+	if motion and not stop and game.bot_social != null and not actor.identity.is_bot:
+		_bots_join_dance()
+
+
+## 싱글 방장: 봇마다 BOT_DANCE_CHANCE 확률로 잠깐 뒤에 아무 춤(중지·제자리 걷기 빼고)을 따라 춘다.
+## 조준 중인 봇·소품 든 봇은 _accept 의 _can_motion 이 거른다.
+func _bots_join_dance() -> void:
+	for actor: PlayerView in game.actors.values():
+		if not actor.identity.is_bot or not actor.emote_clip().is_empty() or _random.randf() > BOT_DANCE_CHANCE:
+			continue
+		var peer: int = actor.identity.peer_id
+		var index: int = EmoteArt.COUNT + _random.randi_range(0, BOT_DANCE_CLIPS - 1)
+		get_tree().create_timer(_random.randf_range(0.5, 1.6)).timeout.connect(func() -> void:
+			if is_instance_valid(game) and game.actors.has(peer):
+				_accept(peer, index))
 
 
 ## 방장: 봇이 감정을 보낸다(싱글 플레이 봇 행동 bot_social.gd). 사람과 같은 간격 확인을 지난다.

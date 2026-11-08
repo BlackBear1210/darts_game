@@ -1,7 +1,10 @@
 extends RefCounted
-## 집어 던지는 소품의 겉모습(코드로 만든 임시안). 디자이너 모델이 오면 res://art/props/<kind>.tscn 을 먼저 쓴다.
+## 집어 던지는 소품의 겉모습. res://art/props/<kind>.tscn 이 있으면 그것을 먼저 쓰고, 없을 때만 아래 코드 도형(임시안)을 쓴다.
+## 2026-11-08: 7종 모두 라운드하우스 손 소품 GLB(Codex 묶음 3, art/environments/roundhouse/common/props/)를 감싼 래퍼 씬이 생겼다.
+##   GLB 안에서 이미 −REST 만큼 내려 놓았으니 래퍼는 위치·회전 0, 배율 1 이다(REST 를 두 번 적용하지 않는다).
+##   큐대만 예외로 길이 한가운데가 원점(+Y 축, −0.71 ~ +0.71m) — 홈 기울임·손잡기·회전·눕기가 모두 이 중심축 기준이다.
 ## 소품의 원점 = 바닥에 놓였을 때의 무게중심. REST 만큼 바닥에서 띄워 놓는다(LoungeWorld 가 쓴다).
-##   bottle 병 · mug 맥주잔 · ball 당구공 · cue 큐대 · hoop_ball 농구공 · plush 곰 인형 · capsule 가챠 캡슐
+##   bottle 병 · mug 맥주잔 · ball 당구공 · cue 큐대 · hoop_ball 농구공 · plush 인형(주사위 모양) · capsule 가챠 캡슐
 ## 맥주잔(2026-10-31 밤)은 RG Poly 에셋 구운 메시(art/vendor/rg_poly/meshes/mug.res)를 쓴다. 없으면 도형 잔.
 
 const Kit = preload("res://art/mesh_kit.gd")

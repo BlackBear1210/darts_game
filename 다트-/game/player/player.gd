@@ -198,9 +198,10 @@ func play_throw() -> void:
 		_rig.play_throw()
 
 
+## 모션(춤)을 틀 수 있는가. 앉아 있어도 된다(2026-11-08 — 엉덩이·다리는 의자에 두고 윗몸만 춘다, CharacterMotion).
 func can_emote() -> bool:
-	return _rig != null and not seated and not crouched and not aiming and drink_pose <= 0.0 \
-		and position.y <= 0.05
+	return _rig != null and not crouched and not aiming and drink_pose <= 0.0 \
+		and (seated or position.y <= 0.05)
 
 
 func play_emote(index: int) -> bool:

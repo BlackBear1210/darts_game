@@ -1,3 +1,72 @@
+# 최신 인수인계 — 바텐더 서빙 · 랜덤 음식 · 시가 · 비스트로 테이블 · 오락실 매점 · 전등 규칙 (2026-11-08 밤 늦게)
+
+- 상세: `작업기록/2026-11-08_펍서빙_시가_오락실매점_전등.md`. 결정: `docs/DECISIONS.md` 2026-11-08(밤 늦게).
+
+## 노드 이름과 실행 중 노드
+
+- **실행 중에 생기는 노드는 안쪽(internal) 자식으로 붙인다** — `add_child(node, false, Node.INTERNAL_MODE_BACK)`.
+  - 대상: 서빙 잔·접시, 랜덤 차림, 시가·연기.
+  - 방 생성기는 `_ready` 를 돌린 뒤 장면을 저장한다. 그냥 붙이면 그때 생긴 잔·음식이 `pub_game.tscn` 에 같이 굳는다.
+- **같은 부모 아래 같은 이름은 엔진이 `@MeshInstance3D@12` 로 바꾼다.**
+  - 이름으로 찾는 부품(예: 오락실이 빼는 `Pendant*`)은 겹치지 않는 묶음 노드 아래 둔다.
+  - 펜던트는 `_pendant` 가 `Pendant_<자식 수>` 묶음을 만든다.
+  - 남은 겹침: 벽등 `Sconce` 는 아직 `@Node3D@4xx` 로 바뀐다. 이름으로 찾는 곳이 없어 그대로 두었다.
+
+## 뼈와 손 위치
+
+- **뼈 수정기(CharacterPoseLayer: 마시기·가리키기 팔)가 바꾼 손 위치는 `Skeleton3D.skeleton_updated` 신호에서만 맞다.**
+  - `_process` 에서 읽으면 수정 전 자세(허리께)다.
+  - 시가(`npc_idle._place_cigar`)와 든 물건(`pub_service._on_skeleton_updated`)이 이 신호를 쓴다.
+
+## 테이블 고정 · 서빙 동선
+
+- `GameView._ready` 가 `table.transform = IDENTITY` 로 둔다.
+  - 경기 규칙 좌표가 모두 원점 기준이라, 테이블을 옮기려면 TableView 상수를 고친다(씬에서 끌지 말 것).
+- 서빙 동선은 `PubService.make(parent, server, lane, serve, lane_z, facing, sources, customers)` 한 곳에 숫자로 있다.
+  - 바·조리대·스툴을 옮기면 `game_room_builder.gd` 의 `BAR_*`·`MICROWAVE_Z`·`COFFEE_Z`·`TableView.BAR_STOOLS_Z` 를 같이 본다.
+  - 오락실은 `arcade_room.gd` 의 `SHOP_*`·`RACK_*`·`KITCHEN_*` 를 같이 본다.
+
+## 테마별 가구 · 축음기
+
+- 비스트로 테이블 충돌은 meta `pub_only` 상자다. 오락실에서는 `rebuild_pub` 가 `collision_layer = 0` 으로 끈다(`ARCADE_SKIP` 에 `BistroTables`).
+- 축음기는 RG Poly `gramophone_classic` 이다.
+  - Codex 축음기 GLB(`art/environments/roundhouse/pub/gramophone/`)는 안 쓰지만 남겨 두었다.
+
+## 남은 판단
+
+- NPC 4명·직원 1명 증가와 랜덤 음식(묶기 제외)의 그리기 비용 측정.
+- 오락실 카드 테이블 위 놋쇠 등을 네온 등으로 바꿀지.
+- 사람이 직접 보는 서빙·연기 느낌.
+
+---
+
+# 최신 인수인계 — 라운드하우스 모델 23종 (2026-11-08 늦은 밤)
+
+- 상세: `작업기록/2026-11-08_라운드하우스_모델23종_통합.md`. 고치는 법: `art/README.md` "라운드하우스 모델(GLB)". 결정: `docs/DECISIONS.md` 2026-11-08(늦은 밤).
+- **GLB 는 받은 원본이다** — 고치지 말고 같은 경로·이름으로 통째 교체만 한다.
+  - 새 GLB 의 `.glb.import` 도 `gltf/embedded_image_handling=2` 로 둔다.
+  - 열린 편집기 옆에서는 스크래치 사본에서 `--import` 한 뒤 `.import` + `.godot/imported/<이름>.glb-*` 만 옮긴다.
+- **정적 묶기 제외 조건은 `scene_file_path` 가 `res://art/environments/roundhouse/` 로 시작하는 것**이다(`static_batch.gd` `ROUNDHOUSE_DIR`).
+  - 다른 폴더에 텍스처 GLB 를 두면 묶기가 텍스처를 지운다. 이 조건을 넓힐 것.
+- **오락실 덮개**: `LoungeWorld._recolor` 가 GLB 메시마다 `set_surface_override_material` 을 쓴다.
+  - 펍이면 null 로 지운다.
+  - 같은 메시에 다른 이유로 면 덮개를 쓰면 테마 전환 때 지워진다.
+  - 대상은 `owner.scene_file_path` 가 roundhouse 인 메시뿐이다.
+- 노드 이름으로 개수를 세지 말 것.
+  - 같은 부모 아래 같은 이름은 `@Cabinet@2` 처럼 바뀐다.
+  - GLB 안 뿌리 노드도 같은 이름이다(`CurtainPair/CurtainPair`).
+  - `scene_file_path` 로 센다.
+- 오락기 크기가 바뀌면 `CABINET_SIZE`·`CABINETS` 좌표(벽에서 0.04m)·`_fit_sign` 비율을 같이 본다. 진열장 글자는 `SHOWCASE_SIGN_Y`.
+- 큐대 홈 높이 0.73 은 "중심 원점 + 반길이 0.71 + 바닥 여유 0.025" 에서 나온 값이다.
+- 안 쓰게 된 RG Poly 구운 메시(`sofa`·`armchair`·`side_table`·`gramophone`·`hook` .res)는 남아 있다. 정리할지 팀이 정한다.
+- 남은 판단:
+  - GLB 105MB → 2026-11-08 밤 늦게 사용자 요청("푸시해")으로 커밋했다
+  - 펍 그리기 호출 증가량 측정
+  - 오락실 덮개 밝기
+  - 선반 위 단 인형이 네온 간판 글자를 가리는 것
+
+---
+
 # 최신 인수인계 — 펍 만화 그림(창 밖 층 · 벽 포스터) (2026-11-08 밤)
 
 - 상세: `작업기록/2026-11-08_만화그림_창밖_포스터.md`. 고치는 법: `art/README.md` "펍 만화 그림 고치기". 결정: `docs/DECISIONS.md` 2026-11-08(밤).

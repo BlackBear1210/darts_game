@@ -29,7 +29,7 @@ func _run() -> void:
 func _check_room_matches_rules() -> void:
 	var room := (load(PUB_GAME_SCENE) as PackedScene).instantiate() as Node3D
 	assert(str(room.get_meta("layout_signature", "")) == TableView.layout_signature(), "pub_game.tscn 이 TableView 상수와 다릅니다 → pub_builder.gd 재실행")
-	for group in ["Shell", "BoardWall", "Lane", "Barrels", "TableAndSeats", "Bar", "NpcCorner", "PoolTable", "Decor", "Windows", "Furnishings", "PubOnly", "Lights"]:
+	for group in ["Shell", "BoardWall", "Lane", "Barrels", "TableAndSeats", "Bar", "NpcCorner", "PoolTable", "Decor", "Windows", "Furnishings", "PubOnly", "Lights", "BistroTables"]:
 		assert(room.get_node_or_null(group) != null, "방 묶음 없음: " + group)
 	# 방 그림에는 충돌이 없어야 한다(충돌은 TableView 만 소유).
 	assert(room.find_children("*", "CollisionObject3D", true, false).is_empty())
@@ -59,7 +59,8 @@ func _check_table_scene() -> void:
 	# ·테이블·바·NPC 테이블·당구대·럼주통4·작은 통4·NPC 스툴2 = 32
 	# + 도면 v3 가구 상자(TableView.decor_blocks: 생맥주 통·뒤 조리대·연습 과녁·양동이·소파·안락의자·낮은 탁자·상자·자루·냉장고)
 	# + 다트 머신 몸체 1(2026-11-07 — 과녁 면 0.12m 뒤부터 과녁 벽까지)
-	assert(bodies == 33 + TableView.decor_blocks().size(), "충돌 몸체 수 %d" % bodies)
+	# + 펍 전용 가구(2026-11-08 비스트로 테이블 2 + 의자 4, TableView.pub_only_blocks — 오락실 테마에서는 꺼진다)
+	assert(bodies == 33 + TableView.decor_blocks().size() + TableView.pub_only_blocks().size(), "충돌 몸체 수 %d" % bodies)
 	# 다트 머신 그림: 롤 셔터 양쪽(2026-11-08 — 앞 바 1 + 좁은 날개 13장이 "Curtain" 아래) + 상태 화면. 보이기만 하므로 충돌 몸체가 아니다.
 	var shutter: Node = table.machine.find_child("ShutterLeft", true, false) if table.machine != null else null
 	assert(shutter != null and shutter.get_node("Curtain").get_child_count() == 14 and int(shutter.call("slat_count")) == 13)

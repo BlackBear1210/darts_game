@@ -18,6 +18,14 @@ var right: Arm
 ## 2026-11-08 사용자 지적 "의자에 앉아 있는 모션이 이상하다": Seated_Stool 모션은 낮은 의자용이라 허벅지가
 ## 35도 아래로 기울어 무릎(높이 0.43m)이 앉는 면 0.6m 의자 방석을 뚫었다. CharacterMotion 이 넣는다.
 var seat_legs := 0.0
+## 앉은 채 춤 비율(0~1). 2026-11-08 사용자 지적 "춤이 싱글에서 안 되고 멀티에서도 안 보인다": 경기 내내 의자에 앉아 있는데
+## 모션은 서 있을 때만 됐다. → 앉아 있으면 모션의 엉덩이(root·hips) 위치·회전을 앉은 자세(Seated_Stool 첫 장면)에 묶고,
+## 다리는 seat_legs 가 방석 위에 둔다. 윗몸·팔·머리만 춤을 춘다. CharacterMotion 이 넣는다.
+var seat_pin := 0.0
+## 엉덩이를 묶을 뼈와 그 앉은 자세(CharacterMotion.setup_seat_pin 이 Seated_Stool 에서 꺼내 넣는다).
+var _pin_bones := PackedInt32Array()
+var _pin_positions: Array[Vector3] = []
+var _pin_rotations: Array[Quaternion] = []
 
 ## 앉은 다리 방향(모델 기준, 오른쪽 다리 = +X 쪽. 왼쪽은 x 를 뒤집는다).
 ## 허벅지: 앞(−Z)으로 거의 수평(무릎이 조금 벌어진다). 정강이: 아래로, 발이 의자 밑으로 25도 들어간다.
@@ -92,6 +100,11 @@ func _process_modification() -> void:
 			for index in range(arm.bones.size()):
 				var bone: int = arm.bones[index]
 				rig.set_bone_pose_rotation(bone, rig.get_bone_pose_rotation(bone).slerp(arm.pose[index], arm.weight))
+	if seat_pin > 0.001:
+		for index in range(_pin_bones.size()):
+			var bone: int = _pin_bones[index]
+			rig.set_bone_pose_position(bone, rig.get_bone_pose_position(bone).lerp(_pin_positions[index], seat_pin))
+			rig.set_bone_pose_rotation(bone, rig.get_bone_pose_rotation(bone).slerp(_pin_rotations[index], seat_pin))
 	if seat_legs > 0.001:
 		for leg: Array in _legs:
 			_seat_leg(rig, leg[0], leg[1], leg[2], leg[3])
@@ -101,6 +114,13 @@ func _process_modification() -> void:
 	_turn(rig, _neck, Vector3.RIGHT, look_pitch * 0.5)
 	_turn(rig, _head, Vector3.RIGHT, look_pitch * 0.5)
 	rig.set_bone_pose_scale(_head, Vector3.ONE * head_scale)
+
+
+## 앉은 채 춤 때 엉덩이를 묶을 뼈와 앉은 자세(위치·회전)를 넣는다.
+func set_seat_pin(bones: PackedInt32Array, positions: Array[Vector3], rotations: Array[Quaternion]) -> void:
+	_pin_bones = bones
+	_pin_positions = positions
+	_pin_rotations = rotations
 
 
 ## 다리 하나를 앉은 자세로: 허벅지 → 정강이 순서로 뼈 방향을 SEAT_THIGH·SEAT_SHIN 쪽으로 seat_legs 만큼 돌리고,

@@ -23,6 +23,11 @@ extends Node3D
 ##        캡슐은 규칙(arcade_rules._step_gacha)이 배출구 → 받침으로 굴려 보낸다.
 ##   농구: 골이 들어가면 그물이 출렁이고 전광판이 GOAL!, 림에 맞으면 링이 떨린다. 바닥에 3점 선(3m 호)을 그었다.
 ##   장식 인형뽑기 4대 → 닫힌 경품 진열장 2대(요청서 6.3 A05 — 조작 기계와 헷갈리지 않게 집게·조이스틱이 없다).
+##
+## [2026-11-08 Codex 라운드하우스 모델(묶음 2) — art/environments/roundhouse/arcade/]
+##   오락기 10대 = A(아치형)/B(경사형) GLB 번갈아(_cabinets) · 경품 진열장 2대 = prize_showcase GLB(_prize_showcase)
+##   · 뒷벽 대기 벤치(_bench, 새 자리) · 진열 선반 인형 16개 = 다트·주사위·카드 인형 GLB(_plush).
+##   조종하는 인형뽑기(_claw_machine)·가챠·농구 기계와 규칙 영역은 그대로다(손에 드는 인형·캡슐은 prop_looks.gd → art/props/).
 
 const Kit = preload("res://art/mesh_kit.gd")
 const PubParts = preload("res://art/pub/pub_parts.gd")
@@ -35,6 +40,21 @@ const NpcIdle = preload("res://art/pub/npc_idle.gd")
 const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
 ## 물레로 깎는 둥근 메시(오락실 테이블 러그).
 const RoundKit = preload("res://art/pub/round_kit.gd")
+## 직원 서빙(2026-11-08 — 펍 바텐더와 같은 움직임: 주스·캔을 손님 앞에 놓고, 뒤돌아 전자레인지에서 음식을 꺼낸다).
+const PubService = preload("res://art/pub/pub_service.gd")
+## 주스 가게 직원 통로 x · 손님 앞에 다가서는 x · 음료 진열대/주방대 앞에 다가서는 x · 걸을 수 있는 z.
+const SHOP_LANE_X := -6.6
+const SHOP_SERVE_X := -6.12
+const RACK_REACH_X := -7.3
+const KITCHEN_REACH_X := -7.0
+const SHOP_LANE_Z := Vector2(0.6, 6.9)
+## 왼쪽 벽 음료 진열대(RG Poly StandShelf — 선반 0.08·0.42·0.73m, 긴 쪽 = z, 앞뒤(±X)가 열려 있다) 자리 z.
+const RACK_Z := 2.45
+const SMALL_RACK_Z := 3.5
+const RACK_SHELVES: Array[float] = [0.08, 0.42, 0.73]
+## 주방대(RG Poly StationTable 1.25 × 1.0 × 0.88m, 예전 준비 싱크대 자리) 가운데 z · 그 위 전자레인지 z.
+const KITCHEN_Z := 6.0
+const SHOP_MICROWAVE_Z := 6.25
 ## 벽 간판·메뉴판을 벽에서 띄우는 거리(m) — 펍 벽 기둥(0.05)·허리 난간(0.078) 앞.
 const SIGN_STANDOFF: float = 0.1
 
@@ -50,20 +70,37 @@ const NAVY := Color("20283e")
 const PLUM := Color("382743")
 ## 오락기: [놓는 자리(바닥), 정면이 보는 방향 yaw, 화면 위 글자]. 정면 = 로컬 -Z.
 ## 뒷벽 6대는 펍 소파 자리 양옆, 다트 홀 옆벽 4대는 넓어진 홀(2026-10-31 늦은 밤)의 투척 구역 밖 벽쪽이다.
+## 2026-11-08 Codex 묶음 2: 몸이 상자(깊이 0.6m) → 라운드하우스 오락기 A/B(깊이 0.85m). 뒷면이 예전과 같은 벽 틈(0.04m)에
+## 오도록 자리를 벽에서 0.125m 당겼다(뒷벽 z 8.51 → 8.385, 옆벽 x ±6.11 → ±5.985). 앞 조작판 끝은 예전과 거의 같다.
 const CABINETS: Array = [
-	[Vector3(-4.4, 0, 8.51), 0.0, "DART\nRUSH"], [Vector3(-3.5, 0, 8.51), 0.0, "NEON\nRACER"], [Vector3(-2.5, 0, 8.51), 0.0, "PUNCH!"],
-	[Vector3(2.5, 0, 8.51), 0.0, "SPACE\nDUCK"], [Vector3(3.5, 0, 8.51), 0.0, "RHYTHM\n★"], [Vector3(4.5, 0, 8.51), 0.0, "BLOCK\nDROP"],
-	[Vector3(-6.11, 0, -0.65), -PI / 2, "ZOMBIE\nPARTY"], [Vector3(-6.11, 0, -1.55), -PI / 2, "KART\nGP"],
-	[Vector3(6.11, 0, -0.65), PI / 2, "PIXEL\nQUEST"], [Vector3(6.11, 0, -1.55), PI / 2, "BEAT\nBOX"]]
-## 장식 경품 진열장(닫힌 유리장, 진짜 인형뽑기 Rules.CLAW_AT 옆 뒷벽). [자리, yaw, 가장자리 줄 색].
+	[Vector3(-4.4, 0, 8.385), 0.0, "DART\nRUSH"], [Vector3(-3.5, 0, 8.385), 0.0, "NEON\nRACER"], [Vector3(-2.5, 0, 8.385), 0.0, "PUNCH!"],
+	[Vector3(2.5, 0, 8.385), 0.0, "SPACE\nDUCK"], [Vector3(3.5, 0, 8.385), 0.0, "RHYTHM\n★"], [Vector3(4.5, 0, 8.385), 0.0, "BLOCK\nDROP"],
+	[Vector3(-5.985, 0, -0.65), -PI / 2, "ZOMBIE\nPARTY"], [Vector3(-5.985, 0, -1.55), -PI / 2, "KART\nGP"],
+	[Vector3(5.985, 0, -0.65), PI / 2, "PIXEL\nQUEST"], [Vector3(5.985, 0, -1.55), PI / 2, "BEAT\nBOX"]]
+## 라운드하우스 오락실 모델(Codex 묶음 2, 2026-11-08 사용자 승인): <key>/<key>.glb. 원점 = 바닥 가운데, 정면 -Z, 미터 크기 그대로(배율 1).
+const ROUNDHOUSE_ARCADE := "res://art/environments/roundhouse/arcade/%s/%s.glb"
+## 오락기 A(아치형)·B(경사형) 몸 크기(폭, 높이, 깊이) = 충돌 상자. 번갈아 세운다.
+const CABINET_MODELS: Array[String] = ["arcade_cabinet_a", "arcade_cabinet_b"]
+const CABINET_SIZE := Vector3(0.75, 1.85, 0.85)
+## 장식 경품 진열장(닫힌 유리장, 진짜 인형뽑기 Rules.CLAW_AT 옆 뒷벽). [자리, yaw, 간판 글자 색].
 ## 2026-11-07: 예전 장식 인형뽑기 4대(ㄱ자)는 진짜 기계와 똑같이 생겨 "어느 게 되는 기계인지" 헷갈렸다 → 2대 · 집게 없음(요청서 6.3 A05).
-const CLAW_DECOS: Array = [[Vector3(10.35, 0, 8.4), 0.0, "ef65cb"], [Vector3(12.15, 0, 8.4), 0.0, "3be5db"]]
+## 2026-11-08: 라운드하우스 진열장(0.9 × 1.9 × 0.7m)으로 바꾸며 깊이가 0.1m 줄어 뒷면이 예전 자리(z 8.8)에 오게 z 8.4 → 8.45.
+const CLAW_DECOS: Array = [[Vector3(10.35, 0, 8.45), 0.0, "ef65cb"], [Vector3(12.15, 0, 8.45), 0.0, "3be5db"]]
 ## 인형뽑기 조작판의 조이스틱 자리(기계 기준 x). 기계 앞에 서서 +Z 를 보면 +X 가 왼손 쪽이다 →
 ## 진짜 오락기처럼 조이스틱은 왼손, 내리기 버튼은 오른손(-STICK_X). 2026-11-07 렌더에서 반대로 놓인 것을 보고 고쳤다.
 const STICK_X: float = 0.22
-## 진열장 크기(폭, 높이, 깊이).
-const SHOWCASE_SIZE := Vector3(1.1, 2.4, 0.8)
-## 인형 색(곰). 오리는 모델 색 그대로.
+## 진열장 크기(폭, 높이, 깊이) = 라운드하우스 prize_showcase 실측(예전 상자 진열장 1.1 × 2.4 × 0.8m). 충돌 상자도 이 크기.
+const SHOWCASE_SIZE := Vector3(0.9, 1.9, 0.7)
+## 진열장 위 판(TopCanopy) 앞면 가운데 높이 — "PRIZE" 글자 자리.
+const SHOWCASE_SIGN_Y: float = 1.845
+## 대기 벤치(라운드하우스 arcade_bench, 1.34 × 0.75 × 0.525m). 펍 코드에는 벤치 자리가 없어 새로 정했다(2026-11-08):
+## 뒷벽 가운데 "★ NEON ARCADE ★" 간판 아래 — 양쪽 오락기 줄(x ±2.125 안쪽) 사이 빈 벽이고, 카드 테이블 안쪽 자리(z 5.8)와는 2m 넘게 떨어져
+## 다트 투척 구역·기계 조작 자리·문(x 8.4) 동선과 겹치지 않는다. 뒷면(+0.27m)이 벽에서 0.05m 떨어지게 z 를 잡았다.
+const BENCH_AT := Vector3(0.5, 0, 8.53)
+const BENCH_SIZE := Vector3(1.34, 0.75, 0.525)
+## 장식 인형(라운드하우스 묶음 2): 다트·주사위·카드 인형을 번갈아 선반에 앉힌다. 몸통 재질 M_Variant 만 PLUSH_COLORS 로 칠한다.
+const DECO_PLUSHES: Array[String] = ["plush_dart", "plush_dice", "plush_card"]
+## 인형 색. 손에 드는 인형 소품(art/props/plush.tscn)은 prop_looks.gd 의 색을 쓴다.
 const PLUSH_COLORS: Array[Color] = [Color("ff6fae"), Color("49d6e6"), Color("ffd34d"), Color("a98bff"), Color("ff9a52"), Color("7be86a")]
 
 var _static: Node3D
@@ -102,6 +139,7 @@ func build() -> void:
 	_drink_fridge()
 	_drums()
 	_cabinets()
+	_bench()
 	_claw_corner()
 	_claw_machine()
 	_gacha_machines()
@@ -221,6 +259,35 @@ func _body(at: Vector3, size: Vector3) -> void:
 	body.add_child(shape)
 	add_child(body)
 	body.position = at
+
+
+## 라운드하우스 오락실 GLB 하나를 장면 그대로(여러 재질·부품 노드 유지) _static 아래에 세운다. 정면 = 로컬 -Z.
+## 정적 묶기(StaticBatch)는 이 GLB 아래를 통째로 건너뛴다(UV·텍스처·대마다 다른 화면 재질 보존 — art/static_batch.gd ROUNDHOUSE_DIR).
+func _model(key: String, at: Vector3, yaw: float, node_name: String) -> Node3D:
+	var node := (load(ROUNDHOUSE_ARCADE % [key, key]) as PackedScene).instantiate() as Node3D
+	node.name = node_name
+	node.position = at
+	node.rotation.y = yaw
+	_static.add_child(node)
+	return node
+
+
+## 부품 메시의 경계 상자를 root 기준 좌표로(트리 밖에서도 되게 부모 변환을 직접 곱한다).
+static func _box_in(root: Node3D, part: MeshInstance3D) -> AABB:
+	var to_root := Transform3D.IDENTITY
+	var node: Node = part
+	while node != root and node is Node3D:
+		to_root = (node as Node3D).transform * to_root
+		node = node.get_parent()
+	return to_root * part.get_aabb()
+
+
+## 판(box, 정면 -Z) 앞면에 글자를 판 크기에 맞춰 붙인다(폭 86% · 높이 70% 안). 빈 간판 판을 가진 모델용.
+func _fit_sign(text: String, box: AABB, parent: Node3D, color: Color, size: int = 40) -> Label3D:
+	var unit: Vector2 = text_size(text, size, 1.0)
+	var pixel: float = minf(box.size.x * 0.86 / unit.x, box.size.y * 0.7 / unit.y)
+	var center := box.get_center()
+	return _sign(text, Vector3(center.x, center.y, box.position.z - 0.004), PI, size, color, pixel, parent)
 
 
 ## 벽 안쪽 면 좌표(펍 생성기 _faces 와 같은 값).
@@ -354,15 +421,16 @@ func _juice_bar() -> void:
 	var top_y: float = TableView.BAR_TOP_Y
 	var front: float = box.end.x
 	var back: float = box.position.x + 0.3
-	# 카운터: 보라 몸통 · 하얀 대리석 윗면 · 앞면 네온 타일(분홍·청록) · 윗선·바닥선 LED.
-	Kit.box(_static, "JuiceCounter", Vector3(box.size.x, top_y - 0.04, box.size.z), Vector3(center.x, (top_y - 0.04) / 2.0, center.z), _mat("juice_counter", Color("2b1d4d")))
-	Kit.box(_static, "JuiceTop", Vector3(box.size.x + 0.1, 0.04, box.size.z + 0.06), Vector3(center.x + 0.05, top_y - 0.02, center.z), _mat("juice_top", Color("ece6f2"), 0.05, 0.25))
-	var tiles: int = int(box.size.z / 0.9)
-	for i in range(tiles):
-		var z: float = box.position.z + box.size.z * (i + 0.5) / tiles
-		Kit.box(_static, "JuiceTile", Vector3(0.02, 0.72, box.size.z / tiles - 0.12), Vector3(front + 0.011, 0.5, z), _neon_mat(PINK if i % 2 == 0 else CYAN, 0.55))
+	# 카운터: 2026-11-08 사용자 "음료 판매대가 너무 구려 — 에셋 도구로 간판대·서랍·음료 전시대": 보라 상자 + 네온 타일 대신
+	# RG Poly 서랍장 모듈(Furnit_A, 파랑 서랍 · 분홍 옆판 · 크림 윗판) 8개를 줄지어 세운다. 서랍 = 모델 +Z → yaw π/2 로 방 쪽(+X).
+	# 깊이 0.935m ≈ 바 깊이(0.95m), 높이 1.02m → 1.078배 = 윗면 1.1m(BAR_TOP_Y — 음료병 소품이 그 위에 선다). 충돌은 그대로 BAR_BOX.
+	var modules: int = 8
+	var width: float = box.size.z / modules
+	var drawers: Array[String] = ["drawer_counter_a", "drawer_counter_b", "drawer_counter_c", "drawer_counter_d"]
+	for i in range(modules):
+		PubParts.asset(_static, drawers[(i * 3) % 4], Vector3(box.position.x + 0.408, 0, box.position.z + width * (i + 0.5)), PI / 2,
+			Vector3(width / 0.9, top_y / 1.019, 1.0), "JuiceDrawer")
 	Kit.box(_static, "JuiceLed", Vector3(0.03, 0.03, box.size.z), Vector3(front + 0.04, top_y - 0.07, center.z), _neon_mat(CYAN, 2.2))
-	Kit.box(_static, "JuiceLedLow", Vector3(0.03, 0.03, box.size.z), Vector3(front + 0.015, 0.06, center.z), _neon_mat(MAGENTA, 2.0))
 	# 주스 디스펜서 3대(오렌지 · 딸기 · 키위): 받침 + 유리 통 + 빛나는 주스 + 뚜껑 + 꼭지.
 	var juices: Array[Color] = [Color("ff9a2e"), Color("ff4f8b"), Color("7be86a")]
 	for i in range(3):
@@ -388,11 +456,9 @@ func _juice_bar() -> void:
 		PubParts.asset(_static, "lemon", Vector3(back - 0.08 + k * 0.1, top_y, 6.95), k * 1.1, Vector3.ONE)
 	PubParts.asset(_static, "blueberries", Vector3(back + 0.04, top_y, 7.2), 0.2, Vector3.ONE * 1.2)
 	PubParts.asset(_static, "waffle", Vector3(front - 0.2, top_y, 0.45), 0.0, Vector3.ONE * 0.9)
-	# 다이너 의자 3개(펍 바 스툴 자리). 모델 0.59m → 1.35배 = 0.8m(카운터 1.1m 에 맞는 높이).
-	var z0: float = box.position.z + 0.1
-	var length: float = box.size.z - 0.2
+	# 다이너 의자 3개(펍 바 스툴과 같은 자리 TableView.BAR_STOOLS_Z). 모델 0.59m → 1.35배 = 0.8m(카운터 1.1m 에 맞는 높이).
 	for i in range(3):
-		PubParts.asset(_static, "diner_stool", Vector3(front + 0.45, 0, z0 + length * (i + 0.5) / 3.0), i * 0.5, Vector3.ONE * 1.35)
+		PubParts.asset(_static, "diner_stool", Vector3(front + 0.45, 0, TableView.BAR_STOOLS_Z[i]), i * 0.5, Vector3.ONE * 1.35)
 	# 가게 안쪽(왼쪽 벽): 금속 선반(캔·우유) · 싱크대 2개(준비대) · 메뉴판 · 줄무늬 차양 · 간판.
 	var shelf := PubParts.asset(_static, "metal_shelf", Vector3(f.lounge_x0 + 0.28, 0, 0.75), PI / 2, Vector3.ONE)
 	if shelf != null:
@@ -400,8 +466,21 @@ func _juice_bar() -> void:
 		for k in range(4):
 			PubParts.asset(_static, "soda_can_%d" % k, Vector3(f.lounge_x0 + 0.28, shelf_top, 0.42 + k * 0.2), k * 0.8, Vector3.ONE * 1.3)
 		PubParts.asset(_static, "milk", Vector3(f.lounge_x0 + 0.3, shelf_top, 1.18), 0.3, Vector3.ONE)
-	for z: float in [5.6, 6.55]:
-		PubParts.asset(_static, "prep_sink", Vector3(f.lounge_x0 + 0.46, 0, z), PI / 2, Vector3.ONE)
+	# 음료 진열대(2026-11-08): 왼쪽 벽에 RG Poly 진열대 큰 것·작은 것 + 선반마다 캔 음료(SodaCan 5종). 메뉴판(1.48m~) 아래에 들어간다.
+	for spec: Array in [["drink_rack", RACK_Z, 6], ["drink_rack_small", SMALL_RACK_Z, 3]]:
+		var rack_x: float = f.lounge_x0 + 0.28
+		PubParts.asset(_static, str(spec[0]), Vector3(rack_x, 0, float(spec[1])), 0.0, Vector3.ONE, "DrinkRack")
+		var count: int = int(spec[2])
+		for level in range(RACK_SHELVES.size()):
+			for k in range(count):
+				var z: float = float(spec[1]) + (k - (count - 1) / 2.0) * 0.13
+				PubParts.asset(_static, "soda_can_" + "abcde"[(k + level * 2) % 5], Vector3(rack_x + 0.05, RACK_SHELVES[level] + 0.005, z), k * 0.9, Vector3.ONE * 1.15)
+	# 주방대(예전 준비 싱크대 자리): RG Poly 스테이션 테이블 위 네온 전자레인지(문 = 모델 -X → 반 바퀴 돌려 +X) · 토스터.
+	# 직원이 뒤돌아 여기서 음식을 꺼낸다(_juice_service).
+	var kitchen_x: float = f.lounge_x0 + 0.45
+	PubParts.asset(_static, "kitchen_station", Vector3(kitchen_x, 0, KITCHEN_Z), PI / 2, Vector3.ONE, "KitchenStation")
+	PubParts.asset(_static, "microwave_neon", Vector3(kitchen_x + 0.08, 1.0, SHOP_MICROWAVE_Z), PI, Vector3.ONE * 0.9, "Microwave")
+	PubParts.asset(_static, "toaster", Vector3(kitchen_x + 0.12, 1.0, KITCHEN_Z - 0.38), 0.0, Vector3.ONE * 0.85, "Toaster")
 	_menu_board(Vector3(f.lounge_x0 + SIGN_STANDOFF, 1.85, 1.9))
 	# 차양: 벽에서 방 쪽으로 내려오는 줄무늬 지붕(2.25~3.1m). 노랑 둘 + 빨강 하나.
 	for spec: Array in [["juice_awning", 1.6], ["juice_awning", 4.4], ["juice_awning_red", 7.1]]:
@@ -409,7 +488,8 @@ func _juice_bar() -> void:
 	# 2026-11-08: 벽 위에 코니스가 생겨 간판 위 끝이 천장 − 0.82m 로 내려왔다 → 두 줄이면 아래 줄이 차양(위 끝 3.1m)에 가려진다.
 	# 한 줄로 줄여 차양과 코니스 사이(3.3~3.9m)에 들어가게 한다.
 	_neon_sign("FRESH JUICE · 생과일 주스", Vector3(f.lounge_x0 + 0.02, 3.6, 3.7), PI / 2, 64, ORANGE, 0.005, 0.12)
-	_juice_vendor(Vector3(-6.6, 0, 4.0))
+	_cafe_sign(Vector3(front + 0.62, 0, 6.85))
+	_juice_service()
 
 
 ## 메뉴판(왼쪽 벽, 방 쪽 +X 를 본다). 값은 장식(실제 사고파는 규칙은 없다 — 음료병은 예전처럼 공짜로 집는다).
@@ -428,12 +508,49 @@ func _menu_board(at: Vector3) -> void:
 	items.shaded = false
 
 
+## 카운터 끝 바닥 간판대(RG Poly CafeBoard — A자 판, 판 = 모델 ±X). 방 가운데 쪽으로 조금 돌려 세우고 앞면에 오늘의 메뉴 글자.
+func _cafe_sign(at: Vector3) -> void:
+	var board := PubParts.asset(_static, "cafe_board", at, 0.36, Vector3.ONE * 1.25, "CafeBoard")
+	if board == null:
+		return
+	# 판이 위로 갈수록 뒤로 기운다(A자 반쪽 ≈ 12.5°) → 글자도 같이 눕힌다. Label3D 정면 = +Z → 반의 반 바퀴 돌려 +X.
+	var menu := Kit.label(board, "CafeBoardText", "SNACK BAR\n핫도그 · 피자\n시원한 캔", Vector3(0.105, 0.43, 0.0), 30, Color("fff4d6"), 0.0021)
+	menu.basis = Basis(Vector3.UP, PI / 2) * Basis(Vector3.RIGHT, -0.22)
+	menu.shaded = false
+
+
+## 주스 가게 직원 + 서빙 + 다이너 의자 손님 둘(2026-11-08 사용자 "오락실도 똑같이 음료나 음식을 서빙하는 식으로").
+## 직원은 카운터 뒤 통로를 걸으며 디스펜서에서 주스를 · 음료 진열대에서 캔을 꺼내 손님 앞에 놓고,
+## 뒤돌아 주방대 전자레인지에서 음식을 꺼낸다(art/pub/pub_service.gd — 펍 바텐더와 같은 코드).
+func _juice_service() -> void:
+	var box: AABB = TableView.BAR_BOX
+	var front: float = box.end.x
+	var top_y: float = TableView.BAR_TOP_Y
+	var vendor := _juice_vendor(Vector3(SHOP_LANE_X, 0, 4.0))
+	var customers: Array = []
+	var looks: Array = [["ff5aa8", false, NpcOutfit.Outfit.GUEST_CAP], ["49d6e6", true, NpcOutfit.Outfit.GUEST_BEANIE]]
+	for i: int in [1, 2]:
+		var z: float = TableView.BAR_STOOLS_Z[i]
+		var look: Array = looks[i - 1]
+		NpcIdle.spawn(self, "ArcadeGuest_%d" % i, Vector3(front + 0.45, 0, z), Vector3(box.position.x, 0, z), Color(look[0]), true, 0, i * 2.1,
+			0.8, look[1], look[2])
+		customers.append([z, Vector3(front - 0.22, top_y, z - 0.17), Vector3(front - 0.22, top_y, z + 0.15)])
+	var foods := PackedStringArray(["plate+hotdog@0.72", "plate+burger_ready@0.7", "pizza_plate@0.6", "plate+donut@0.95", "plate+cake_slice@0.55",
+		"plate+pancakes@0.62", "dish_5@0.52"])
+	var kitchen_x: float = _faces().lounge_x0 + 0.45
+	PubService.make(self, vendor, SHOP_LANE_X, SHOP_SERVE_X, SHOP_LANE_Z, -PI / 2, [
+		["drink", 1.15, -PI / 2, 2.4, PackedStringArray(["juice_cup"]), 1.0, Vector3.ZERO, SHOP_SERVE_X],
+		["drink", RACK_Z, PI / 2, 1.6, PackedStringArray(["soda_can_a", "soda_can_b", "soda_can_c", "soda_can_d", "soda_can_e"]), 1.15, Vector3.ZERO, RACK_REACH_X],
+		["food", SHOP_MICROWAVE_Z, PI / 2, 3.2, foods, 1.0, Vector3(kitchen_x + 0.35, 1.18, SHOP_MICROWAVE_Z), KITCHEN_REACH_X]],
+		customers)
+
+
 ## 주스 가게 직원(2026-11-08): 펍 바텐더·손님과 같은 리깅 캐릭터(art/pub/npc_idle.gd)에 청록 셔츠만 입힌다.
 ## 예전에는 옛 상자 바텐더 모델(chr_bartender)의 옷을 갈아입혔다 — 선수와 생김새가 달라 보인다는 사용자 지적으로 바꿨다.
 ## 카운터 뒤에 서서 방 쪽(+X)을 보고, 가끔 손님 쪽을 가리킨다. 충돌 없음(지나갈 수 있다).
-func _juice_vendor(at: Vector3) -> void:
-	# 2026-11-08: 가게 색 야구 모자 + 가슴 앞치마(art/pub/npc_outfit.gd) — 손님·선수와 구분된다.
-	NpcIdle.spawn(self, "JuiceVendor", at, at + Vector3(3.0, 0, 0), Color("2fc6b6"), false, 1, 0.9, NpcIdle.SEAT_TOP, false, NpcOutfit.Outfit.JUICE_VENDOR)
+func _juice_vendor(at: Vector3) -> Node3D:
+	# 2026-11-08: 가게 색 야구 모자 + 가슴 앞치마(art/pub/npc_outfit.gd) — 손님·선수와 구분된다. 몸짓 3 = 서빙(PubService 가 움직인다).
+	return NpcIdle.spawn(self, "JuiceVendor", at, at + Vector3(3.0, 0, 0), Color("2fc6b6"), false, 3, 0.9, NpcIdle.SEAT_TOP, false, NpcOutfit.Outfit.JUICE_VENDOR)
 
 
 ## 바 끝 냉장고 자리(TableView.BAR_FRIDGE_AT): 하얀 음료 냉장고 + 빛나는 유리문 + 색색 캔 4칸 + "COLD DRINKS".
@@ -487,30 +604,31 @@ func _cabinets() -> void:
 		var at: Vector3 = CABINETS[index][0]
 		var yaw: float = CABINETS[index][1]
 		var color: Color = colors[index % colors.size()]
-		var root := Node3D.new()
-		root.name = "Cabinet"
-		_static.add_child(root)
-		root.position = at
-		root.rotation.y = yaw
-		# 2026-11-07: 남색 둥근 몸통 + 크림 간판·화면 테두리·조작판. 예전엔 앞판 전체(0.84×1.84m)가 네온으로 빛나 과녁보다 눈에 띄었다
-		# → 네온은 앞 모서리 두 줄(얇은 세로 띠)만 남겼다(요청서 2장 "시안/마젠타는 가장자리에만").
-		var navy := _mat("arcade_navy", NAVY, 0.1, 0.42)
-		var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
-		Kit.rounded_box(root, "Cabinet", Vector3(0.82, 1.82, 0.6), Vector3(0, 0.91, 0), navy, 0.07)
-		for side: float in [-1.0, 1.0]:
-			Kit.box(root, "CabinetEdge", Vector3(0.018, 1.5, 0.018), Vector3(side * 0.392, 0.92, -0.302), _neon_mat(color, 1.6))
-		Kit.rounded_box(root, "CabinetMarquee", Vector3(0.78, 0.26, 0.08), Vector3(0, 1.66, -0.29), cream, 0.035)
-		Kit.rounded_box(root, "CabinetBezel", Vector3(0.7, 0.58, 0.04), Vector3(0, 1.3, -0.3), cream, 0.03)
-		var screen := Kit.box(root, "CabinetScreen", Vector3(0.6, 0.46, 0.02), Vector3(0, 1.3, -0.325), _glow("screen_%d" % index, color.darkened(0.2), 1.6))
+		# 2026-11-08 Codex 묶음 2: 상자 몸 → 라운드하우스 오락기 A(아치형)/B(경사형) 번갈아. 화면·조이스틱·버튼 3개·동전 투입구가
+		# 따로 된 부품 노드이고, 크림 에나멜·남색·얇은 네온 테두리가 모델에 들어 있다(예전 네온 모서리 띠·버튼을 덧붙이지 않는다).
+		# B 조작판은 메시에 이미 X −34.7도 기울어 있다 — 여기서 또 돌리지 않는다.
+		var cabinet := _model(CABINET_MODELS[index % CABINET_MODELS.size()], at, yaw, "Cabinet")
+		# 화면: 모델의 빈 검은 유리(ScreenBlank)를 대마다 복제해 빛나게 덮는다 → show_state 의 색 순환이 대마다 따로 돈다.
+		var screen := cabinet.find_child("Screen", true, false) as MeshInstance3D
+		var lit := screen.get_active_material(0).duplicate() as StandardMaterial3D
+		lit.emission_enabled = true
+		lit.emission = color.darkened(0.2)
+		lit.emission_energy_multiplier = 1.6
+		screen.material_override = lit
 		_screens.append(screen)
-		Kit.rounded_box(root, "CabinetPanel", Vector3(0.8, 0.07, 0.3), Vector3(0, 0.98, -0.42), cream, 0.03)
-		Kit.cylinder(root, "Stick", 0.012, 0.12, Vector3(-0.18, 1.06, -0.45), navy, 6)
-		Kit.sphere(root, "StickBall", 0.035, Vector3(-0.18, 1.13, -0.45), _mat("stick_ball", MAGENTA))
-		for button in range(3):
-			Kit.cylinder(root, "Button", 0.028, 0.03, Vector3(0.04 + button * 0.09, 1.03, -0.45), _neon_mat(colors[(index + button + 1) % colors.size()], 1.6), 10)
-		_sign(str(CABINETS[index][2]), Vector3(0, 1.66, -0.34), PI, 40, color, 0.004, root)
+		# 간판: 빈 남색 판(MarqueeBlank) 앞면에 게임 이름 한 줄(판 크기에 맞춘 글자).
+		var marquee := cabinet.find_child("MarqueeBlank", true, false) as MeshInstance3D
+		_fit_sign(str(CABINETS[index][2]).replace("\n", " "), _box_in(cabinet, marquee), cabinet, color)
 		var turned: bool = absf(sin(yaw)) > 0.5
-		_body(at + Vector3(0, 0.91, 0), Vector3(0.6, 1.82, 0.82) if turned else Vector3(0.82, 1.82, 0.6))
+		var footprint := Vector3(CABINET_SIZE.z, CABINET_SIZE.y, CABINET_SIZE.x) if turned else CABINET_SIZE
+		_body(at + Vector3(0, CABINET_SIZE.y / 2.0, 0), footprint)
+
+
+## 대기 벤치(라운드하우스 arcade_bench, 2026-11-08 Codex 묶음 2). 자리 근거는 BENCH_AT 주석.
+## 앉는 기능은 없다(장식 + 이 테마에서만 충돌). 이름이 "Seat" 로 시작하지 않아 자리 숨기기(TableView.show_seats)와 섞이지 않는다.
+func _bench() -> void:
+	_model("arcade_bench", BENCH_AT, 0.0, "ArcadeBench")
+	_body(BENCH_AT + Vector3(0, BENCH_SIZE.y / 2.0, 0), BENCH_SIZE)
 
 
 # ─────────────────────────────── 인형뽑기 가게 ───────────────────────────────
@@ -542,18 +660,34 @@ static func _plush_mat(key: String, color: Color, rough: float) -> StandardMater
 	return _plush_materials[key]
 
 
-## 인형 하나: 곰(코드) 또는 오리(RG Poly 모델). 진열·장식 기계 안에 쓴다.
-func _plush(parent: Node3D, at: Vector3, yaw: float, pick: int) -> void:
-	if pick % 3 == 2 and PubParts.asset(parent, "plush_duck", at - Vector3(0, 0.12, 0), yaw, Vector3.ONE * 0.3) != null:
-		return
-	_bear(parent, at, PLUSH_COLORS[pick % PLUSH_COLORS.size()], yaw, 0.95, true)
+## 장식 인형 하나(선반용): 라운드하우스 다트·주사위·카드 인형(묶음 2)을 pick 순서로 번갈아 앉힌다. at = 앉는 면, 정면 = yaw 방향의 -Z.
+## 2026-11-08: 예전 곰(코드 도형)·오리(RG Poly) → 라운드하우스 인형. 몸통 M_Variant 는 색마다 복제 재질 하나를 같이 쓴다(_plush_body).
+func _plush(at: Vector3, yaw: float, pick: int) -> void:
+	var doll := _model(DECO_PLUSHES[pick % DECO_PLUSHES.size()], at, yaw, "DecoPlush")
+	var color: Color = PLUSH_COLORS[pick % PLUSH_COLORS.size()]
+	for found in doll.find_children("*", "MeshInstance3D", true, false):
+		var mesh_node := found as MeshInstance3D
+		for surface in range(mesh_node.mesh.get_surface_count()):
+			var material := mesh_node.mesh.surface_get_material(surface) as StandardMaterial3D
+			if material != null and material.resource_name == "M_Variant":
+				mesh_node.set_surface_override_material(surface, _plush_body(material, color))
+
+
+## 인형 몸통 재질(원본 M_Variant + 색)의 복제본. 섬유 텍스처·노멀은 원본 그대로, 색(albedo_color)만 바꾼다.
+func _plush_body(source: StandardMaterial3D, color: Color) -> StandardMaterial3D:
+	var key := "plush_%d_%s" % [source.get_instance_id(), color.to_html(false)]
+	if not _materials.has(key):
+		var tinted := source.duplicate() as StandardMaterial3D
+		tinted.albedo_color = Color(color, source.albedo_color.a)
+		_materials[key] = tinted
+	return _materials[key]
 
 
 ## 인형뽑기 코너: 닫힌 경품 진열장 2대 + 뒷벽 인형 진열 선반 2단. 진짜 기계(_claw_machine)는 그 앞 Rules.CLAW_AT.
 func _claw_corner() -> void:
 	var f := _faces()
 	for index in range(CLAW_DECOS.size()):
-		_prize_showcase(CLAW_DECOS[index][0], CLAW_DECOS[index][1], Color(str(CLAW_DECOS[index][2])), index)
+		_prize_showcase(CLAW_DECOS[index][0], CLAW_DECOS[index][1], Color(str(CLAW_DECOS[index][2])))
 	# 진열 선반: 장식 기계 위(2.75m · 3.3m), 뒷벽 x 9.45~12.95.
 	var from: float = 9.45
 	var to: float = 12.95
@@ -561,47 +695,22 @@ func _claw_corner() -> void:
 		var y: float = 2.75 + row * 0.55
 		Kit.box(_static, "PlushShelf", Vector3(to - from, 0.04, 0.28), Vector3((from + to) / 2.0, y, f.back_z - 0.14), _mat("plush_shelf", Color("2a2148")))
 		Kit.box(_static, "PlushShelfLed", Vector3(to - from, 0.02, 0.02), Vector3((from + to) / 2.0, y - 0.03, f.back_z - 0.28), _neon_mat([CYAN, PINK][row], 2.0))
+		# 인형은 선반 윗면(y + 0.02)에 바닥 원점으로 앉고 정면(-Z)이 방 안을 본다.
 		for slot in range(8):
-			_plush(_static, Vector3(from + 0.22 + slot * 0.44, y + 0.14, f.back_z - 0.15), PI, slot + row * 3)
+			_plush(Vector3(from + 0.22 + slot * 0.44, y + 0.02, f.back_z - 0.15), 0.0, slot + row * 3)
 
 
 ## 닫힌 경품 진열장 한 대(움직이지 않음, 이 테마에서만 충돌). 정면 = 로컬 -Z.
-## 2026-11-07: 조작 인형뽑기와 헷갈리지 않게 집게·레일·조이스틱이 없다. 유리장 안에 3단 계단 받침 + 인형이 줄지어 앉아 있다.
-func _prize_showcase(at: Vector3, yaw: float, accent: Color, index: int) -> void:
-	var size: Vector3 = SHOWCASE_SIZE
-	var root := Node3D.new()
-	root.name = "PrizeShowcase"
-	_static.add_child(root)
-	root.position = at
-	root.rotation.y = yaw
-	var cream := _mat("arcade_cream", CREAM, 0.05, 0.38)
-	var navy := _mat("arcade_navy", NAVY, 0.1, 0.42)
-	var front: float = -size.z / 2.0
-	# 아래 몸통(크림) + 남색 걸레받이 + 윗선 얇은 네온.
-	Kit.rounded_box(root, "ShowcaseKick", Vector3(size.x - 0.06, 0.1, size.z - 0.06), Vector3(0, 0.05, 0), navy, 0.03)
-	Kit.rounded_box(root, "ShowcaseBase", Vector3(size.x, 0.8, size.z), Vector3(0, 0.5, 0), cream, 0.07)
-	Kit.box(root, "ShowcaseEdge", Vector3(size.x - 0.12, 0.014, 0.014), Vector3(0, 0.86, front - 0.002), _neon_mat(accent, 1.8))
-	# 유리장: 모서리 기둥(남색) · 안쪽 바닥(자두색) · 3단 계단 받침 · 인형.
-	Kit.box(root, "ShowcaseFloor", Vector3(size.x - 0.08, 0.04, size.z - 0.08), Vector3(0, 0.92, 0), _mat("arcade_plum", PLUM, 0.0, 0.8))
-	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		Kit.rounded_box(root, "ShowcasePost", Vector3(0.05, 1.16, 0.05), Vector3(corner.x * (size.x / 2 - 0.025), 1.5, corner.y * (size.z / 2 - 0.025)), navy, 0.02)
-	for step in range(3):
-		var depth: float = (size.z - 0.14) * (3 - step) / 3.0
-		var z: float = (size.z - 0.14) / 2.0 - depth / 2.0
-		Kit.rounded_box(root, "ShowcaseStep", Vector3(size.x - 0.12, 0.14, depth), Vector3(0, 0.99 + step * 0.14, z), cream, 0.02)
-		for slot in range(3):
-			_plush(root, Vector3(-0.32 + slot * 0.32, 1.14 + step * 0.14, z - depth / 2.0 + 0.11), PI + (slot - 1) * 0.25, slot + step * 3 + index * 2)
-	# 위 머리(남색) + 크림 간판 판 + 아래 얇은 시안 줄 + 안쪽 조명.
-	Kit.rounded_box(root, "ShowcaseHeader", Vector3(size.x + 0.04, 0.34, size.z + 0.04), Vector3(0, 2.23, 0), navy, 0.08)
-	Kit.rounded_box(root, "ShowcaseMarquee", Vector3(size.x - 0.16, 0.22, 0.03), Vector3(0, 2.24, front - 0.03), cream, 0.025)
-	Kit.box(root, "ShowcaseHeaderEdge", Vector3(size.x - 0.04, 0.014, 0.014), Vector3(0, 2.05, front - 0.03), _neon_mat(CYAN, 1.8))
-	Kit.box(root, "ShowcaseLamp", Vector3(size.x - 0.12, 0.02, size.z - 0.12), Vector3(0, 2.05, 0), _neon_mat(Color("fff3e0"), 1.2))
-	# 유리는 맨 나중에(투명 — 안이 보인다). 앞면에 "닫힘"을 알리는 작은 자물쇠 판.
-	Kit.box(root, "ShowcaseGlass", Vector3(size.x - 0.04, 1.12, size.z - 0.04), Vector3(0, 1.5, 0), _glass_mat("claw_glass", Color("d8f4ff"), 0.12))
-	Kit.rounded_box(root, "ShowcaseLock", Vector3(0.12, 0.08, 0.02), Vector3(0, 0.98, front - 0.012), navy, 0.01)
-	_sign("PRIZE", Vector3(0, 2.24, front - 0.05), PI, 54, accent, 0.0045, root)
+## 2026-11-07: 조작 인형뽑기와 헷갈리지 않게 집게·레일·조이스틱이 없다.
+## 2026-11-08 Codex 묶음 2: 상자 진열장(계단 받침 + 곰·오리 9마리 + 투명 상자 유리) → 라운드하우스 진열장 GLB.
+## 모델 안에 선반 3단·앞유리 한 장(Glass)·인형 3개(PrizeDisplayRoot — 다트·주사위·카드)가 이미 있어 그대로 쓴다
+## (예전 투명 상자 유리·인형을 덧붙이지 않는다). 위 판 앞면에 "PRIZE" 글자만 더한다.
+func _prize_showcase(at: Vector3, yaw: float, accent: Color) -> void:
+	var showcase := _model("prize_showcase", at, yaw, "PrizeShowcase")
+	_sign("PRIZE", Vector3(0, SHOWCASE_SIGN_Y, -SHOWCASE_SIZE.z / 2.0 - 0.004), PI, 40, accent, 0.0021, showcase)
 	var turned: bool = absf(sin(yaw)) > 0.5
-	_body(at + Vector3(0, size.y / 2.0, 0), Vector3(size.z, size.y, size.x) if turned else size)
+	var footprint := Vector3(SHOWCASE_SIZE.z, SHOWCASE_SIZE.y, SHOWCASE_SIZE.x) if turned else SHOWCASE_SIZE
+	_body(at + Vector3(0, SHOWCASE_SIZE.y / 2.0, 0), footprint)
 
 
 func _claw_machine() -> void:
@@ -828,12 +937,29 @@ func _small_props() -> void:
 
 
 ## 색 조명(그림자 없음). 오락실 분위기는 대부분 빛나는 재질이 내고, 여기 빛은 바닥·사람에 색을 묻히는 정도.
+## 2026-11-08 사용자 "펍과 오락실 전부 전등이 안 어울리거나 너무 무규칙적" → 빛 자리 규칙:
+##   ① 천장 네온 관 줄(RoomBuilder.ceiling_beams — _ceiling_neon 과 같은 차례·같은 색) 바로 아래, 칸 너비를 똑같이 나눈 간격.
+##      다트 홀(폭 13m)은 가운데 하나, 라운지(폭 22m)는 셋.
+##   ② 조작하는 기계(인형뽑기·가챠·농구)는 기계 앞에 기계 색 하나씩. ③ 주스 가게 주방대 위 따뜻한 빛 하나.
+##   펍 놋쇠 펜던트는 카드 테이블 것만 남긴다(LoungeWorld._trim_arcade).
 func _lights() -> void:
-	for spec in [[Rules.CLAW_AT + Vector3(0, 2.0, -0.2), MAGENTA, 2.6, 3.2], [Vector3(11.2, 2.9, 7.4), Color("ff7ad9"), 2.2, 5.0],
-			[(Rules.GACHA_AT[0] + Rules.GACHA_AT[1]) / 2.0 + Vector3(0, 1.3, -0.7), Color("ffe7c2"), 1.6, 3.0], [Rules.HOOP_RING + Vector3(0, 0.4, -0.8), ORANGE, 2.2, 3.5],
-			[Vector3(-3.5, 3.6, -3.0), CYAN, 1.6, 7.5], [Vector3(3.5, 3.6, -3.0), MAGENTA, 1.6, 7.5],
-			[Vector3(-6.4, 3.0, 3.7), Color("ffb347"), 1.8, 6.0], [Vector3(0.5, 3.4, 7.6), VIOLET, 1.4, 6.0]]:
+	var specs: Array = []
+	var ceiling: float = TableView.CEILING_HEIGHT
+	var index := 0
+	for entry: Array in RoomBuilder.ceiling_beams():
+		var room: Rect2 = entry[0]
+		var columns: int = 1 if room.size.x < 14.0 else 3
+		for z: float in entry[1]:
+			for c in range(columns):
+				specs.append([Vector3(room.position.x + room.size.x * (c + 0.5) / columns, ceiling - 0.6, z), CYAN if index % 2 == 0 else PINK, 1.2, 6.5])
+			index += 1
+	specs.append([Rules.CLAW_AT + Vector3(0, 2.0, -0.2), MAGENTA, 2.6, 3.2])
+	specs.append([(Rules.GACHA_AT[0] + Rules.GACHA_AT[1]) / 2.0 + Vector3(0, 1.3, -0.7), Color("ffe7c2"), 1.6, 3.0])
+	specs.append([Rules.HOOP_RING + Vector3(0, 0.4, -0.8), ORANGE, 2.2, 3.5])
+	specs.append([Vector3(_faces().lounge_x0 + 1.2, 2.6, KITCHEN_Z - 1.2), Color("ffb347"), 1.4, 5.0])
+	for spec: Array in specs:
 		var light := OmniLight3D.new()
+		light.name = "ArcadeLight"
 		light.position = spec[0]
 		light.light_color = spec[1]
 		light.light_energy = spec[2]

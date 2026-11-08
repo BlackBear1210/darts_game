@@ -7,6 +7,7 @@ extends SceneTree
 ##     --only=<앞글자> 를 주면 그 글자로 시작하는 후보만 찍는다(2026-10-31 늦은 밤: city: = Cartoon City 팩).
 ##   굽기(창 없이):   godot --headless --path . --script res://art/vendor/rg_poly/rg_poly_baker.gd -- --bake --source=<팩 폴더>
 ##     → art/vendor/rg_poly/meshes/<이름>.res (rg_poly_catalog.gd used() 목록)
+##     --keys=<이름,이름…> 를 주면 그 이름들만 굽는다(2026-11-08: 이미 구운 .res 를 다시 써서 바뀐 것처럼 보이지 않게).
 ##
 ## 굽는 방법: 삼각형마다 텍스처 좌표(UV) 가운데 점의 색을 읽어 그 삼각형 세 꼭짓점에 같은 색을 준다(면마다 한 색).
 ## 그 색은 RgPolyCatalog.pub_color 로 펍 팔레트 쪽으로 옮긴다. 텍스처가 없는 재질은 재질 색을 쓴다.
@@ -151,7 +152,12 @@ func _bake_all() -> void:
 	var material := shared_material()
 	var made := 0
 	var used: Dictionary = Catalog.used()
+	var only := PackedStringArray()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--keys="): only = arg.trim_prefix("--keys=").split(",", false)
 	for key: String in used:
+		if not only.is_empty() and not only.has(key):
+			continue
 		var entry: Array = used[key]
 		var path := find_glb(entry[0])
 		if path.is_empty():

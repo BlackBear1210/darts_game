@@ -107,6 +107,10 @@ var _was_seated: bool = false
 
 
 func _ready() -> void:
+	# 테이블은 언제나 원점이다. 자리·카드 매트·손 카드·다트 판정이 모두 TableView 상수(원점 기준)로 놓인다.
+	# 2026-11-08 사용자 지적 "왜 공중에 카드가 떠 있지?": 에디터에서 game.tscn 의 Table 이 실수로 17cm 아래로
+	# 끌려 저장돼 테이블만 내려가고 카드는 제자리에 떠 있었다 → 씬에서 끌려도 실행 때 제자리로 되돌린다.
+	table.transform = Transform3D.IDENTITY
 	controller.changed.connect(_apply_state)
 	controller.dart_thrown.connect(_show_throw)
 	controller.dart_redirected.connect(_redirect_throw)

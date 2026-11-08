@@ -12,11 +12,16 @@ const FACE_PREFIXES: Array[String] = ["Eye", "Pupil", "Brow", "Mouth"]
 ## "WindowView"(2026-11-08) = 펍 창 밖 밤거리 그림(art/pub/window_view.gdshader). 셰이더가 메시 로컬 좌표·노드 위치로
 ## 그림을 그려서, 묶어 좌표가 방 기준으로 바뀌면 그림이 깨진다.
 ## "WallPoster"(2026-11-08 저녁) = 벽 액자 만화 포스터. 묶음은 UV 를 옮기지 않아 그림이 사라진다.
-const NO_BATCH_NAMES: Array[String] = ["Bell", "WindowView", "WallPoster"]
+## "Service"·"TableFood"·"SmokeFx"(2026-11-08) = 바텐더·직원이 나르는 잔·접시, 손님 앞 랜덤 음식, 시가·연기 — 실행 중에 생기고 움직인다.
+const NO_BATCH_NAMES: Array[String] = ["Bell", "WindowView", "WallPoster", "Service", "TableFood", "SmokeFx"]
 ## 이름이 이렇게 시작하는 묶음(아래 전부)은 묶지 않는다.
 ## "Seat" = 자리 매트·바닥 자리 표시·스툴·자리 글자(2026-11-07): 방 인원수에 따라 TableView.show_seats 가 숨기므로
 ## 묶여 버리면 원본을 숨겨도 묶음 메시에 그대로 남는다.
 const NO_BATCH_PREFIXES: Array[String] = ["Seat"]
+## 라운드하우스 GLB(2026-11-08 Codex 묶음 1 v2·2·3) 아래는 통째로 묶지 않는다.
+## 이 묶기는 정점·법선만 옮기고 UV·탄젠트·면별 재질을 버려서, 텍스처·노멀맵이 사라진다. 오락기 화면(Screen)처럼
+## 대마다 다른 재질을 덮는 부품, 투명 유리·캡슐도 있어 따로 둔다. 묶기를 지원하려면 UV·탄젠트·면 재질·투명도 보존 검증이 먼저다.
+const ROUNDHOUSE_DIR := "res://art/environments/roundhouse/"
 
 
 ## root 아래 정적 메시를 묶어 RuntimeStaticBatches 노드에 넣는다. 반환값은 로그·검증용 개수.
@@ -69,7 +74,7 @@ static func optimize(root: Node3D) -> Dictionary:
 
 ## 묶을 후보를 "재질 + 격자 칸" 키로 모은다.
 static func collect(node: Node, root: Node3D, groups: Dictionary) -> void:
-	if node != root and (node.name == "Dartboard" or node.scene_file_path.contains("/characters/")):
+	if node != root and (node.name == "Dartboard" or node.scene_file_path.contains("/characters/") or node.scene_file_path.begins_with(ROUNDHOUSE_DIR)):
 		return
 	if str(node.name) in NO_BATCH_NAMES:
 		return

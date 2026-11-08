@@ -38,6 +38,10 @@ const BLEND := 0.18
 const FOLLOW := 12.0
 ## 이 비율(지금 속도 / 최고 속도)을 넘으면 걷는다.
 const MOVE_THRESHOLD := 0.05
+## 앉은 채 춤에서 엉덩이를 묶는 뼈(CharacterPoseLayer.seat_pin). 다리는 seat_legs 가 맡는다.
+const SEAT_PIN_BONES: PackedStringArray = ["root", "hips"]
+## 앉은 채 춤으로 바뀌는 빠르기.
+const SEAT_PIN_RATE := 10.0
 ## 걷기 재생 배속 = 속도 비율 × WALK_RATE(MIN~MAX 사이). 최고 속도 3.8m/s 에서 한 걸음 주기 0.4초.
 const WALK_RATE := 3.0
 const WALK_RATE_MIN := 0.7
@@ -117,6 +121,7 @@ func _init(model: Node3D, seed_offset := 0.0) -> void:
 	_layer = CharacterPoseLayer.new()
 	rig.add_child(_layer)
 	_layer.setup(rig, CharacterPoseLayer.Arm.new(rig, LEFT_ARM, path), CharacterPoseLayer.Arm.new(rig, RIGHT_ARM, path))
+	_setup_seat_pin(rig, path)
 	# 네 명이 같은 박자로 숨쉬고 깜빡이지 않게 자리마다 시작 시각을 다르게 준다.
 	_seed = seed_offset
 	_time = seed_offset
@@ -161,8 +166,11 @@ func stop_emote() -> void:
 func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool, look_pitch: float, aiming: bool) -> void:
 	_time += delta
 	var amount := 1.0 - exp(-FOLLOW * delta)
-	if posture != Posture.STAND or airborne or aiming or drinking > 0.0 or _throw_time >= 0.0:
+	# 앉아 있어도 모션은 계속된다(엉덩이·다리는 의자에 묶고 윗몸만 춘다). 숙이기·점프·조준·마시기·던지기는 멈춘다.
+	if posture == Posture.CROUCH or airborne or aiming or drinking > 0.0 or _throw_time >= 0.0:
 		stop_emote()
+	var pin_target: float = 1.0 if posture == Posture.SEAT and not emote_clip.is_empty() else 0.0
+	_layer.seat_pin = lerpf(_layer.seat_pin, pin_target, 1.0 - exp(-SEAT_PIN_RATE * delta))
 	_update_body(speed_ratio, posture, airborne)
 	var drink: Vector2 = CharacterRig.drink_curve(drinking)
 	if not emote_clip.is_empty():
@@ -186,6 +194,24 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 static func freeze(model: Node3D, clip_name: String) -> void:
 	var player := model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	player.play(clip_name)
+
+
+## 앉은 자세(Seated_Stool 첫 장면)의 엉덩이 뼈 위치·회전을 꺼내 CharacterPoseLayer 에 넣는다.
+func _setup_seat_pin(rig: Skeleton3D, path: String) -> void:
+	var seated := _player.get_animation(SEATED)
+	var bones := PackedInt32Array()
+	var positions: Array[Vector3] = []
+	var rotations: Array[Quaternion] = []
+	for bone_name: String in SEAT_PIN_BONES:
+		var bone := rig.find_bone(bone_name)
+		var position_track := seated.find_track(NodePath("%s:%s" % [path, bone_name]), Animation.TYPE_POSITION_3D)
+		var rotation_track := seated.find_track(NodePath("%s:%s" % [path, bone_name]), Animation.TYPE_ROTATION_3D)
+		if bone < 0 or position_track < 0 or rotation_track < 0:
+			continue
+		bones.append(bone)
+		positions.append(seated.position_track_interpolate(position_track, 0.0))
+		rotations.append(seated.rotation_track_interpolate(rotation_track, 0.0))
+	_layer.set_seat_pin(bones, positions, rotations)
 
 
 func _update_body(speed_ratio: float, posture: Posture, airborne: bool) -> void:
