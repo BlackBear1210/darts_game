@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<!-- 펍 창밖 달(창 셰이더가 하늘 방향으로 붙인다). 다트가 꽂힌 달 — 2026-11-08 디자인 담당 -->
+<defs><radialGradient id="mf" cx="0.4" cy="0.35" r="0.75"><stop offset="0" stop-color="#fff8dc"/><stop offset="1" stop-color="#f0cf7e"/></radialGradient></defs>
+<circle cx="250" cy="266" r="196" fill="url(#mf)" stroke="#7a5530" stroke-width="10"/>
+<circle cx="165" cy="185" r="26" fill="#e8c372" opacity="0.75"/>
+<circle cx="345" cy="372" r="34" fill="#e8c372" opacity="0.75"/>
+<circle cx="150" cy="380" r="18" fill="#e8c372" opacity="0.75"/>
+<circle cx="300" cy="140" r="14" fill="#e8c372" opacity="0.75"/>
+<circle cx="395" cy="250" r="12" fill="#e8c372" opacity="0.75"/>
+<ellipse cx="160" cy="318" rx="36" ry="20" fill="#f39a8a" opacity="0.6"/>
+<ellipse cx="340" cy="318" rx="36" ry="20" fill="#f39a8a" opacity="0.6"/>
+<path d="M138,238 L190,262 L138,286" fill="none" stroke="#5a3a22" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M362,238 L310,262 L362,286" fill="none" stroke="#5a3a22" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M198,330 Q250,392 302,330 Q250,352 198,330 Z" fill="#7a3a2e" stroke="#5a3a22" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+<ellipse cx="252" cy="362" rx="18" ry="9" fill="#ff8a8a"/>
+<path d="M402,210 Q410,226 402,236 Q394,226 402,210 Z" fill="#a9dcff" stroke="#5a3a22" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M352.8,127.3 L332.9,118" fill="none" stroke="#5a3a22" stroke-width="6" stroke-linecap="round"/>
+<path d="M367.3,112.8 L358.9,94.7" fill="none" stroke="#5a3a22" stroke-width="6" stroke-linecap="round"/>
+<path d="M349.9,150.9 L327.4,159.2" fill="none" stroke="#5a3a22" stroke-width="6" stroke-linecap="round"/>
+<path d="M391.6,108.1 L397.8,91.1" fill="none" stroke="#5a3a22" stroke-width="6" stroke-linecap="round"/>
+<path d="M380,140 L390.2,128.8" fill="none" stroke="#c9ccd6" stroke-width="5.7" stroke-linecap="round"/>
+<path d="M390.2,128.8 L419.6,96.4" fill="none" stroke="#241a2e" stroke-width="22.8" stroke-linecap="round"/>
+<path d="M390.2,128.8 L419.6,96.4" fill="none" stroke="#d9a441" stroke-width="15.2" stroke-linecap="round"/>
+<path d="M402.1,124.2 L393.7,116.5" fill="none" stroke="#8a6420" stroke-width="2.8" stroke-linecap="round"/>
+<path d="M408.5,117.1 L400.1,109.5" fill="none" stroke="#8a6420" stroke-width="2.8" stroke-linecap="round"/>
+<path d="M414.9,110.1 L406.5,102.4" fill="none" stroke="#8a6420" stroke-width="2.8" stroke-linecap="round"/>
+<path d="M419.6,96.4 L441.3,72.5" fill="none" stroke="#241a2e" stroke-width="7.6" stroke-linecap="round"/>
+<path d="M435,79.5 L459.2,52.8 L480.3,72 L442,85.9 Z" fill="#ff6fae" stroke="#241a2e" stroke-width="3.8" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M435,79.5 L459.2,52.8 L438.2,33.7 L427.9,73.2 Z" fill="#ff9bc6" stroke="#241a2e" stroke-width="3.8" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

@@ -1,12 +1,18 @@
-// 펍 아치 창 밖 풍경: 밤거리 그림. 2026-11-08, 디자인 담당 소유.
-// 사용자 지적 "창문이라고 설치한 모형에 밖의 풍경이 안 나오는데 그냥 그림을 붙여 주는 게 좋을 것 같다":
-//   예전 창 = 청록 단색 유리 + 아래 갈색 띠뿐이라 벽에 붙은 판처럼 보였다.
-//   → 창 유리 자리에 밤거리 그림을 그린다: 하늘(별·달) · 먼 빌딩 실루엣 · 길 건너 건물(불 켜진 창·네온 간판) · 가로등 · 길바닥.
+// 펍 아치 창 밖 풍경: 만화 밤거리 그림. 2026-11-08, 디자인 담당 소유.
+// 사용자 지적(오후) "창문이라고 설치한 모형에 밖의 풍경이 안 나오는데 그냥 그림을 붙여 주는 게 좋을 것 같다":
+//   예전 창 = 청록 단색 유리 + 아래 갈색 띠뿐이라 벽에 붙은 판처럼 보였다 → 셰이더로 네모 빌딩 밤거리를 그렸다.
+// 사용자 지적(저녁) "그림이 너무 아쉽다 — 캐주얼한 그림인데 재밌는 느낌으로":
+//   네모 빌딩·가로등 → 손으로 그린 만화 그림 층(art/pub/pictures/window_*.svg)을 유리 뒤 깊이별로 붙인다.
+//   - 먼 층 window_far.svg    : 스카이라인 · 대관람차 · 열기구 · 방송탑(유리 뒤 60m)
+//   - 가운데 window_street.svg: 길 건너 건물 6채 — 창마다 고양이·춤·건배·TV, 네온 다트·맥주잔 간판, 빨랫줄(18m)
+//   - 앞 층 window_front.svg  : 알전구 줄 · 가로등 위 고양이 · 목도리 새(6.5m)
+//   - 달 window_moon.svg       : 다트가 꽂혀 "아야!" 하는 달(하늘 방향에 붙는다)
+//   그림은 SVG(벡터)라 디자이너가 일러스트레이터·피그마에서 바로 고칠 수 있다. 크기(m)는 아래 *_size 와 맞춘다.
 //
-// [왜 그림 파일(PNG) 대신 셰이더인가]
-//   - 그림 파일은 편집기가 import 해야 열린다(열린 편집기 + 새 PNG = 시험이 깨지는 함정). 셰이더는 글자 파일이라 바로 열린다.
-//   - 풍경을 유리 뒤 여러 깊이(가로등 7m · 건물 18m · 스카이라인 60m)에 놓고 눈 위치에서 광선을 쏴 그린다 →
-//     걸어 다니면 가까운 것이 더 많이 움직여(시차) "창 밖"처럼 보인다. 창마다 달·건물 배치가 다르다(창 위치로 씨앗).
+// [어떻게 그리나]
+//   눈(카메라)에서 유리 점으로 광선을 쏴, 유리 뒤 깊이 d 의 세로 판과 만나는 점(x, y m)에서 그 층 그림을 읽는다.
+//   → 걸어 다니면 가까운 층이 더 많이 움직여(시차) "창 밖"처럼 보인다. 창마다 그림의 다른 곳이 보인다(창 위치로 씨앗).
+//   하늘 색·별·길바닥·유리 반사는 셰이더가 그린다(그림의 투명한 곳으로 하늘이 보인다).
 //
 // 좌표: 이 메시의 로컬 공간 = 창 유리 면(z 0), +Z = 방 안쪽, y = 바닥에서의 높이(m). 그래서 정적 묶기(art/static_batch.gd)에서
 //   빼야 한다(묶이면 로컬 좌표가 사라진다 — NO_BATCH_NAMES 의 "WindowView").
@@ -14,16 +20,23 @@
 shader_type spatial;
 render_mode unshaded, cull_back;
 
+// 그림 층(방 생성기 game_room_builder._window_view_material 이 넣는다).
+uniform sampler2D far_layer : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D street_layer : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D front_layer : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D moon_picture : source_color, filter_linear_mipmap, repeat_disable;
+// 층마다 (유리 뒤 깊이 m, 그림 한 장 폭 m, 그림 높이 m). 그림 아래 끝 = 땅(y 0). 그림 폭은 옆으로 이어 붙는다.
+uniform vec3 far_size = vec3(60.0, 96.0, 48.0);
+uniform vec3 street_size = vec3(18.0, 42.0, 16.0);
+uniform vec3 front_size = vec3(6.5, 14.0, 6.0);
+// 앞 층 그림에서 가로등이 서 있는 x(m) — 길바닥 불빛 웅덩이 자리.
+uniform float front_lamp_x = 10.5;
+// 달 반지름(라디안). 만화 느낌으로 실제 달보다 훨씬 크다.
+uniform float moon_radius = 0.075;
+
 uniform vec3 sky_top : source_color = vec3(0.035, 0.06, 0.15);
 uniform vec3 sky_horizon : source_color = vec3(0.24, 0.19, 0.33);
 uniform vec3 city_haze : source_color = vec3(0.45, 0.30, 0.30);      // 지평선 근처 도시 불빛 안개
-uniform vec3 far_building : source_color = vec3(0.075, 0.08, 0.16);
-uniform vec3 mid_building : source_color = vec3(0.15, 0.11, 0.15);
-uniform vec3 mid_building_alt : source_color = vec3(0.11, 0.10, 0.17);
-uniform vec3 window_warm : source_color = vec3(1.0, 0.78, 0.45);
-uniform vec3 window_cool : source_color = vec3(0.55, 0.78, 1.0);
-uniform vec3 neon_a : source_color = vec3(1.0, 0.35, 0.66);
-uniform vec3 neon_b : source_color = vec3(0.23, 0.9, 0.86);
 uniform vec3 street : source_color = vec3(0.09, 0.08, 0.10);
 uniform vec3 lamp_light : source_color = vec3(1.0, 0.8, 0.5);
 uniform float brightness = 1.0;
@@ -50,7 +63,16 @@ vec2 hit_at(vec3 ray, float depth) {
 	return (local_pos + ray * t).xy;
 }
 
-// 하늘: 높이각에 따른 색 띠 + 지평선 도시 안개 + 별 + 달.
+// 그림 층 하나: size = (깊이, 폭, 높이), offset = 창마다 다른 가로 위치(m). 그림 위·아래 밖은 투명.
+// (조건문 안에서 읽으면 밉맵 고르는 미분이 깨지므로 항상 읽고 마스크로 지운다.)
+vec4 picture_layer(sampler2D picture, vec3 ray, vec3 size, float offset) {
+	vec2 p = hit_at(ray, size.x);
+	vec2 uv = vec2((p.x + offset) / size.y, 1.0 - p.y / size.z);
+	vec4 c = texture(picture, uv);
+	return c * step(0.0, uv.y) * step(uv.y, 1.0);
+}
+
+// 하늘: 높이각에 따른 색 띠 + 지평선 도시 안개 + 반짝이는 별.
 vec3 sky(vec3 ray) {
 	float elevation = ray.y / max(length(ray.xz), 0.001);
 	vec3 col = mix(sky_horizon, sky_top, smoothstep(0.02, 0.75, elevation));
@@ -59,27 +81,26 @@ vec3 sky(vec3 ray) {
 	vec2 q = vec2(ray.x / -ray.z, elevation) * 46.0;
 	vec2 cell = floor(q);
 	float pick = hash(cell + seed * 17.0);
-	if (pick > 0.9 && elevation > 0.18) {
+	if (pick > 0.88 && elevation > 0.18) {
 		vec2 spot = vec2(hash(cell + 3.1), hash(cell + 7.7)) * 0.6 + 0.2;
 		float twinkle = 0.65 + 0.35 * sin(TIME * (1.5 + pick * 3.0) + pick * 40.0);
 		col += vec3(0.9, 0.92, 1.0) * smoothstep(0.09, 0.0, length(fract(q) - spot)) * twinkle * 0.8;
 	}
-	// 달: 창마다 다른 자리. 둥근 판 + 넓은 빛무리.
-	vec3 moon_dir = normalize(vec3(mix(-0.55, 0.55, seed), 0.5 + 0.25 * fract(seed * 7.0), -1.0));
-	float facing = dot(normalize(ray), moon_dir);
-	col += vec3(1.0, 0.95, 0.82) * smoothstep(0.99935, 0.99955, facing) * 1.1;
-	col += vec3(0.55, 0.5, 0.6) * pow(max(facing, 0.0), 220.0) * 0.45;
 	return col;
 }
 
-// 건물 줄 하나: x 를 cell 폭 칸으로 나눠 칸마다 높이·색이 다른 건물. 틈(gap)은 비워 뒤가 보인다.
-// 반환: x = 건물 안인지(0/1), y = 칸 번호, z = 칸 안 x(0~1).
-vec3 building(vec2 p, float cell, float h_min, float h_max, float gap, float salt) {
-	float id = floor(p.x / cell);
-	float u = fract(p.x / cell);
-	float height = mix(h_min, h_max, hash(vec2(id, salt + seed * 5.0)));
-	float inside = step(gap, u) * step(u, 1.0 - gap) * step(p.y, height) * step(0.0, p.y);
-	return vec3(inside, id, u);
+// 다트 꽂힌 달: 창마다 다른 하늘 방향에 그림을 붙이고 둘레에 빛무리. 살짝 둥실거린다.
+vec3 moon(vec3 ray, vec3 col) {
+	vec3 dir = normalize(vec3(mix(-0.5, 0.5, seed), 0.48 + 0.2 * fract(seed * 7.0) + 0.006 * sin(TIME * 0.8), -1.0));
+	vec3 right = normalize(cross(dir, vec3(0.0, 1.0, 0.0)));
+	vec3 up = cross(right, dir);
+	float facing = dot(ray, dir);
+	col += vec3(0.55, 0.5, 0.6) * pow(max(facing, 0.0), 200.0) * 0.5;
+	vec2 q = vec2(dot(ray, right), dot(ray, up)) / max(facing, 0.01);
+	vec2 uv = vec2(0.5 + q.x / (2.0 * moon_radius), 0.5 - q.y / (2.0 * moon_radius));
+	vec4 m = texture(moon_picture, uv);
+	float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0) * step(0.0, facing);
+	return mix(col, m.rgb, m.a * inside);
 }
 
 void fragment() {
@@ -87,79 +108,42 @@ void fragment() {
 	// 방 안에서 보면 ray.z < 0(유리 너머). 거의 옆에서 보는 각도는 잘라서 무한대로 튀지 않게 한다.
 	ray.z = min(ray.z, -0.08);
 	ray = normalize(ray);
-	vec3 col = sky(ray);
+	vec3 col = moon(ray, sky(ray));
 
-	// 먼 스카이라인(60m): 어두운 실루엣 + 드문드문 작은 불빛.
-	vec2 far_p = hit_at(ray, 60.0);
-	vec3 far_b = building(far_p, 9.0, 10.0, 34.0, 0.03, 1.0);
-	if (far_b.x > 0.5) {
-		col = far_building;
-		// 창 칸은 크게(3.2 × 4.0m): 60m 밖 작은 칸은 화면에서 1~2px 이라 반짝반짝 깨져 보였다.
-		vec2 w = vec2(far_p.x / 3.2, far_p.y / 4.0);
-		vec2 wf = fract(w);
-		float lit = step(0.84, hash(floor(w) + far_b.y * 13.0));
-		col += window_warm * 0.35 * lit * step(0.3, wf.x) * step(wf.x, 0.7) * step(0.35, wf.y) * step(wf.y, 0.7);
-		// 꼭대기 빨간 항공등(키 큰 건물만).
-		float top = mix(10.0, 34.0, hash(vec2(far_b.y, 1.0 + seed * 5.0)));
-		if (top > 26.0) {
-			float blink = step(0.5, fract(TIME * 0.5 + far_b.y * 0.13));
-			col += vec3(1.0, 0.2, 0.15) * blink * smoothstep(0.7, 0.0, length(vec2((far_b.z - 0.5) * 9.0, far_p.y - top - 0.5)));
-		}
-	}
+	// 창마다 그림의 다른 곳이 보이게 층마다 다른 가로 위치.
+	float far_offset = fract(seed * 3.7) * far_size.y;
+	float street_offset = fract(seed * 7.3) * street_size.y;
+	float front_offset = fract(seed * 11.1) * front_size.y;
 
-	// 길 건너 건물(18m): 3~5층, 칸마다 다른 벽색, 불 켜진 창(따뜻한 빛·TV 푸른빛), 가끔 네온 간판, 1층 가게 불빛.
-	vec2 mid_p = hit_at(ray, 18.0);
-	vec3 mid_b = building(mid_p, 7.0, 8.0, 15.5, 0.025, 2.0);
-	if (mid_b.x > 0.5) {
-		float kind = hash(vec2(mid_b.y, 4.0 + seed));
-		col = mix(mid_building, mid_building_alt, step(0.5, kind));
-		// 층 띠(조금 밝은 선) — 그림 같은 단순한 결.
-		col += vec3(0.03) * step(0.93, fract(mid_p.y / 3.0));
-		vec2 w = vec2(mid_p.x / 1.75, mid_p.y / 3.0);
-		vec2 wf = fract(w);
-		float in_window = step(0.22, wf.x) * step(wf.x, 0.78) * step(0.3, wf.y) * step(wf.y, 0.8) * step(3.0, mid_p.y);
-		float roll = hash(floor(w) + mid_b.y * 7.0 + seed);
-		vec3 glow = roll > 0.86 ? window_cool * 0.7 : window_warm * (0.55 + 0.45 * roll);
-		// 커튼 그림자: 창 위쪽 절반이 조금 어둡다.
-		glow *= mix(1.0, 0.7, step(0.6, wf.y));
-		col = mix(col, glow, in_window * step(0.5, roll));
-		col = mix(col, vec3(0.04, 0.04, 0.07), in_window * (1.0 - step(0.5, roll)));
-		// 1층 가게 진열창(0.4~2.4m): 따뜻한 빛.
-		float shop = step(0.1, mid_b.z) * step(mid_b.z, 0.9) * step(0.4, mid_p.y) * step(mid_p.y, 2.4);
-		col = mix(col, window_warm * 0.8, shop * step(0.35, kind));
-		// 네온 간판(건물 셋 중 하나): 2층 높이 가로 띠, 테두리만 밝은 관.
-		if (hash(vec2(mid_b.y, 9.0 + seed)) > 0.62) {
-			vec2 sign_p = vec2(mid_b.z, (mid_p.y - 3.3) / 0.9);
-			float box = step(0.25, sign_p.x) * step(sign_p.x, 0.75) * step(0.0, sign_p.y) * step(sign_p.y, 1.0);
-			float edge = box * (1.0 - step(0.29, sign_p.x) * step(sign_p.x, 0.71) * step(0.12, sign_p.y) * step(sign_p.y, 0.88));
-			vec3 tone = hash(vec2(mid_b.y, 11.0)) > 0.5 ? neon_a : neon_b;
-			col = mix(col, vec3(0.05, 0.03, 0.08), box);
-			col += tone * 1.6 * edge * (0.85 + 0.15 * sin(TIME * 7.0 + mid_b.y));
-		}
-	}
+	vec4 far_c = picture_layer(far_layer, ray, far_size, far_offset);
+	col = mix(col, far_c.rgb, far_c.a);
+	vec4 street_c = picture_layer(street_layer, ray, street_size, street_offset);
+	// 네온·불 켜진 창이 아주 살짝 숨 쉬듯 밝아졌다 어두워진다(밝은 곳만, 건물 칸마다 다른 박자).
+	float glow_mask = smoothstep(0.55, 0.9, max(street_c.r, max(street_c.g, street_c.b)));
+	street_c.rgb *= 1.0 + glow_mask * 0.08 * sin(TIME * 1.7 + floor((hit_at(ray, street_size.x).x + street_offset) / 3.5) * 2.1);
+	col = mix(col, street_c.rgb, street_c.a);
 
-	// 길바닥: 광선이 건물(18m)보다 먼저 땅(y 0)에 닿으면 길. 가로등 불빛 웅덩이.
-	float lamp_x = mix(-2.6, 2.6, fract(seed * 13.7));
+	// 길바닥: 광선이 길 건너 건물보다 먼저 땅(y 0)에 닿으면 길. 가로등 불빛 웅덩이.
+	float lamp_x = front_lamp_x - front_offset;
+	lamp_x -= front_size.y * round(lamp_x / front_size.y);
 	if (ray.y < 0.0) {
 		float t_ground = -local_pos.y / ray.y;
 		vec3 g = local_pos + ray * t_ground;
-		if (-g.z < 18.0) {
+		if (-g.z < street_size.x) {
 			col = street;
 			// 보도와 차도 경계(연석) 선.
 			col += vec3(0.05) * smoothstep(0.08, 0.0, abs(-g.z - 9.0));
-			float pool = exp(-pow(length(vec2(g.x - lamp_x, -g.z - 7.0)) / 2.4, 2.0));
+			float pool = exp(-pow(length(vec2(g.x - lamp_x, -g.z - front_size.x)) / 2.4, 2.0));
 			col += lamp_light * pool * 0.45;
 		}
 	}
 
-	// 가로등(7m): 가는 기둥 + 등 머리 + 빛무리(뒤 그림 위에 더한다).
-	vec2 lamp_p = hit_at(ray, 7.0);
-	float pole = step(abs(lamp_p.x - lamp_x), 0.07) * step(0.0, lamp_p.y) * step(lamp_p.y, 4.3);
-	col = mix(col, vec3(0.03, 0.03, 0.04), pole);
-	vec2 head = vec2(lamp_x, 4.45);
-	float d_head = length(lamp_p - head);
-	col = mix(col, lamp_light * 1.8, smoothstep(0.24, 0.19, d_head));
-	col += lamp_light * exp(-d_head * 1.1) * 0.35;
+	// 앞 층: 알전구는 하나씩 다른 박자로 반짝인다(전구 간격 0.7m).
+	vec4 front_c = picture_layer(front_layer, ray, front_size, front_offset);
+	float bulb = floor((hit_at(ray, front_size.x).x + front_offset) / 0.7);
+	float bright = smoothstep(0.6, 0.85, max(front_c.r, max(front_c.g, front_c.b)));
+	front_c.rgb *= 1.0 + bright * 0.18 * sin(TIME * 2.3 + bulb * 1.9);
+	col = mix(col, front_c.rgb, front_c.a);
 
 	// 유리: 비스듬한 옅은 반사 줄 두 개(유리 면 기준 — 시차 없이 유리에 붙어 있다).
 	float diag = local_pos.x * 0.8 + local_pos.y * 0.6;

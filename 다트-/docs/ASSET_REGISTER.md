@@ -18,6 +18,7 @@
 | 엔진 | Godot 4.6.3.stable.official.7d41c59c4 | 공식 배포본 | 예 (MIT + 구성요소) | 아래 고지 참고 |
 | 펍 가구 41종 (도면 v3, 2026-10-31) | `art/vendor/rg_poly/meshes/*.res` (굽기: `rg_poly_baker.gd`, 목록: `rg_poly_catalog.gd`) | **RG Poly** — Kitchen & Restaurant Pack · Medieval Megapack (itch.io Creator Bundle Vol.1, 다른 작업자가 전달한 `에셋.zip`) | 예 (**CC0** — 묶음 안내 `plan.txt` 기준. zip 안에는 라이선스 파일이 없어 itch.io 팩 페이지에서 한 번 더 확인할 것) | 원본 `.glb`·텍스처는 저장소에 넣지 않는다. 쓰는 모델만 면마다 한 색(정점 색, 펍 팔레트로 당김)으로 구운 메시만 넣었다. 목록·측정값: `docs/MAP_PLAN_2026-10-31.md` |
 | 네온 오락실 소품 21종 + 펍 냉장고 병 (방 넓히기 v4, 2026-10-31 늦은 밤) | `art/vendor/rg_poly/meshes/*.res` (주스 가게·인형뽑기 코너: `game/lounge/arcade/arcade_room.gd`) | **RG Poly** — Cartoon City Massive Pack(차양·다이너 의자·컵·병조림·오리 인형·화분·휴지통) · Kitchen & Restaurant Pack(과일·우유·음료 캔·싱크대·금속 선반·와플·그릇) — 같은 `에셋.zip` | 예 (**CC0** — 위 행과 같은 근거, itch.io 팩 페이지 재확인 필요) | 원본은 저장소 밖. 오락실용은 팔레트 당김 0~0.15(원래 만화 색 유지). 음료 캔 4색은 빨간 몸통만 바꿔 구웠다(`SODA_COLORS`). 상표·실제 제품 모델 없음(캔·우유팩은 무지) |
+| 펍 만화 그림 7장 — 창 밖 층 4장 + 벽 포스터 3장 (2026-11-08) | `art/pub/pictures/*.svg` | 디자인 담당 요청으로 Claude 가 도형·선(SVG path)으로 직접 그린 오리지널 그림. 참고 이미지·외부 그림 없음 | 아니오 | 글자("180!", "CHEERS!", "LUCKY!")도 글꼴 없이 선으로 그렸다. 실존 브랜드·캐릭터·로고 없음 |
 
 ### 에셋 묶음(`에셋.zip`, 2026-10-31) 쓰는 규칙
 

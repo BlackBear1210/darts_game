@@ -1,3 +1,15 @@
+# 최신 인수인계 — 펍 만화 그림(창 밖 층 · 벽 포스터) (2026-11-08 밤)
+
+- 상세: `작업기록/2026-11-08_만화그림_창밖_포스터.md`. 고치는 법: `art/README.md` "펍 만화 그림 고치기". 결정: `docs/DECISIONS.md` 2026-11-08(밤).
+- **그림 원본은 `art/pub/pictures/*.svg`** 다. 같은 이름으로 고쳐 저장하면 방을 다시 만들 필요 없다(`pub_game.tscn` 이 경로로 참조). 새 그림을 더할 때만 `game_room_builder.gd` 의 `WINDOW_PICTURES`·`POSTER_PICTURES` 를 고치고 방을 다시 만든다.
+- 창 밖 층의 실제 크기(깊이·폭·높이 m)는 셰이더 `far_size`·`street_size`·`front_size` 다. SVG 크기를 바꾸면 같이 바꾼다. 층 그림은 좌우로 이어 붙으니 양 끝에 걸친 물체를 두지 않는다.
+- `.import` 는 `mipmaps/generate=true`·`detect_3d/compress_to=0`(무손실) — 기본값으로 되돌리면 멀리서 깜빡이거나, 편집기가 `.import` 를 혼자 바꾼다.
+- 열린 편집기 옆에서 새 그림을 넣을 때: 스크래치 복사본에서 `--import` → `.import` 와 `.godot/imported/<이름>.svg-*` 만 옮긴다(실제 프로젝트에서 `--import` 금지).
+- SVG `<text>`·blur 는 Godot(ThorVG)가 못 그린다 — 글자는 선(path), 빛무리는 투명해지는 방사형 그라데이션.
+- 남은 판단: 창 밖 밝기(`brightness`, 지금 1.0 — 밤치고 알록달록), 포스터 문구 한글화 여부.
+
+---
+
 # 최신 인수인계 — 인원수만큼 자리 똑같이 나누기 · 앉은 다리 · 발걸이 (2026-11-08 저녁)
 
 - 상세: `작업기록/2026-11-08_자리균등배치_앉은자세_발걸이.md`. 결정: `docs/DECISIONS.md` 2026-11-08(저녁).

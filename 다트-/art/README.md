@@ -66,7 +66,27 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | `pub/game_room_builder.gd` | F5 경기 방 조립(TableView 좌표를 읽는다) | 예 |
 | `pub/pub_builder.gd` | 생성기 본체: 캐릭터·쇼케이스 펍·경기 방을 전부 저장 | 예 |
 | `pub/pub.tscn`, `pub/pub_game.tscn` | 위 도구가 만든 결과 | **아니오 — 생성물** |
+| `pub/pictures/*.svg` | 펍 만화 그림: 창 밖 층 4장(`window_*`) + 벽 포스터 3장(`poster_*`) | 예 — 벡터 도구로 바로 고친다(아래) |
+| `pub/window_view.gdshader` | 창 밖 그림 층을 깊이별로 붙이고 하늘·별·길바닥을 그린다(시차) | 예 |
 | `showcase/*` | 쇼케이스 데모(카메라·투척·카드 예시·효과음) | 예 |
+
+## 펍 만화 그림(창 밖 · 벽 포스터) 고치기
+
+2026-11-08: 창 밖 풍경과 벽 액자를 손으로 그린 만화 그림(SVG)으로 바꿨다. 일러스트레이터·피그마·Inkscape 로 열어 고치고 같은 이름으로 저장하면 된다.
+
+| 파일 | 그림 크기(px) | 게임 속 실제 크기 | 쓰는 곳 |
+|---|---|---|---|
+| `window_far.svg` | 1920 × 960 | 96m × 48m, 유리 뒤 60m | 스카이라인·대관람차·열기구 |
+| `window_street.svg` | 2100 × 800 | 42m × 16m, 유리 뒤 18m | 길 건너 건물 6채 |
+| `window_front.svg` | 1400 × 600 | 14m × 6m, 유리 뒤 6.5m | 알전구 줄·가로등 고양이 |
+| `window_moon.svg` | 512 × 512 | 하늘 방향(반지름 0.075 라디안) | 다트 꽂힌 달 |
+| `poster_bullseye/cheers/lucky.svg` | 640 × 840 | 0.62m × 0.81m 액자 그림 | 벽 액자 3개(`_art_spots` 순서) |
+
+- 창 밖 층: **아래 끝 = 땅**, 투명한 곳으로 뒤 층·하늘이 보인다. 그림 왼쪽 끝과 오른쪽 끝이 이어 붙으므로(창마다 다른 곳이 보임) 양 끝에 걸친 물체는 두지 않는다.
+- 그림 크기(px)나 실제 크기를 바꾸면 `window_view.gdshader` 의 `far_size`·`street_size`·`front_size`(깊이, 폭 m, 높이 m)도 같이 고친다. 가로등을 옮기면 `front_lamp_x`.
+- SVG 의 `<text>` 글자는 Godot 가 못 그린다 — 글자는 선(path)으로 그린다("180!", "CHEERS!", "LUCKY!" 가 그렇게 되어 있다). 흐림(blur) 필터도 안 된다. 빛무리는 투명해지는 방사형 그라데이션으로.
+- 같은 이름으로 저장하면 에디터가 다시 가져오므로 방을 다시 만들 필요가 없다(방 그림은 경로로 읽는다). `.import` 설정(밉맵 켬·3D 압축 감지 끔)은 그대로 둔다.
+- 새 그림 파일을 더할 때만 `game_room_builder.gd` 의 `WINDOW_PICTURES`·`POSTER_PICTURES` 를 고치고 `pub_game.tscn` 을 다시 만든다.
 
 ## 바꾸고 다시 만들기
 

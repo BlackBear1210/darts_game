@@ -71,6 +71,20 @@ static var _floor_shader_material: ShaderMaterial
 ## 창 밖 풍경 그림 셰이더(2026-11-08) — _window_view_material.
 const WINDOW_VIEW_SHADER := "res://art/pub/window_view.gdshader"
 static var _window_view_shader_material: ShaderMaterial
+## 2026-11-08 저녁 "그림이 너무 아쉽다 — 캐주얼한데 재밌게": 손으로 그린 만화 그림(SVG). 디자이너가 벡터 도구로 바로 고친다.
+## 창 밖 층 = 셰이더 uniform 이름 → 그림. 층 깊이·실제 크기(m)는 window_view.gdshader 의 *_size 와 맞춘다.
+const WINDOW_PICTURES := {
+	"far_layer": "res://art/pub/pictures/window_far.svg",
+	"street_layer": "res://art/pub/pictures/window_street.svg",
+	"front_layer": "res://art/pub/pictures/window_front.svg",
+	"moon_picture": "res://art/pub/pictures/window_moon.svg",
+}
+## 벽 액자 포스터 3장(_art_spots 의 그림 번호 순서): 놀란 과녁 친구 180! · 건배 맥주잔 CHEERS! · 윙크 하트 에이스 LUCKY!
+const POSTER_PICTURES: Array[String] = [
+	"res://art/pub/pictures/poster_bullseye.svg",
+	"res://art/pub/pictures/poster_cheers.svg",
+	"res://art/pub/pictures/poster_lucky.svg",
+]
 
 
 ## 방 전체를 만든다. 반환한 노드를 pub_builder.gd 가 pub_game.tscn 으로 저장한다.
@@ -165,6 +179,8 @@ static func _window_view_material() -> ShaderMaterial:
 		_window_view_shader_material = ShaderMaterial.new()
 		_window_view_shader_material.resource_name = "WindowView"
 		_window_view_shader_material.shader = load(WINDOW_VIEW_SHADER)
+		for layer: String in WINDOW_PICTURES:
+			_window_view_shader_material.set_shader_parameter(layer, load(WINDOW_PICTURES[layer]))
 	return _window_view_shader_material
 
 
@@ -1016,7 +1032,9 @@ static func _window(parent: Node3D, at: Vector2, inward: Vector2) -> Node3D:
 	return root
 
 
-## 벽 그림 액자(요청서 C18 "자체 기하 패턴"): 월넛 틀 + 크림 캔버스 + 해·아치·언덕 같은 단순 도형.
+## 벽 그림 액자: 월넛 틀 + 크림 받침 + 만화 포스터(POSTER_PICTURES[kind]).
+## 2026-11-08 저녁: 예전 추상 도형(해·아치·언덕, 요청서 C18)은 사용자 "그림이 너무 아쉽다 — 캐주얼한데 재밌게"로
+## 펍 주제(다트·건배·카드) 만화 포스터로 바꿨다. 포스터 판 이름 "WallPoster" 는 정적 묶기에서 빠진다(묶으면 그림 UV 가 사라진다).
 static func _wall_art(parent: Node3D, at: Vector2, inward: Vector2, kind: int, y: float) -> void:
 	var root := Node3D.new()
 	root.name = "WallArt_%d" % (kind + 1)
@@ -1025,30 +1043,14 @@ static func _wall_art(parent: Node3D, at: Vector2, inward: Vector2, kind: int, y
 	parent.add_child(root)
 	MeshKit.rounded_box(root, "ArtFrame", Vector3(0.78, 0.98, 0.05), Vector3(0, 0, 0.03), _walnut(), 0.02)
 	MeshKit.rounded_box(root, "ArtCanvas", Vector3(0.64, 0.84, 0.02), Vector3(0, 0, 0.05), RoundKit.clay("ArtCanvas", "e9dcc4", 0.95), 0.006)
-	var terracotta := RoundKit.clay("ArtTerracotta", "c0674a", 0.9)
-	var mustard := RoundKit.clay("ArtMustard", "d4a24c", 0.9)
-	var teal := RoundKit.clay("ArtTeal", "2f6b5e", 0.9)
-	var cream := RoundKit.clay("ArtCanvas", "e9dcc4", 0.95)
-	# [가운데, 반지름, 재질, 반원인가]. 그리는 순서대로 조금씩 앞에 놓는다.
-	var shapes: Array = []
-	match kind:
-		0:
-			shapes = [[Vector2(0.0, 0.18), 0.14, terracotta, false], [Vector2(0, -0.36), 0.26, teal, true], [Vector2(0, -0.36), 0.17, mustard, true], [Vector2(0, -0.36), 0.08, cream, true]]
-		1:
-			shapes = [[Vector2(0, -0.3), 0.29, terracotta, true], [Vector2(0, -0.3), 0.22, cream, true], [Vector2(0, -0.3), 0.15, mustard, true], [Vector2(0, -0.3), 0.08, cream, true], [Vector2(0.13, 0.22), 0.07, teal, false]]
-		_:
-			shapes = [[Vector2(0.12, 0.15), 0.12, mustard, false], [Vector2(-0.14, -0.38), 0.3, teal, true], [Vector2(0.18, -0.38), 0.22, terracotta, true]]
-	for i in range(shapes.size()):
-		var shape: Array = shapes[i]
-		var center: Vector2 = shape[0]
-		var radius: float = shape[1]
-		var outline := PackedVector2Array()
-		var arc: float = PI if bool(shape[3]) else TAU
-		var steps := 16 if bool(shape[3]) else 28
-		for s in range(steps + (1 if bool(shape[3]) else 0)):
-			var angle := arc * s / steps
-			outline.append(center + Vector2(cos(angle), sin(angle)) * radius)
-		MeshKit.mesh_node(root, "ArtShape", RoundKit.flat_shape_mesh("art|%d|%d" % [kind, i], outline), Vector3(0, 0, 0.061 + i * 0.0015), shape[2])
+	var print_sheet := QuadMesh.new()
+	print_sheet.size = Vector2(0.62, 0.814)
+	var paper := StandardMaterial3D.new()
+	paper.resource_name = "Poster%d" % (kind + 1)
+	paper.albedo_texture = load(POSTER_PICTURES[kind % POSTER_PICTURES.size()])
+	paper.roughness = 0.82
+	paper.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	MeshKit.mesh_node(root, "WallPoster", print_sheet, Vector3(0, 0, 0.0615), paper)
 
 
 ## 구석 화분(요청서 C18): 물레로 깎은 화분 + 줄기 끝에 달린 둥근 잎(크기·기울기는 seed 로 조금씩 다르게).

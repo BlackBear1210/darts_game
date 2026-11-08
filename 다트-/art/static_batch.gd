@@ -11,7 +11,8 @@ const FACE_PREFIXES: Array[String] = ["Eye", "Pupil", "Brow", "Mouth"]
 ## 실행 중 움직이는 방 소품(2026-10-31 밤 "건드리기": 바 종이 흔들린다)은 묶지 않는다 — 묶이면 원본이 숨어 흔들림이 안 보인다.
 ## "WindowView"(2026-11-08) = 펍 창 밖 밤거리 그림(art/pub/window_view.gdshader). 셰이더가 메시 로컬 좌표·노드 위치로
 ## 그림을 그려서, 묶어 좌표가 방 기준으로 바뀌면 그림이 깨진다.
-const NO_BATCH_NAMES: Array[String] = ["Bell", "WindowView"]
+## "WallPoster"(2026-11-08 저녁) = 벽 액자 만화 포스터. 묶음은 UV 를 옮기지 않아 그림이 사라진다.
+const NO_BATCH_NAMES: Array[String] = ["Bell", "WindowView", "WallPoster"]
 ## 이름이 이렇게 시작하는 묶음(아래 전부)은 묶지 않는다.
 ## "Seat" = 자리 매트·바닥 자리 표시·스툴·자리 글자(2026-11-07): 방 인원수에 따라 TableView.show_seats 가 숨기므로
 ## 묶여 버리면 원본을 숨겨도 묶음 메시에 그대로 남는다.
