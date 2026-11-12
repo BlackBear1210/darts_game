@@ -38,11 +38,11 @@ var _pending_hit: Dictionary = {}
 ## 손님 화면은 받은 뒤 흐른 시간을 더해 같은 회전·벌어짐을 재생한다(프레임마다 RPC 를 보내지 않는다).
 var _chaos_ages: Dictionary = {}
 const BoardChaos = preload("res://game/board/board_chaos.gd")
-## 지금 날아가는 다트의 조준·충전. 날아가는 중에 궤적 카드가 걸리면 같은 값으로 다시 계산한다.
+## 지금 날아가는 다트의 조준·충전·졸림 오차. 궤적 카드가 걸리면 같은 값으로 다시 계산한다.
 var _flight_input: Dictionary = {}
 var _request_number: int = 0
 var _last_requests: Dictionary = {}
-## 카드를 뽑는 난수. 방장만 돌리고 결과는 스냅샷으로 나간다.
+## 카드 추첨·졸림 오차의 난수. 방장만 돌리고 확정 상태·비행 결과를 전송한다.
 var _random := RandomNumberGenerator.new()
 ## 무효(×0)는 한 경기에 딱 한 장(2026-10-31 사용자 요청). 기본 방 설정은 거의 연산 카드만 뽑혀서 무효가 다섯 장에 한 장꼴로
 ## 나왔다(첫 나눠 주기 28장 중 평균 5~6장) → 막기 카드가 너무 흔했다. 이제 첫 나눠 주기에서 무작위 한 사람에게만 한 장 넣고,
@@ -155,8 +155,8 @@ func bot_throw(aim: Vector2, charge: float) -> void:
 
 ## 확정된 한 발을 비행으로 보낸다. 사람과 봇이 같은 경로를 쓴다.
 func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void:
-	var data: Dictionary = _solve(peer_id, aim, charge)
 	_flight_input = {"aim": aim, "charge": charge}
+	var data: Dictionary = _solve(peer_id, aim, charge)
 	_pending_hit = data.duplicate()
 	_pending_hit.merge({"peer_id": peer_id, "request_id": request_id})
 	state.darts_left -= 1
@@ -167,19 +167,35 @@ func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void
 	_play_throw(data)
 
 
-## 카드 궤적 효과(무거운 다트·바람·힘 증가·특수 다트)를 넣은 비행 계산. 가림판·숫자 섞기는 꽂힐 때 센다(MatchCards.landing_points).
+## 카드 궤적 효과를 넣은 비행 계산. 가림판·숫자 섞기는 꽂힐 때 센다(MatchCards.landing_points).
 func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 	var mods: Dictionary = cards.modifiers(peer_id) if cards != null else {}
 	var adjusted: Vector2 = aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
-	var data: Dictionary = solve_throw.call(adjusted, 1.0 if mods.get("power", false) else charge, peer_id)
+	if mods.get("drowsy", false):
+		# 방장이 한 발에 한 번만 정한다. 비행 중 다른 카드로 재계산해도 오차를 다시 뽑지 않는다.
+		if not _flight_input.has("drowsy_offset"):
+			var spread: float = CardCatalog.DROWSY_AIM_SPREAD
+			_flight_input.drowsy_offset = Vector2(_random.randf_range(-spread, spread), _random.randf_range(-spread, spread))
+		adjusted += Vector2(_flight_input.drowsy_offset) * float(mods.get("drowsy_strength", 1.0))
+	var offsets: Array[Vector2] = [Vector2.ZERO]
 	if mods.get("triple", false):
-		for offset in [Vector2(-0.09, 0.03), Vector2(0.09, 0.03)]:
-			var alternate: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id)
-			if int(alternate.points) > int(data.points): data = alternate
-	# 셔터(가림판 카드)가 닫힌 왼쪽에 꽂히는 다트는 과녁 면이 아니라 셔터 날개 앞면에 박힌다(2026-11-07).
-	# 보이는 자리만 앞으로 당긴다 — 점수는 꽂힐 때 BoardChaos.locate 가 어차피 0점으로 센다(x 99 = 판 밖은 그대로).
-	if mods.get("cover", false) and float(data.x) < 0.0 and float(data.x) > -50.0:
-		data.target = (data.target as Vector3) + Vector3(0, 0, BoardChaos.SHUTTER_FRONT)
+		if not _flight_input.has("pattern"): _flight_input.pattern = CardCatalog.special_offsets(_random)
+		offsets.assign(_flight_input.pattern)
+	var flights: Array[Dictionary] = []
+	for offset in offsets:
+		var one: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id, CardCatalog.POWER_SPEED_MULTIPLIER if mods.get("power", false) else 1.0)
+		one["large"] = bool(mods.get("large", false))
+		var shape: Dictionary = cards.shape_now() if cards != null else BoardChaos.rest()
+		if BoardChaos.covered(Vector2(float(one.x), float(one.y)), shape) and absf(float(one.x)) < 50:
+			one.target = (one.target as Vector3) + Vector3(0, 0, BoardChaos.SHUTTER_FRONT)
+		flights.append(one)
+	var data: Dictionary = flights[0].duplicate()
+	data["flights"] = flights
+	data.points = 0
+	for one in flights:
+		data.points += int(one.points)
+		data.duration = maxf(float(data.duration), float(one.duration))
+
 	return data
 
 
@@ -190,7 +206,7 @@ func redirect_flight() -> void:
 		return
 	var data: Dictionary = _solve(int(_pending_hit.peer_id), _flight_input.aim, _flight_input.charge)
 	_pending_hit.merge(data, true)
-	var event := {"match_id": state.match_id, "turn_id": state.turn_id, "target": data.target, "remaining": maxf(0.05, _phase_end - _now())}
+	var event := {"match_id": state.match_id, "turn_id": state.turn_id, "target": data.target, "flights": data.get("flights", []), "peer_id": _pending_hit.peer_id, "remaining": maxf(0.05, _phase_end - _now())}
 	if session != null:
 		session.receive_game_event.rpc("redirect", event)
 	_play_redirect(event)
@@ -272,7 +288,7 @@ func _deal_single_nullify() -> void:
 		return
 	_nullify_dealt = true
 	var nullify: int = CardCatalog.type_of(NULLIFY_ID)
-	if nullify < 0 or (room_settings.social_lobby and room_settings.disabled_cards.has(NULLIFY_ID)):
+	if nullify < 0 or (room_settings.social_lobby and (not room_settings.special_cards or room_settings.disabled_cards.has(NULLIFY_ID))):
 		return
 	var holders: Array[MatchPlayer] = []
 	for player in state.players:
@@ -307,9 +323,13 @@ func _land_dart() -> void:
 		return
 	var won: bool = false
 	# 몸에 맞은 발은 "○○ 몸에 맞음!" 이라고 적힌 채로 둔다(점수 식으로 덮지 않는다).
-	var victim_id: int = int(_pending_hit.get("victim", 0))
+	var victims: Array[int] = []
+	for flight: Dictionary in _pending_hit.get("flights", [_pending_hit]):
+		var victim: int = int(flight.get("victim", 0))
+		if victim != 0 and victim not in victims: victims.append(victim)
+	var victim_id: int = victims[0] if not victims.is_empty() else 0
 	if cards != null:
-		var result: Dictionary = cards.score(cards.landing_points(_pending_hit))
+		var result: Dictionary = cards.score(cards.landing_points(_pending_hit), _pending_hit)
 		_pending_hit.points = result.points
 		if victim_id == 0:
 			_pending_hit.reason = "버스트 · 차례 시작 점수로 복귀" if result.bust else str(result.formula) + "점"
@@ -320,7 +340,7 @@ func _land_dart() -> void:
 	state.last_hit = _pending_hit.duplicate()
 	_pending_hit.clear()
 	if victim_id != 0:
-		_body_blocked(victim_id)
+		for victim in victims: _body_blocked(victim)
 	else:
 		add_feed(feed_entry("dart", state.active_player(), str(state.last_hit.reason)))
 	if won:
@@ -335,7 +355,7 @@ func _land_dart() -> void:
 
 ## 몸으로 막혔다(2026-11-02 F6 이식). 다트는 0점이고, 맞은 사람은 스턴 + 방해 성공 보상을 받는다.
 ## 보상 계산은 카드 규칙(RoundRules.disrupt) 한 곳에 둔다 — 지금 경기 보상은 점수다(라운드 한정 카드 보상은 F6 전용).
-## 던진 사람에게 주는 벌(취기·마우스·난시)은 아직 옮기지 않았다.
+## 던진 사람의 취기·감도·난시 및 음성 변조는 MatchCards가 차례 효과로 기록한다.
 func _body_blocked(victim_id: int) -> void:
 	var victim: MatchPlayer = state.find_player(victim_id)
 	if victim == null:
@@ -348,6 +368,9 @@ func _body_blocked(victim_id: int) -> void:
 
 func _advance_turn() -> void:
 	if cards != null: cards.end_dart_turn()
+	if cards != null and state.active_player() != null and cards.take_retry(state.active_player().peer_id):
+		_begin_turn()
+		return
 	state.turn_index += 1
 	if state.turn_index >= state.players.size():
 		state.turn_index = 0
@@ -540,7 +563,7 @@ func chaos_shape() -> Dictionary:
 	var passed: float = _now() - _received_at
 	var age := func(kind: String) -> float:
 		return float(_chaos_ages[kind]) + passed if _chaos_ages.has(kind) else -1.0
-	return BoardChaos.pose(age.call("spin"), float(_chaos_ages.get("dir", 1.0)), age.call("split"), age.call("cover"))
+	return BoardChaos.boost(BoardChaos.pose(age.call("spin"), float(_chaos_ages.get("dir", 1.0)), age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _chaos_ages.get("move_dir", Vector2.RIGHT), int(_chaos_ages.get("cover_side", -1))), _chaos_ages.get("levels", {}))
 
 
 func _now() -> float:

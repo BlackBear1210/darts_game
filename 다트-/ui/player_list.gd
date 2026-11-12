@@ -149,7 +149,7 @@ func _refresh(slow_parts: bool) -> void:
 	for peer: int in _cells:
 		var cells: Dictionary = _cells[peer]
 		var match_player: MatchPlayer = game.controller.state.find_player(peer)
-		(cells.score as Label).text = "%d점" % match_player.score if match_player != null else "-"
+		(cells.score as Label).text = "%.1f점" % match_player.score if match_player != null else "-"
 		var member: RoomPlayer = room.find_player(peer)
 		if member != null: (cells.ping as Label).text = _ping_text(member)
 		if cells.has("status"):

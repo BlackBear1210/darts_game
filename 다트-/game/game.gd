@@ -1,5 +1,8 @@
 class_name GameView
 extends Node3D
+
+## 1인칭 손을 당기는 거리. 미리보기 도구도 같은 값을 사용한다.
+const HAND_CHARGE_OFFSET := Vector3(0.005, 0.005, 0.065)
 ## 공간, 로컬 시점, 방장 이동 시뮬레이션과 경기 기능을 조립한다.
 ## 조명·배경색은 Table/Pub(art/pub/pub_game.tscn)이 가진다. 여기서는 카메라·손·다트·칠판 점수만 연결한다.
 
@@ -22,8 +25,9 @@ const CHAOS_SETTLE_RATE: float = 4.0
 
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
-## 1인칭 손 모양(디자인 담당 생성 코드). class_name 이 없는 도구라 preload 로 부른다.
-const CharacterFactory = preload("res://art/characters/character_factory.gd")
+## 1인칭 오른팔(선수 몸과 같은 리깅 캐릭터의 팔). class_name 이 없는 도구라 preload 로 부른다.
+const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
+const FirstPersonArm = preload("res://art/characters/first_person_arm.gd")
 ## 봇의 차례 행동 계산(방장 전용). class_name 이 없는 도구라 preload 로 부른다.
 const BotDriver = preload("res://game/player/bot_driver.gd")
 ## 카드 그림과 1인칭 손 부채는 카드 라운드 시연 것을 그대로 쓴다 — 카드 모양은 한 곳만 유지한다.
@@ -94,6 +98,7 @@ var _throw_kick: float = 0.0
 var _board_shake: float = 0.0
 ## 지금 날아가는 다트(궤적 카드로 꽂히는 자리가 바뀌면 이 다트를 휘게 한다).
 var _flying_dart: DartView
+var _flying_darts: Array[DartView] = []
 ## 테이블 자리 매트 위 카드(각자 손패를 앞면으로 깐다 — 2026-10-31 저녁 결정, 엿보면 옆자리 카드가 내 화면에서 크게 펼쳐진다). 화면이 없으면 만들지 않는다.
 var seat_cards: Node3D
 var held_cards: Node
@@ -242,14 +247,20 @@ func _on_card_dealt(_seat: int, _index: int) -> void:
 		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 
 
-## 1인칭 손을 자기 자리 색 소매로 바꾸고, 손에 든 다트 깃도 자리 색으로 칠한다.
+## 1인칭 오른팔을 붙이고 손에 든 다트 깃을 자리 색으로 칠한다.
+## 2026-11-09: 선수 몸과 같은 리깅 캐릭터의 오른팔을 쓴다(art/characters/first_person_arm.gd).
+## 예전에는 옛 도형 모델(art/characters/character_factory.gd 의 create_hand)이라 3인칭 내 팔과 생김새가 달랐다.
 func _equip_hand(seat: int) -> void:
 	var hand := $Camera/Hand as Node3D
 	var old := hand.get_node_or_null("FirstPersonHand")
 	if old != null:
 		hand.remove_child(old)
 		old.queue_free()
-	hand.add_child(CharacterFactory.create_hand(seat))
+	var arm := FirstPersonArm.new()
+	arm.name = "FirstPersonHand"
+	arm.seat = seat
+	arm.dart_grip = ($Camera/Hand/HeldDart as Node3D).transform
+	hand.add_child(arm)
 	($Camera/Hand/HeldDart as DartView).paint(PlayerLook.COLORS[seat])
 
 
@@ -341,8 +352,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			if is_seated(controller.local_peer_id): request_seat()
 			else: _jump = true
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_yaw -= event.relative.x * MOUSE_SENSITIVITY * Preferences.sensitivity
-		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENSITIVITY * Preferences.sensitivity, -1.25, 1.25)
+		var actor: PlayerView = actors.get(controller.local_peer_id)
+		var axes: Vector2 = actor.identity.card_effects.get("reverse_axes", Vector2.ONE) if actor != null else Vector2.ONE
+		axes *= float(actor.identity.card_effects.get("reverse_sensitivity", 1.0)) if actor != null else 1.0
+		if _screen_fx != null: axes *= _screen_fx.mouse_factor
+		_yaw -= event.relative.x * MOUSE_SENSITIVITY * Preferences.sensitivity * axes.x
+		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENSITIVITY * Preferences.sensitivity * axes.y, -1.25, 1.25)
 
 
 func _physics_process(delta: float) -> void:
@@ -553,10 +568,15 @@ func _animate_hand(delta: float) -> void:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var tremble := Vector3(sin(now * 47.0), cos(now * 39.0), 0.0) * 0.0025 * pull * pull
 	var snap: float = sin(_throw_kick * PI)
-	hand.transform = _hand_base.translated_local(Vector3(0.025, -0.03, 0.11) * pull + tremble + Vector3(-0.01, 0.035, -0.17) * snap)
+	var motion: float = 0.3 if Preferences.reduced_motion else 1.0
+	hand.transform = _hand_base.translated_local((HAND_CHARGE_OFFSET * pull + Vector3(-0.01, 0.035, -0.17) * snap) * motion + (Vector3.ZERO if Preferences.reduced_motion else tremble))
+	hand.rotate_object_local(Vector3.RIGHT, (-0.06 * pull + 0.1 * snap) * motion)
+	var arm := hand.get_node_or_null("FirstPersonHand") as FirstPersonArm
+	if arm != null: arm.animate_grip(_throw_kick > 0.0, delta)
 	hand.visible = throw_input.enabled or _throw_kick > 0.0
 	($Camera/Hand/HeldDart as Node3D).visible = _throw_kick <= 0.0
-	camera.rotation.x += snap * 0.02
+	($Camera/Hand/HeldDart as Node3D).scale = Vector3.ONE * (1.8 if bool(controller.state.find_player(controller.local_peer_id).card_effects.get("large", false)) else 1.0)
+	camera.rotation.x += snap * 0.02 * motion
 	table.board.position = TableView.BOARD_CENTER + Vector3(sin(now * 70.0) * 0.006, 0.0, -0.012) * _board_shake
 
 
@@ -569,7 +589,14 @@ func _process(delta: float) -> void:
 	_face_table_on_sit(local)
 	camera.position = local.eye_position()
 	# 엿보기(앉아서 A·D): 몸이 기운 쪽으로 화면도 기운다(레식 기울이기). 마시는 중이면 고개가 뒤로 젖혀진다.
+	camera.h_offset = 0.0
 	camera.rotation = Vector3(_pitch + local.drink_pose_tilt() * PlayerView.DRINK_LOOK_UP, _yaw, local.peek_roll())
+	var dizzy: float = float(local.identity.card_effects.get("dizzy", 0.0))
+	if Preferences.visual_effects and dizzy > 0:
+		var strength: float = dizzy * (0.15 if Preferences.reduced_motion else 1.0)
+		var time: float = Time.get_ticks_msec() / 1000.0
+		camera.rotation.z += sin(time * 1.7) * deg_to_rad(15.0) * strength
+		camera.h_offset = sin(time * 1.13) * 0.12 * strength
 	if seat_cards != null:
 		seat_cards.show_peek(local, delta)
 	if lounge != null:
@@ -578,7 +605,8 @@ func _process(delta: float) -> void:
 			camera.rotation.z += sin(Time.get_ticks_msec() / 780.0) * amount * 0.025
 		if _screen_fx != null:
 			_screen_fx.drowsy = Preferences.visual_effects and bool(local.identity.card_effects.get("drowsy", false))
-			_screen_fx.penalty = 3 if Preferences.visual_effects and amount > 1.4 else 0
+			_screen_fx.penalty = (3 if amount > 1.4 else int(local.identity.card_effects.get("hit_penalty", 0))) if Preferences.visual_effects else 0
+			if Preferences.visual_effects and not Preferences.reduced_motion: camera.rotation.z += sin(Time.get_ticks_msec() / 800.0) * _screen_fx.sway * 0.035
 		if _last_quality != Preferences.quality:
 			_last_quality = Preferences.quality
 			get_viewport().scaling_3d_scale = [0.65, 0.85, 1.0][_last_quality]
@@ -590,6 +618,11 @@ func _process(delta: float) -> void:
 		if current != null:
 			table.board.show_layout(current.layout)
 	_show_chaos(delta)
+	var marked_sector: int = -1
+	if local.identity.pending_card >= 0:
+		var card: Dictionary = CardCatalog.card(local.identity.pending_card)
+		if str(card.get("choice", "")) == "sector": marked_sector = int(local.identity.card_effects.get("choice", -1))
+	table.board.show_choice(marked_sector)
 	# 다트 홀 밖(라운지)에서는 조준·충전 자체를 잠근다 — 방장도 같은 조건으로 거부한다.
 	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
 	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (lounge == null or (lounge.held(controller.local_peer_id) < 0 and lounge.focus(controller.local_peer_id).is_empty()))
@@ -598,6 +631,7 @@ func _process(delta: float) -> void:
 	var voice: VoiceChat = session.voice if session != null else null
 	for id: int in actors:
 		(actors[id] as PlayerView).set_speaking(voice.level(id) if voice != null and voice.is_speaking(id) else -1.0)
+		if voice != null: voice.set_warped(id, int((actors[id] as PlayerView).identity.card_effects.get("hit_penalty", 0)) > 0)
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
 	for actor: PlayerView in actors.values():
@@ -660,7 +694,7 @@ func stun_player(peer_id: int, seconds: float) -> void:
 	var actor := actors.get(peer_id) as PlayerView
 	if actor == null or actor.seated:
 		return
-	# 옆으로 튕긴다 — 앞(과녁 쪽)으로 밀면 레인 안쪽 벽에 끼이고 다음 발도 계속 막게 된다.
+	# 다음 발을 연속으로 막지 않도록 궤적 옆으로 튕긴다.
 	var away: float = signf(actor.global_position.x)
 	actor.knockback = Vector3(away if away != 0.0 else 1.0, 0, 0) * BODY_KNOCKBACK
 
@@ -677,25 +711,50 @@ func _show_body_hit(victim_id: int, at: Vector3) -> void:
 
 
 func _show_throw(data: Dictionary) -> void:
-	var dart := DART_SCENE.instantiate() as DartView
-	_darts.add_child(dart)
-	# 모든 화면은 방장의 시작점/종점/시간으로 같은 포물선을 재현한다.
-	dart.fly(data.start, data.target, data.duration, true, $Camera/Hand.position)
-	_flying_dart = dart
+	_flying_darts.clear()
+	var color: Color = PlayerLook.COLORS[0]
+	var actor := actors.get(int(data.get("peer_id", 0))) as PlayerView
+	if actor != null: color = actor.color
+	for flight: Dictionary in data.get("flights", [data]):
+		var dart := DART_SCENE.instantiate() as DartView
+		_darts.add_child(dart)
+		dart.size_multiplier = 1.8 if bool(flight.get("large", false)) else 1.0
+		dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
+		dart.paint(color)
+		dart.landed.connect(_on_dart_landed.bind(dart))
+		_flying_darts.append(dart)
+	_flying_dart = _flying_darts[0]
+
 	# 깃 = 던진 사람 자리 색, 그 캐릭터는 던지기 몸짓을 한다.
 	var thrower := actors.get(int(data.get("peer_id", 0))) as PlayerView
 	if thrower != null:
-		dart.paint(thrower.color)
 		thrower.play_throw()
 		if thrower.identity.peer_id == controller.local_peer_id:
 			_throw_kick = 1.0
-	dart.landed.connect(_on_dart_landed.bind(dart))
 	Sfx.play_at(self, "whoosh", data.start, -8.0)
 
 
 func _redirect_throw(data: Dictionary) -> void:
-	if is_instance_valid(_flying_dart):
-		_flying_dart.redirect(data.target, float(data.remaining))
+	var flights: Array = data.get("flights", [])
+	if flights.is_empty():
+		if is_instance_valid(_flying_dart): _flying_dart.redirect(data.target, float(data.remaining))
+		return
+	for index in range(flights.size()):
+		var flight: Dictionary = flights[index]
+		if index >= _flying_darts.size():
+			var dart := DART_SCENE.instantiate() as DartView
+			_darts.add_child(dart)
+			var from: Vector3 = _flying_dart.global_position if is_instance_valid(_flying_dart) else flight.start
+			dart.fly(from, flight.target, float(data.remaining))
+			var actor := actors.get(int(data.get("peer_id", 0))) as PlayerView
+			if actor != null: dart.paint(actor.color)
+			dart.landed.connect(_on_dart_landed.bind(dart))
+			_flying_darts.append(dart)
+		var dart: DartView = _flying_darts[index]
+		if is_instance_valid(dart):
+			dart.size_multiplier = 1.8 if bool(flight.get("large", false)) else 1.0
+			dart.redirect(flight.target, float(data.remaining))
+
 
 
 ## 다트가 멈춘 순간의 손맛: 과녁이 움찔하고 코르크 가루가 튀며 "턱" 소리가 난다. 판정과 무관하다.
@@ -719,11 +778,12 @@ func _chalk_text() -> String:
 	var players := controller.state.players.duplicate()
 	players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
 	for player: MatchPlayer in players:
-		lines.append("%s  %d" % [PlayerLook.tag(player.seat, player.display_name.left(CHALK_NAME_LENGTH)), player.score])
+		lines.append("%s  %.1f" % [PlayerLook.tag(player.seat, player.display_name.left(CHALK_NAME_LENGTH)), player.score])
 	return "\n".join(lines)
 
 
 func _clear_darts() -> void:
+	_flying_darts.clear()
 	for child in _darts.get_children():
 		_darts.remove_child(child)
 		child.queue_free()
@@ -736,7 +796,7 @@ func _clear_darts() -> void:
 ## 효과가 끝나면 제자리로 부드럽게 돌아간다(차례가 바뀔 때 판이 덜컥 튀지 않게).
 func _show_chaos(delta: float) -> void:
 	var target: Dictionary = controller.chaos_shape()
-	var active: bool = absf(float(target.angle)) > 0.0 or float(target.split) > 0.0 or float(target.shutter) > 0.0
+	var active: bool = absf(float(target.angle)) > 0.0 or float(target.split) > 0.0 or float(target.shutter) > 0.0 or float(target.get("vertical", 0)) > 0 or float(target.get("horizontal", 0)) > 0 or Vector2(target.get("move", Vector2.ZERO)).length() > 0
 	if active or _shown_chaos.is_empty():
 		_shown_chaos = target.duplicate()
 	else:
@@ -745,13 +805,16 @@ func _show_chaos(delta: float) -> void:
 		_shown_chaos.split = lerpf(float(_shown_chaos.split), 0.0, weight)
 		_shown_chaos.shutter = lerpf(float(_shown_chaos.shutter), 0.0, weight)
 		_shown_chaos.cover = false
+		_shown_chaos.vertical = lerpf(float(_shown_chaos.get("vertical", 0)), 0, weight)
+		_shown_chaos.horizontal = lerpf(float(_shown_chaos.get("horizontal", 0)), 0, weight)
+		_shown_chaos.move = Vector2(_shown_chaos.get("move", Vector2.ZERO)).lerp(Vector2.ZERO, weight)
 	table.board.show_chaos(_shown_chaos)
 	if table.machine != null:
 		table.machine.show_chaos(_shown_chaos, delta)
 
 
 ## 방장이 한 발을 확정한다. 과녁까지 가는 길에 사람 몸이 있으면 거기서 멈춘다(몸으로 막기 — 0점 + 맞은 사람 스턴).
-func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
+func solve_dart(aim: Vector2, charge: float, peer_id: int = 0, speed_multiplier: float = 1.0) -> Dictionary:
 	var config := throw_input.config
 	var thrower_id: int = peer_id if peer_id != 0 else controller.local_peer_id
 	var actor: PlayerView = actors[thrower_id] as PlayerView
@@ -759,7 +822,7 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 	var bodies: Array = _dart_bodies(thrower_id)
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	var aim_target := TableView.BOARD_CENTER + Vector3(aim.x * radius, aim.y * radius, 0)
-	var speed: float = lerpf(config.minimum_speed, config.maximum_speed, charge)
+	var speed: float = lerpf(config.minimum_speed, config.maximum_speed, charge) * speed_multiplier
 	var direction: Vector3 = (aim_target - start).normalized()
 	var nominal_time: float = start.distance_to(aim_target) / config.maximum_speed
 	var initial: Vector3 = direction * speed + Vector3.UP * config.gravity * nominal_time * 0.5
@@ -767,7 +830,7 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 	# 피자 분리(2026-11-07): 조각이 바깥으로 벌어지면 판 밖(반지름 1 너머)에도 조각이 있다 → 과녁 평면에서 받아 둔다.
 	# 꽂히는 순간 조각에 맞았는지 틈인지는 MatchCards.landing_points 가 그 시각 모양으로 센다(틈 = 0점).
 	var mods: Dictionary = controller.cards.modifiers(thrower_id) if controller.cards != null else {}
-	var reach: float = 1.0 + (BoardChaos.SPLIT_MAX if mods.get("split", false) else 0.0)
+	var reach: float = 1.0 + 2.0 * ((BoardChaos.SPLIT_MAX if mods.get("split", false) else 0.0) + (0.18 if mods.get("vertical", false) else 0.0) + (0.18 if mods.get("horizontal", false) else 0.0) + (0.25 if mods.get("move", false) else 0.0) + (BoardChaos.LARGE_RADIUS if mods.get("large", false) else 0.0))
 	var previous: Vector3 = start
 	var previous_time: float = 0
 	var step: float = 1.0 / 120.0
@@ -800,9 +863,9 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0) -> Dictionary:
 	return _flight_result(start, previous, config.flight_limit, Vector2.INF, 0, "비행 제한시간 · 실패")
 
 
-## 몸으로 막고 있는 사람들(몸 판정용). **몸막 구역 안에 선 사람만** 센다.
+## 투척선 앞 다트 홀에 선 사람들. 펜스 제거 후 앞 공간 전체에서 실제 몸과 교차하면 막힌다.
 ## 투척선 뒤 던지는 칸에는 여럿이 몰려 서기 때문에(차례를 기다리거나 구경하거나) 거기까지 세면
-## 서로 끊임없이 막혀 경기가 성립하지 않는다 — 막는 것은 레인 안으로 들어온 사람의 몫이다.
+## 대기 인원이 발사를 막지 않도록 투척선 뒤는 제외한다.
 func _dart_bodies(thrower_id: int) -> Array:
 	var bodies: Array = []
 	for id: int in actors:

@@ -32,6 +32,8 @@ var _score_box: VBoxContainer
 var _round_chip: Label
 var _phase_title: Label
 var _phase_detail: Label
+var _effects: Label
+var _drowsy_hint: Label
 var _timer_bar: ProgressBar
 var _banner: RoundBanner
 var _room: Label
@@ -50,6 +52,7 @@ var _card_name: Label
 var _card_info: Label
 var _card_text: Label
 var _card_target: Label
+var _choice_label: Label
 var _card_bar: ProgressBar
 var _card_status: Label
 ## 지금 꺼내 든 카드(손패 번호·종류)와 꺼낸 시각. 방장의 준비 시간(Rules.READY_SECONDS)을 화면에서 따라 센다.
@@ -127,6 +130,10 @@ func _build_scoreboard() -> void:
 	_phase_detail.custom_minimum_size.x = 340
 	_timer_bar = _bar(Style.GOLD, 8)
 	phase_column.add_child(_timer_bar)
+	_effects = Style.label(phase_column, "", 16, Style.PINK)
+	_effects.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_effects.custom_minimum_size.x = 340
+	_effects.visible = false
 
 
 func _build_room_corner() -> void:
@@ -147,6 +154,8 @@ func _build_room_corner() -> void:
 
 
 func _build_bottom() -> void:
+	_drowsy_hint = Style.label(_root, "졸림 · 조준 오차가 생길 수 있어요", 16, Style.GOLD)
+	_drowsy_hint.visible = false
 	var reticle := Style.label(_root, "·", 40, Style.MINT)
 	reticle.add_theme_color_override("font_outline_color", Style.INK)
 	reticle.add_theme_constant_override("outline_size", 8)
@@ -200,9 +209,11 @@ func _build_card_panel() -> void:
 	_card_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_card_text.custom_minimum_size.x = 380
 	_card_target = Style.label(column, "", 18, Style.MINT)
+	_choice_label = Style.label(column, "", 18, Style.GOLD)
 	_card_bar = _bar(Style.MINT, 8)
 	column.add_child(_card_bar)
 	_card_status = Style.heading(column, "", 24, Style.GOLD)
+	_card_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
 func _build_result() -> void:
@@ -283,6 +294,7 @@ func _process(delta: float) -> void:
 	_feed_box.position = Vector2(width - 28 - _feed_box.size.x, 26 + _room.size.y + (72 if _copy.visible else 14))
 	_update_feed(state)
 	_update_cards(state, waiting, finished)
+	_update_effects(state, waiting or finished)
 	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
 	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
@@ -290,10 +302,10 @@ func _process(delta: float) -> void:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	var fan_open: bool = me != null and not me.hand.is_empty() and not waiting
 	var prompt_center: float = maxf(width * 0.5, 900.0 + _prompt_box.size.x * 0.5) if fan_open else width * 0.5
-	_prompt_box.position = Vector2(prompt_center - _prompt_box.size.x / 2, height - 92)
+	_prompt_box.position = Vector2(clampf(prompt_center - _prompt_box.size.x / 2, 28, maxf(28, width - 28 - _prompt_box.size.x)), height - 92)
 	# 카드 한 줄 안내는 위 가운데(라운드 표시 자리)에서 키 안내 칩 바로 위로 옮겼다. 부채가 열리면 같이 오른쪽으로 비킨다.
 	var hint_center: float = maxf(width * 0.5, 900.0 + _card_hint.size.x * 0.5) if fan_open else width * 0.5
-	_card_hint.position = Vector2(hint_center - _card_hint.size.x / 2, height - 150)
+	_card_hint.position = Vector2(clampf(hint_center - _card_hint.size.x / 2, 28, maxf(28, width - 28 - _card_hint.size.x)), height - 150)
 	_update_ready(room, waiting)
 	_ready_box.position = Vector2((width - _ready_box.size.x) / 2, height - 170)
 	_result.visible = finished
@@ -307,7 +319,20 @@ func _process(delta: float) -> void:
 	_charge.visible = charge >= 0.0
 	_charge.value = charge * 100.0
 	_charge.position = Vector2((width - 180) / 2, height / 2 + 34)
+	_drowsy_hint.visible = Preferences.visual_effects and game.throw_input.enabled and me != null and bool(me.card_effects.get("drowsy", false))
+	_drowsy_hint.position = Vector2((width - _drowsy_hint.size.x) / 2, height / 2 + 58)
 	_overlay.queue_redraw()
+
+
+func _update_effects(state: MatchState, hidden: bool) -> void:
+	var active: MatchPlayer = state.active_player()
+	var details: Array = active.card_effects.get("details", []) if active != null else []
+	_effects.visible = not hidden and not details.is_empty()
+	if _effects.visible:
+		var text: String = "\n".join(details)
+		if state.phase == MatchState.Phase.FLIGHT:
+			text = text.replace("다음 한 발", "이번 비행")
+		_effects.text = "적용 중 · %s\n%s" % [active.display_name, text]
 
 
 func _update_scores(state: MatchState, waiting: bool) -> void:
@@ -315,7 +340,7 @@ func _update_scores(state: MatchState, waiting: bool) -> void:
 	var active: MatchPlayer = null if waiting else state.active_player()
 	var key := PackedStringArray()
 	for player in state.players:
-		key.append("%d|%s|%d|%s" % [player.seat, player.display_name, player.score, "A" if player == active else ""])
+		key.append("%d|%s|%.1f|%s" % [player.seat, player.display_name, player.score, "A" if player == active else ""])
 	var joined := ",".join(key)
 	if joined == _score_key: return
 	_score_key = joined
@@ -339,7 +364,7 @@ func _score_row(player: MatchPlayer, active: bool, me: bool) -> Control:
 	name.clip_text = true
 	if active:
 		Style.label(line, "▶ 차례", 14, Style.GOLD)
-	var score := Style.heading(line, str(player.score), 26, Style.GOLD if active else Style.CREAM)
+	var score := Style.heading(line, "%.1f" % player.score, 26, Style.GOLD if active else Style.CREAM)
 	score.add_theme_font_override("font", Style.font("logo"))
 	score.custom_minimum_size.x = 54
 	score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -485,6 +510,8 @@ func _counter_target(state: MatchState, me: MatchPlayer) -> int:
 
 ## 꺼내 든 카드가 걸릴 사람. 무효는 Tab 으로 고른 사람, 나머지는 누가 쓰든 지금 던지는 사람이다.
 func _target_name(state: MatchState, me: MatchPlayer) -> String:
+	if int(Catalog.card(me.pending_card).target) == Catalog.Target.ALL: return "모든 플레이어 (나 포함)"
+	if int(Catalog.card(me.pending_card).target) == Catalog.Target.CASTER: return "나 (카드 사용자)"
 	if int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER:
 		var victim: int = _counter_target(state, me)
 		return "%s (Tab 바꾸기)" % state.find_player(victim).display_name if victim != 0 else "카드를 꺼내 든 사람 없음"
@@ -505,10 +532,41 @@ func _show_card_panel(me: MatchPlayer, target: String) -> void:
 	_card_info.text = "%s · %s" % [Catalog.category_name(type), Catalog.timing_text(type)]
 	_card_text.text = str(Catalog.card(type).text)
 	_card_target.text = "대상 · " + target
+	_choice_label.visible = Catalog.card(type).has("choice")
+	if _choice_label.visible:
+		var choice: int = int(me.card_effects.get("choice", -1))
+		var value: String = "선택 필요"
+		if choice >= 0:
+			if str(Catalog.card(type).choice) == "adjust": value = "+5" if choice == 0 else "−5"
+			else:
+				var active: MatchPlayer = game.controller.state.active_player()
+				value = "%d번째 칸 · %d" % [choice + 1, active.layout.numbers[choice]] if active != null else "선택 필요"
+		_choice_label.text = "Z ◀  %s  ▶ X" % value
 	var ratio: float = clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
 	_card_bar.value = ratio * 100.0
 	_card_status.text = "준비 중…" if ratio < 1.0 else "%s 로 쓰기" % OS.get_keycode_string(Preferences.interact_key)
+	var active: MatchPlayer = game.controller.state.active_player()
+	if ratio >= 1.0 and active != null and Catalog.supports_synergy(type):
+		var together: Dictionary = active.card_effects.get("synergies", {}).get(str(Catalog.card(type).effect), {})
+		if not together.is_empty() and me.peer_id not in together.contributors and int(together.players) < Catalog.SYNERGY_MAX_PLAYERS:
+			_card_status.text = "%s · %d인 시너지 강화" % [OS.get_keycode_string(Preferences.interact_key), int(together.players) + 1]
 	_card_status.add_theme_color_override("font_color", Style.GOLD if ratio < 1.0 else Style.MINT)
+	var blocked: String = _blocked_card_reason(me)
+	_card_bar.visible = blocked.is_empty()
+	if not blocked.is_empty():
+		_card_status.text = blocked.replace(" · ", "\n")
+		_card_status.add_theme_color_override("font_color", Style.PINK)
+
+
+func _blocked_card_reason(me: MatchPlayer) -> String:
+	if me.pending_card >= 0 and str(Catalog.card(me.pending_card).effect) == "retry":
+		if bool(me.card_effects.get("retry_used", false)): return "재도전은 경기당 한 번만 사용합니다"
+		if game.controller.state.active_player() != me: return "자기 차례에 사용하는 카드입니다"
+	if me.pending_card >= 0 and Catalog.card(me.pending_card).has("choice"):
+		if game.controller.state.phase != MatchState.Phase.AIMING: return "발사 전에 사용하는 카드입니다"
+		if int(me.card_effects.get("choice", -1)) < 0: return "Z · X로 값을 먼저 선택하세요"
+	var active: MatchPlayer = game.controller.state.active_player()
+	return MatchCards.duplicate_reason(me.pending_card, active.card_effects, me.peer_id) if active != null and me.pending_card >= 0 else ""
 
 
 func _update_prompt() -> void:
@@ -562,7 +620,7 @@ func _update_result() -> void:
 	var countdown: bool = game.controller.room_settings.win_mode == 2
 	players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.score < b.score if countdown else a.score > b.score)
 	var key := PackedStringArray()
-	for player in players: key.append("%s|%d" % [player.display_name, player.score])
+	for player in players: key.append("%s|%.1f" % [player.display_name, player.score])
 	var joined := ",".join(key)
 	if joined == _result_key: return
 	_result_key = joined
@@ -580,7 +638,32 @@ func _update_result() -> void:
 # ─────────────────────────────── 장난 효과 덮개 ───────────────────────────────
 
 ## 인형에 맞으면 얼굴이 인형으로 가려지고, 가챠 먹물을 맞으면 먹물이 튄다. 내 화면에만 그린다.
+## 조준점 주변의 졸림 오차 범위를 표시한다. 카메라를 추가로 흔들지 않아 멀미를 피한다.
+func _draw_drowsy_range() -> void:
+	if game == null or not Preferences.visual_effects or not game.throw_input.enabled:
+		return
+	var me: MatchPlayer = game.controller.state.find_player(game.controller.local_peer_id)
+	if me == null or not bool(me.card_effects.get("drowsy", false)) or not game.throw_input.aim.is_finite():
+		return
+	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
+	var aim: Vector2 = game.throw_input.aim
+	var at: Vector3 = TableView.BOARD_CENTER + Vector3(aim.x, aim.y, 0) * radius
+	var spread: float = Catalog.DROWSY_AIM_SPREAD * radius * float(game.controller.state.find_player(game.controller.local_peer_id).card_effects.get("drowsy_strength", 1.0))
+	var scale_value: float = _root.scale.x
+	var center: Vector2 = game.camera.unproject_position(at) / scale_value
+	var right: Vector2 = game.camera.unproject_position(at + Vector3.RIGHT * spread) / scale_value
+	var top: Vector2 = game.camera.unproject_position(at + Vector3.UP * spread) / scale_value
+	var half := Vector2(absf(right.x - center.x), absf(top.y - center.y))
+	_overlay.draw_rect(Rect2(center - half, half * 2), Color(Style.GOLD, 0.05))
+	for x: float in [-1.0, 1.0]:
+		for y: float in [-1.0, 1.0]:
+			var corner: Vector2 = center + half * Vector2(x, y)
+			_overlay.draw_line(corner, corner - Vector2(x * minf(9, half.x), 0), Style.GOLD, 1.5, true)
+			_overlay.draw_line(corner, corner - Vector2(0, y * minf(9, half.y)), Style.GOLD, 1.5, true)
+
+
 func _draw_overlay() -> void:
+	_draw_drowsy_range()
 	if game == null or game.lounge == null or not game.lounge.has_method("effect_left"): return
 	var id: int = game.controller.local_peer_id
 	var extent: Vector2 = _overlay.size
@@ -641,6 +724,7 @@ func _prompt_for(focus: Dictionary) -> Array:
 	var card_keys: Array = []
 	if me != null and _card_phase(state) and not me.hand.is_empty():
 		card_keys = [[key, "카드 쓰기"]] if me.pending_card >= 0 else [["Q · E", "카드 꺼내기"]]
+		if not _blocked_card_reason(me).is_empty(): card_keys = [["Q · E", "다른 카드 선택"]]
 	if game.is_seated(game.controller.local_peer_id):
 		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
 	# 카드를 들고 있으면 F 는 카드 쓰기라 "착석 · 기계" 칩은 뺀다(한 키에 두 안내가 겹치지 않게).
@@ -670,6 +754,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		game.controller.request_card("select", event.keycode - KEY_1)
 	elif event.keycode >= KEY_KP_1 and event.keycode <= KEY_KP_7:
 		game.controller.request_card("select", event.keycode - KEY_KP_1)
+	elif event.keycode in [KEY_Z, KEY_X]:
+		_cycle_choice(me, -1 if event.keycode == KEY_Z else 1)
+		get_viewport().set_input_as_handled()
 	elif event.keycode in [KEY_Q, KEY_E]:
 		_browse_card(me, -1 if event.keycode == KEY_Q else 1)
 		get_viewport().set_input_as_handled()
@@ -692,6 +779,7 @@ func use_lifted_card() -> bool:
 	if not _card_phase(state): return false
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	if me == null or me.pending_card < 0: return false
+	if not _blocked_card_reason(me).is_empty(): return true
 	var counter: bool = int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER
 	var active: MatchPlayer = state.active_player()
 	game.controller.request_card("use", _counter_target(state, me) if counter else (active.peer_id if active != null else 0))
@@ -727,3 +815,11 @@ func _bar(fill: Color, thickness: int) -> ProgressBar:
 	bar.add_theme_stylebox_override("background", Style.flat(Color(Style.INK, 0.8), Color(0, 0, 0, 0), 0, thickness / 2, 0, 0))
 	bar.add_theme_stylebox_override("fill", Style.flat(fill, Color(0, 0, 0, 0), 0, thickness / 2, 0, 0))
 	return bar
+
+
+func _cycle_choice(me: MatchPlayer, step: int) -> void:
+	if me.pending_card < 0 or not Catalog.card(me.pending_card).has("choice"): return
+	var count: int = 2 if str(Catalog.card(me.pending_card).choice) == "adjust" else 20
+	var previous: int = int(me.card_effects.get("choice", -1))
+	var chosen: int = (0 if step > 0 else count - 1) if previous < 0 else posmod(previous + step, count)
+	game.controller.request_card("choice", chosen)

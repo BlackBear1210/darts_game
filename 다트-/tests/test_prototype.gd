@@ -120,7 +120,7 @@ func _run() -> void:
 	assert(local.position.z >= TableView.DART_HALL.position.y + TableView.BODY_MARGIN - 0.01)
 	# 거기서 레인 쪽으로 밀어도 레인 벽에 막혀 안으로 못 들어간다.
 	await _drive(Vector2(1, 0), 1.5)
-	assert(local.position.x < -TableView.LANE_HALF)
+	assert(local.position.x > -TableView.LANE_HALF, "중앙 펜스가 없어 레인을 가로질러 걸을 수 있다")
 	_game.request_seat()
 	assert(not local.seated)
 	# 라운지로 돌아 나와 방 경계를 확인한다.
@@ -289,7 +289,7 @@ func _run() -> void:
 	_main.get_node("NetworkSession").leave_room()
 	await process_frame
 	assert(_main.get_node("FrontDoor").visible and _main.get_node_or_null("Game") == null)
-	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/protected zone, seating distance, host ballistic hits/misses/limit, body block inside the block zone, protected lane with open side aisles, seven cards dealt before the darts, bot walks to the oche and throws three darts then returns to its seat, lounge throw rejected, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
+	print("PASS: F5 human+3 bots, shared-world viewport/masks, F1/F2/F3/F4, jump/crouch, floor/wall/open dart hall, seating distance, host ballistic hits/misses/limit, body block in the open dart hall, central lane freely walkable, seven cards dealt before the darts, bot walks to the oche and throws three darts then returns to its seat, lounge throw rejected, deadline race, table gathering auto-seat + slow, active/finished departure, duplicate/flight lock, joint ranking, menu return")
 	_main.queue_free()
 	await process_frame
 	quit()

@@ -39,8 +39,10 @@ func setup(ctx: Context) -> void:
 ## 마우스 움직임만큼 시선을 돌린다(마우스 벌이면 감도가 들쭉날쭉 — debuff.mouse_factor).
 func turn(relative: Vector2) -> void:
 	var sensitivity: float = MOUSE_SENSITIVITY * _ctx.debuff.mouse_factor
-	yaw -= relative.x * sensitivity
-	pitch = clampf(pitch - relative.y * sensitivity, -1.25, 1.25)
+	var axes: Vector2 = _ctx.rules.dart_modifiers(Context.LOCAL_SEAT).get("reverse_axes", Vector2.ONE)
+	sensitivity *= float(_ctx.rules.dart_modifiers(Context.LOCAL_SEAT).get("reverse_sensitivity", 1.0))
+	yaw -= relative.x * sensitivity * axes.x
+	pitch = clampf(pitch - relative.y * sensitivity * axes.y, -1.25, 1.25)
 
 
 ## 앉은 자리에서 테이블 가운데를 보게 한다(앉을 때·시작할 때).
@@ -92,10 +94,11 @@ func update(delta: float) -> void:
 	camera.global_position = camera.global_position.lerp(target, weight) if actor.seated else target
 	if _ctx.autoplay:
 		_auto_look(delta)
+	var dizzy: float = float(_ctx.rules.dart_modifiers(Context.LOCAL_SEAT).get("dizzy", 0))
 	var sway: float = _ctx.debuff.sway
 	var drift: float = sin(_ctx.now * SWAY_SPEED) + 0.4 * sin(_ctx.now * SWAY_SPEED * 2.3 + 1.1)
 	camera.rotation = Vector3(pitch, yaw + drift * SWAY_YAW * sway,
-		sin(_ctx.now * 1.7) * 0.035 * _ctx.debuff.eyelid + drift * SWAY_ROLL * sway)
+		sin(_ctx.now * 1.7) * 0.035 * _ctx.debuff.eyelid + drift * SWAY_ROLL * sway + sin(_ctx.now * 1.7) * deg_to_rad(15.0) * dizzy)
 
 
 ## 자동 진행 때 내 시선: 카드 단계 = 테이블, 다트 = 던지는 사람과 과녁 사이, 벌칙 = 원판.

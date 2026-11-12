@@ -197,7 +197,12 @@ func _smoke_step(ratio: float) -> void:
 
 ## 뼈 수정이 끝난 자세로 시가(오른손 손가락 사이)와 "후" 연기 자리(입 앞)를 잡는다(Skeleton3D.skeleton_updated).
 func _place_cigar() -> void:
-	if _cigar == null or _hand < 0:
+	# 장면 제거 중에도 마지막 skeleton_updated가 올 수 있다.
+	if not is_inside_tree() or not is_instance_valid(_skeleton) or not _skeleton.is_inside_tree():
+		return
+	if not is_instance_valid(_cigar) or not _cigar.is_inside_tree() or _hand < 0:
+		return
+	if not is_instance_valid(_puff) or not _puff.is_inside_tree():
 		return
 	var lift: float = _motion.drinking
 	var hand: Transform3D = _skeleton.global_transform * _skeleton.get_bone_global_pose(_hand)

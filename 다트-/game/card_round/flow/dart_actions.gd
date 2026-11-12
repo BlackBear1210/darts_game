@@ -15,7 +15,9 @@ signal dart_landed(seat: int, base: int)
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const TurnEffects = preload("res://game/card_round/flow/turn_effects.gd")
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
+const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
 const DartSolver = preload("res://game/card_round/rules/dart_solver.gd")
+const BoardChaos = preload("res://game/board/board_chaos.gd")
 const StunStars = preload("res://game/card_round/fx/stun_stars.gd")
 const PunishmentWheel = preload("res://game/card_round/fx/punishment_wheel.gd")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
@@ -66,44 +68,45 @@ func throw(seat: int, aim: Vector2, charge: float) -> void:
 	busy = true
 	var rules: Rules = _ctx.rules
 	var mods: Dictionary = rules.dart_modifiers(seat)
-	# 카드 효과가 조준을 바꾼다: 힘 증가 = 최대 충전, 무거운 다트 = 아래로, 바람 = 옆으로, 졸림 = 흔들림, 특수 다트 = 3갈래.
-	if bool(mods.power):
-		charge = 1.0
+	# 카드 효과가 조준을 바꾼다: 힘 증가 = 속도 배율, 무거운 다트 = 아래로, 바람 = 옆으로, 졸림 = 흔들림, 특수 다트 = 무작위 묶음.
+	var speed_multiplier: float = CardCatalog.POWER_SPEED_MULTIPLIER if bool(mods.power) else 1.0
 	aim += Vector2(float(mods.push), -float(mods.drop))
 	if bool(mods.drowsy):
-		aim += Vector2(_ctx.random.randf_range(-0.3, 0.3), _ctx.random.randf_range(-0.3, 0.3))
+		var spread: float = CardCatalog.DROWSY_AIM_SPREAD * float(mods.get("drowsy_strength", 1.0))
+		aim += Vector2(_ctx.random.randf_range(-spread, spread), _ctx.random.randf_range(-spread, spread))
 	var aims: Array[Vector2] = [aim]
 	if bool(mods.triple):
-		aims.append(aim + Vector2(-0.14, 0.06))
-		aims.append(aim + Vector2(0.14, 0.06))
+		aims.clear()
+		for offset in CardCatalog.special_offsets(_ctx.random): aims.append(aim + offset)
 	var actor: PlayerView = _ctx.actors[seat]
 	var start: Vector3 = actor.eye_position()
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	var bodies: Array = _bodies(seat)
 	actor.play_throw()
 	_ctx.audio.cue("throw")
-	# 여러 갈래면 가장 높은 과녁 점수 한 개만 친다. 사람 몸에 먼저 맞으면 그 사람이 "막은" 것.
+	# 여러 갈래면 각 과녁 점수를 합산한다. 사람 몸에 먼저 맞으면 그 사람이 "막은" 것.
 	var base: int = 0
+	var hit_sectors: Array[int] = []
 	var reason: String = "빗나감"
 	var victim: int = -1
 	var longest: float = 0.0
 	for one in aims:
 		var aim_point: Vector3 = TableView.BOARD_CENTER + Vector3(one.x * radius, one.y * radius, 0)
-		var flight: Dictionary = DartSolver.solve(_ctx.root.get_world_3d().direct_space_state, start, aim_point, charge, TableView.BOARD_CENTER.z, bodies)
+		var flight: Dictionary = DartSolver.solve(_ctx.root.get_world_3d().direct_space_state, start, aim_point, charge, TableView.BOARD_CENTER.z, bodies, speed_multiplier)
 		_spawn_dart(seat, flight)
 		longest = maxf(longest, float(flight.time))
 		match str(flight.kind):
 			"board":
 				var point: Vector3 = flight.point
 				var hit := Vector2(point.x - TableView.BOARD_CENTER.x, point.y - TableView.BOARD_CENTER.y) / radius
-				if hit.length() <= 1.0 + BoardScorer.BOUNDARY_EPSILON:
-					var points: int = BoardScorer.score(hit, _effects.layout)
-					if bool(mods.cover) and hit.x < 0.0:
-						points = 0
-						reason = "가림판에 막힘"
-					elif points >= base:
-						reason = "%d점" % points
-					base = maxi(base, points)
+				var shape: Dictionary = _effects.shape_now()
+				var region: int = BoardScorer.region_at(BoardChaos.locate(hit, shape))
+				if bool(mods.get("large", false)): region = int(BoardChaos.area_result(hit, shape, _effects.layout, _ctx.random).region)
+				var points: int = _effects.layout.region_score(region)
+				base += points
+				if region >= 0 and region < 80: hit_sectors.append(region / 4)
+				reason = "%d점 합산" % base
+
 			"body":
 				if victim < 0:
 					victim = int(flight.seat)
@@ -112,8 +115,8 @@ func throw(seat: int, aim: Vector2, charge: float) -> void:
 				reason = "테이블·벽에 맞음" if base == 0 else reason
 	await _ctx.wait(minf(longest, 1.3))
 	# 과녁 점수 → 이 다트에 걸린 카드 연산(+10, ×2, ÷2 …) → 점수판.
-	var result: Dictionary = rules.resolve_dart(seat, base)
-	var outcome: Dictionary = rules.apply_points(seat, int(result.points))
+	var result: Dictionary = rules.resolve_dart(seat, base, hit_sectors, _effects.layout)
+	var outcome: Dictionary = rules.apply_points(seat, float(result.points))
 	_ctx.stats.darts = int(_ctx.stats.darts) + 1
 	if base > 0:
 		_ctx.audio.cue("bull" if base >= 25 else "hit")
@@ -180,6 +183,7 @@ func _spawn_dart(seat: int, flight: Dictionary) -> DartView:
 	var dart := DART_SCENE.instantiate() as DartView
 	_ctx.darts_root.add_child(dart)
 	dart.paint(PlayerLook.COLORS[seat])
+	dart.size_multiplier = 1.8 if bool(_ctx.rules.dart_modifiers(seat).get("large", false)) else 1.0
 	var release: Vector3 = LOCAL_RELEASE if seat == Context.LOCAL_SEAT and not _ctx.autoplay else Vector3.ZERO
 	var kind: String = str(flight.kind)
 	dart.fly(flight.start, flight.point, float(flight.time), kind != "none", release)

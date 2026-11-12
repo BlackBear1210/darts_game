@@ -67,6 +67,8 @@ func lift(seat: int, slot: int) -> void:
 		return
 	target_choice[seat] = default_target(seat)
 	var card: Rules.Card = _ctx.rules.seats[seat].pending
+	if CardCatalog.card(card.type).has("choice"):
+		card.choice = _ctx.random.randi_range(0, 1 if str(CardCatalog.card(card.type).choice) == "adjust" else 19) if seat != Context.LOCAL_SEAT or _ctx.autoplay else 0
 	if seat != Context.LOCAL_SEAT or _ctx.autoplay:
 		var card_name: String = CardCatalog.card(card.type).name
 		_ctx.hud.toast("%s 「%s」%s 꺼내 들었다!" % [Context.josa(_ctx.name_of(seat), "이", "가"), card_name, Context.josa(card_name, "을", "를", false)],
@@ -124,8 +126,9 @@ func use(seat: int, target: int) -> bool:
 		var to_text: String = "자신" if target == seat else _ctx.name_of(target)
 		_ctx.hud.toast("%s → %s : 「%s」 %s" % [_ctx.name_of(seat), to_text, data.name, effect.label if effect.kind in ["math", "random_math"] else ""],
 			PlayerLook.COLORS[seat].lightened(0.45))
-	if effect.timing == CardCatalog.Timing.TURN and _ctx.rules.is_turn_of(target):
+	if effect.timing in [CardCatalog.Timing.TURN, CardCatalog.Timing.ROUND] and _ctx.rules.is_turn_of(target):
 		turn_effect_added.emit(target)
+	if effect.kind == "hand_shuffle": _ctx.table_cards.refresh_hands(_ctx.rules)
 	_ctx.voice.say(seat, "talk")
 	sync_fans()
 	card_used.emit(seat, target)
@@ -233,3 +236,11 @@ func _spend(seat: int, slot: int) -> void:
 	else:
 		_ctx.table_cards.remove(seat, slot)
 		_ctx.table_cards.compact_rewards(seat)
+
+
+func cycle_value(step: int) -> void:
+	var card: Rules.Card = _ctx.rules.seats[Context.LOCAL_SEAT].pending
+	if card == null or not CardCatalog.card(card.type).has("choice"): return
+	var count: int = 2 if str(CardCatalog.card(card.type).choice) == "adjust" else 20
+	card.choice = posmod(card.choice + step, count)
+	_ctx.hud.toast("선택: %s" % (("+5" if card.choice == 0 else "−5") if count == 2 else str(_ctx.table.board.layout.numbers[card.choice])), PubTheme.GOLD)

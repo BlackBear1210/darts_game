@@ -117,7 +117,7 @@ func show_state(player: MatchPlayer) -> void:
 ## 엿보는 중이면 "엿보는 중"을 붙인다 → 들여다보이는 옆 사람도 눈치채고 견제할 수 있다(모든 화면).
 func _refresh_label() -> void:
 	var tags: String = (" · 슬로우" if identity.speed_scale < 1.0 else "") + (" · 엿보는 중" if _peek_tagged else "")
-	_label.text = "%s · %d%s" % [PlayerLook.tag(identity.seat, identity.display_name), identity.score, tags]
+	_label.text = "%s · %.1f%s" % [PlayerLook.tag(identity.seat, identity.display_name), identity.score, tags]
 	_label.modulate = COLORS[identity.seat].lightened(0.35)
 
 

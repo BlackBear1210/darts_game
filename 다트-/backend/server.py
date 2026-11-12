@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import hmac
 import json
+import math
 import os
 import secrets
 import sqlite3
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS matches (
 );
 CREATE TABLE IF NOT EXISTS scores (
  match_id TEXT NOT NULL REFERENCES matches(id),
- account_id TEXT NOT NULL REFERENCES accounts(id), score INTEGER NOT NULL,
+ account_id TEXT NOT NULL REFERENCES accounts(id), score REAL NOT NULL,
  PRIMARY KEY(match_id, account_id)
 );
 """
@@ -104,10 +105,10 @@ def save_result(db, match_id, body):
         if not isinstance(player, dict):
             raise ApiError(400, "invalid_player")
         account_id, score = player.get("account_id"), player.get("score")
-        # Godot가 대기 JSON을 다시 읽으면 정수도 float로 복원된다. 소수점이 없는 값만 허용한다.
-        if not isinstance(account_id, str) or type(score) not in (int, float) or not 0 <= score <= 900 or score != int(score):
+        # 연산 카드 결과는 음수와 소수 한 자리를 허용한다. NaN·무한대·과도한 정밀도는 거절한다.
+        if not isinstance(account_id, str) or type(score) not in (int, float) or not math.isfinite(score) or abs(score) > 1e18 or not math.isclose(score * 10, round(score * 10), abs_tol=1e-6, rel_tol=0.0):
             raise ApiError(400, "invalid_score_or_account")
-        cleaned.append({"account_id": account_id, "score": int(score)})
+        cleaned.append({"account_id": account_id, "score": round(float(score), 1)})
     if len({p["account_id"] for p in cleaned}) != len(cleaned):
         raise ApiError(400, "duplicate_account")
     canonical = json.dumps({"rules": {"rounds": 5, "darts_per_turn": 3},

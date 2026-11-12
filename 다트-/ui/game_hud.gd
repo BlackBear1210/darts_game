@@ -158,7 +158,7 @@ func _process(_delta: float) -> void:
 	var lines := PackedStringArray(["다트 파티  /  최고 누적 점수"])
 	for player in state.players:
 		# 자리 표식(●▲■◆)을 붙여 3D 이름표·발밑 매트·칠판과 같은 기호로 맞춘다.
-		lines.append("%s%s  %d점%s" % ["▶ " if player == state.active_player() else "   ", PlayerLook.tag(player.seat, player.display_name), player.score,
+		lines.append("%s%s  %.1f점%s" % ["▶ " if player == state.active_player() else "   ", PlayerLook.tag(player.seat, player.display_name), player.score,
 			"  [슬로우]" if player.speed_scale < 1.0 else ""])
 	_score.text = "\n".join(lines)
 	var active_name: String = state.active_player().display_name if state.active_player() != null else "대기"
@@ -244,7 +244,7 @@ func ranking_text() -> String:
 		if players[index].score != previous:
 			rank = index + 1
 		previous = players[index].score
-		lines.append("%d위  %s  %d점" % [rank, players[index].display_name, players[index].score])
+		lines.append("%d위  %s  %.1f점" % [rank, players[index].display_name, players[index].score])
 	return "\n".join(lines)
 
 

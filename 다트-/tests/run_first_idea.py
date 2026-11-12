@@ -42,8 +42,8 @@ def start(engine, folder, count, afk=False):
 # 라운지에서 다트 홀로 나가는 옆길(테이블과 바 / NPC 테이블 사이). TableView 배치에 맞춘 값이다.
 LANE_LEFT = -3.0
 LANE_RIGHT = 3.0
-# 투척선 뒤에 서는 자리(TableView.THROW_LINE_Z = -4.05 보다 뒤).
-OCHE = (0.0, -3.5)
+# 펜스가 사라져 선을 넘어 걸을 수 있으므로 도착 허용 반경 0.6m까지 투척선(-3.6) 뒤에 둔다.
+OCHE = (0.0, -2.8)
 
 
 def walk(peers, peer, identity, target, tolerance=0.5, steps=60):

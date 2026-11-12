@@ -39,6 +39,7 @@ func _run() -> void:
 func _controller(disable_nullify: bool) -> MatchController:
 	var room := RoomState.new()
 	room.settings.social_lobby = true
+	room.settings.special_cards = true
 	if disable_nullify:
 		room.settings.disabled_cards.append("times_0")
 	for id in range(1, 5):

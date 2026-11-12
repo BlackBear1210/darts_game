@@ -1,7 +1,7 @@
 extends RefCounted
 ## 캐릭터 4종(삐죽이·바가지·반짝이·뽀글이)과 바텐더 시안, 1인칭 손의 외형을 코드로 만든다.
 ## 몸 생성은 pub_builder.gd 가 실행할 때만 쓰인다(게임 실행 중에는 저장된 chr_*.tscn 을 쓴다).
-## 단, create_hand() 는 F5 게임이 시작할 때 GameView 가 직접 부른다(자리 색 소매).
+## 현재 F5 투척 손·F6 가리키는 손은 first_person_arm.gd의 리깅 모델을 쓴다.
 ##
 ## 디자인 규칙(DARTY 디자인 진행 프롬프트 v2): 약 3등신(머리 0.52m = 키의 32%), 키 약 1.6m,
 ## 같은 몸·얼굴 + 머리 실루엣 1개 + 얼굴 수치 1개만 다르게, 부위별 단색 재질 M_Skin/M_Hair/M_Top/M_Bottom/M_Shoes.

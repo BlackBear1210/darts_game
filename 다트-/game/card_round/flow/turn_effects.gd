@@ -5,6 +5,8 @@ extends RefCounted
 
 const Context = preload("res://game/card_round/flow/round_context.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
+const Chaos = preload("res://game/board/board_chaos.gd")
+const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const ScreenDebuff = preload("res://game/card_round/fx/screen_debuff.gd")
 
 ## 맞힌 사람이 변조된 목소리로 투덜대는 간격(초).
@@ -20,6 +22,13 @@ var _ctx: Context
 var _cover: MeshInstance3D
 var _wind: Label3D
 var _warp_talk_at: float = 0.0
+var _motion_started: Dictionary = {}
+var _applied: Dictionary = {}
+var _cover_side: int = -1
+var _move_dir := Vector2.RIGHT
+var _round_overrides: Dictionary = {}
+var _lock_applied: Dictionary = {}
+var _round_number: int = -1
 
 
 ## 감독이 시작할 때 한 번: 함께 쓰는 상자를 받는다.
@@ -67,22 +76,43 @@ func build_props() -> void:
 
 ## seat 차례에 걸린 효과를 보이게 한다(차례 시작 때, 그리고 차례 중에 새 카드가 걸렸을 때).
 func apply(seat: int) -> void:
+	if _round_number != _ctx.rules.round_number:
+		_round_number = _ctx.rules.round_number
+		_round_overrides.clear()
+		_lock_applied.clear()
+	for effect in _ctx.rules.effects:
+		if effect.kind != "lock_scores" or effect.state != _ctx.rules.EffectState.ACTIVE or _lock_applied.has(effect.uid): continue
+		_lock_applied[effect.uid] = true
+		layout.overrides = _round_overrides.duplicate()
+		layout.apply_card_change("lock_scores", -1, effect.contributors.size(), _ctx.random)
+		_round_overrides = layout.overrides.duplicate()
+	layout.overrides = _round_overrides.duplicate()
 	var mods: Dictionary = _ctx.rules.dart_modifiers(seat)
-	if bool(mods.shuffle) and layout.numbers == BoardLayout.DEFAULT_NUMBERS:
-		layout = BoardLayout.new()
-		layout.shuffle_with(_ctx.random)
-		_ctx.table.board.show_layout(layout)
-	_show_cover(bool(mods.cover))
-	_wind.visible = float(mods.push) > 0.0
-	if seat == Context.LOCAL_SEAT:
-		_ctx.debuff.drowsy = bool(mods.drowsy)
+	for effect in _ctx.rules.effects:
+		if effect.target != seat or effect.state != _ctx.rules.EffectState.ACTIVE or _applied.has(effect.uid): continue
+		_applied[effect.uid] = true
+		if effect.kind != "lock_scores": layout.apply_card_change(effect.kind, effect.choice, effect.contributors.size(), _ctx.random)
+		if effect.kind in ["spin", "split", "vertical", "horizontal", "move", "cover"] and not _motion_started.has(effect.kind):
+			_motion_started[effect.kind] = _ctx.now
+			if effect.kind == "cover": _cover_side = -1 if _ctx.random.randf() < 0.5 else 1
+			if effect.kind == "move": _move_dir = Vector2.from_angle(_ctx.random.randf_range(0, TAU))
+	_ctx.table.board.show_layout(layout)
+	_cover.visible = false
+	_wind.visible = absf(float(mods.push)) > 0
+	_wind.text = "바람 ←←←" if float(mods.push) < 0 else "바람 →→→"
+	if seat == Context.LOCAL_SEAT: _ctx.debuff.drowsy = bool(mods.drowsy)
+
 
 
 ## 차례가 끝나면 과녁·소품·졸림을 원래대로.
 func restore() -> void:
+	_motion_started.clear()
+	_applied.clear()
 	layout = BoardLayout.new()
 	_ctx.table.board.show_layout(layout)
-	_show_cover(false)
+	_cover.hide()
+	_ctx.table.board.show_chaos(Chaos.rest())
+	if _ctx.table.machine != null: _ctx.table.machine.show_chaos(Chaos.rest(), 0.0)
 	_wind.visible = false
 	_ctx.debuff.drowsy = false
 
@@ -125,6 +155,15 @@ func end_turn(seat: int) -> void:
 
 ## 매 프레임: 벌 받는 사람이 변조된 목소리로 투덜대게 한다(목소리 변조가 들리도록).
 func process() -> void:
+	var shape: Dictionary = shape_now()
+	_ctx.table.board.show_chaos(shape)
+	if _ctx.table.machine != null: _ctx.table.machine.show_chaos(shape, 0.016)
 	if penalty_seat >= 0 and _ctx.now >= _warp_talk_at:
 		_ctx.voice.say(penalty_seat, "talk")
 		_warp_talk_at = _ctx.now + WARP_TALK_SECONDS
+
+
+func shape_now() -> Dictionary:
+	var age := func(kind: String) -> float:
+		return _ctx.now - float(_motion_started[kind]) if _motion_started.has(kind) else -1.0
+	return Chaos.boost(Chaos.pose(age.call("spin"), 1, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_dir, _cover_side), _ctx.rules.dart_modifiers(_ctx.rules.active_seat()).get("synergy_levels", {}))

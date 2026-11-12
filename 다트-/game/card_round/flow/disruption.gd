@@ -85,17 +85,10 @@ func on_body_hit(thrower: int, victim: int) -> void:
 	hit_resolved.emit(thrower, victim)
 
 
-## 방해 성공 보상(규칙: rules.disrupt). 점수면 바로 더하고(500→0 모드는 빼고), 카드면 테이블 예약 칸과 손 부채 끝에 금빛 카드.
+## 피격 결과는 순수 규칙이 정하고 여기는 안내만 표시한다.
 func _give_reward(victim: int) -> void:
 	var reward: Dictionary = _ctx.rules.disrupt(victim)
-	match str(reward.kind):
-		"score":
-			var sign: String = "−" if _ctx.rules.win_mode == Rules.WinMode.COUNTDOWN else "+"
-			_ctx.hud.toast("방해 성공! %s %s%d점" % [_ctx.name_of(victim), sign, int(reward.amount)], PubTheme.GOLD)
-		"card":
-			var card: Rules.Card = reward.card
-			_ctx.table_cards.give_reward(victim, _ctx.rules.seats[victim].reward.size() - 1, card.type)
-			_cards.sync_fans()
-			_ctx.hud.toast("방해 성공! %s에게 라운드 한정 카드 「%s」" % [_ctx.name_of(victim), CardCatalog.card(card.type).name], PubTheme.GOLD)
-		_:
-			_ctx.hud.toast("방해 성공! (보상 없음: 남은 점수가 모자란다)", PubTheme.GOLD)
+	if str(reward.kind) == "score":
+		_ctx.hud.toast("몸으로 받기! %s +%d점" % [_ctx.name_of(victim), int(reward.amount)], PubTheme.GOLD)
+	else:
+		_ctx.hud.toast("%s: 이번 라운드 동안 약한 어지러움" % _ctx.name_of(victim), Color("c9a6ff"))

@@ -281,6 +281,7 @@ func _developer() -> void:
 	Style.row(_body, "병 적중 스턴 · 초", Style.number(_draft.hit_stun, 0, 3, 0.1, func(v: float) -> void: _draft.hit_stun = v))
 	Style.row(_body, "빗나감 회수 대기 · 초", Style.number(_draft.miss_cooldown, 0.5, 10, 0.5, func(v: float) -> void: _draft.miss_cooldown = v))
 	for entry: Dictionary in Catalog.CARDS:
+		if not Catalog.is_available(Catalog.type_of(str(entry.id))): continue
 		var id: String = entry.id
 		var line := HBoxContainer.new()
 		_body.add_child(line)

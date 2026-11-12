@@ -9,8 +9,7 @@ const Context = preload("res://game/card_round/flow/round_context.gd")
 const EmoteBubble = preload("res://game/card_round/fx/emote_bubble.gd")
 const EmoteArt = preload("res://game/card_round/fx/emote_art.gd")
 const EmoteWheel = preload("res://game/card_round/ui/emote_wheel.gd")
-const CharacterFactory = preload("res://art/characters/character_factory.gd")
-const MeshKit = preload("res://art/mesh_kit.gd")
+const FirstPersonArm = preload("res://art/characters/first_person_arm.gd")
 const MotionEmotes = preload("res://art/characters/motion_emotes.gd")
 
 ## 가리키는 시간(초).
@@ -46,11 +45,11 @@ func setup(ctx: Context, wheel: EmoteWheel) -> void:
 
 ## 캐릭터가 다 만들어진 뒤 한 번: 내 카메라에 1인칭 가리키는 손.
 func build() -> void:
-	_fp_hand = CharacterFactory.create_hand(Context.LOCAL_SEAT)
+	var arm := FirstPersonArm.new()
+	arm.seat = Context.LOCAL_SEAT
+	arm.pointing = true
+	_fp_hand = arm
 	_fp_hand.name = "PointingHand"
-	var mitten := _fp_hand.get_node("Mitten") as MeshInstance3D
-	var finger := MeshKit.rod(_fp_hand, "Finger", Vector3(0.002, -0.02, 0.04), Vector3(0.004, -0.01, -0.05), 0.012, mitten.material_override)
-	finger.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_fp_hand.position = FP_POSITION + Vector3.DOWN * FP_HIDDEN_DROP
 	_fp_hand.rotation_degrees = Vector3(6, 14, 0)
 	_fp_hand.visible = false

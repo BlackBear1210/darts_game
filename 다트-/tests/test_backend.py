@@ -95,10 +95,20 @@ class BackendTests(unittest.TestCase):
         body["players"][0]["score"] = 700
         self.assertEqual(self.request(path, body, self.key)[0], 409)
 
+    def test_signed_decimal_scores_persist(self):
+        accounts, body = self.result()
+        body["players"][0]["score"] = -12.3
+        body["players"][1]["score"] = 456.7
+        path = "/internal/results/" + secrets.token_hex(16)
+        self.assertEqual(self.request(path, body, self.key)[0], 200)
+        for account, expected in zip(accounts, (-12.3, 456.7)):
+            code, saved = self.request("/v1/profile", token=account["token"])
+            self.assertEqual((code, saved["total_score"]), (200, expected))
+
     def test_invalid_result_rolls_back(self):
         _, body = self.result()
         path = "/internal/results/" + secrets.token_hex(16)
-        for value in (-1, 901, True, "750", 1.5, float("nan")):
+        for value in (True, "750", 1.55, float("nan"), float("inf"), 1e19):
             body["players"][0]["score"] = value
             self.assertEqual(self.request(path, body, self.key)[0], 400)
         body["players"][0]["score"] = 750

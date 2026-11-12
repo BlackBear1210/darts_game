@@ -19,6 +19,7 @@ signal landed(at: Vector3, hit_board: bool)
 
 @onready var _visual: Node3D = $Visual
 
+var size_multiplier: float = 1.0
 var velocity: Vector3 = Vector3.ZERO
 var _start: Vector3 = Vector3.ZERO
 var _initial_velocity: Vector3 = Vector3.ZERO
@@ -60,6 +61,7 @@ func fly(start: Vector3, target: Vector3, duration: float, hit_board: bool = tru
 	# 판정 원점은 유지하고 외형만 손에서 출발해 착탄점으로 합류시킨다.
 	_release_offset = global_basis * release_offset
 	_visual.global_position = global_position + _release_offset
+	_visual.scale = Vector3.ONE * size_multiplier
 	set_physics_process(true)
 
 
@@ -87,7 +89,7 @@ func _physics_process(delta: float) -> void:
 	look_at(global_position + velocity, Vector3.UP)
 	var progress := minf(flight_time / _duration, 1.0)
 	_visual.global_position = global_position + _release_offset * (1.0 - progress)
-	_visual.scale = Vector3.ONE * lerpf(1.0, LANDED_SCALE, progress)
+	_visual.scale = Vector3.ONE * lerpf(1.0, LANDED_SCALE, progress) * size_multiplier
 	# 깃이 공기를 타며 몸통 축으로 돈다(손을 떠난 직후 빠르고 점점 느려진다).
 	_visual.rotation.z = TAU * SPIN_TURNS * _duration * (1.0 - pow(1.0 - progress, 2.0)) * 0.5
 	if _elapsed >= _duration:

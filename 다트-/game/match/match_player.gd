@@ -5,7 +5,7 @@ extends RefCounted
 var peer_id: int
 var display_name: String
 var seat: int
-var score: int = 0
+var score: float = 0.0
 var is_bot: bool = false
 var layout := BoardLayout.new()
 var bonus: int = 0
@@ -21,7 +21,7 @@ var pending_slot: int = -1
 var card_effects: Dictionary = {}
 
 
-func score_hit(base_score: int) -> int:
+func score_hit(base_score: float) -> float:
 	return base_score * multiplier + bonus if base_score > 0 else 0
 
 
@@ -41,7 +41,7 @@ func effects_text() -> String:
 
 func to_snapshot() -> Dictionary:
 	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score, "bot": is_bot,
-		"numbers": layout.numbers, "bonus": bonus, "multiplier": multiplier, "hand": hand,
+		"numbers": layout.numbers, "board_values": layout.to_snapshot(), "bonus": bonus, "multiplier": multiplier, "hand": hand,
 		"speed_scale": speed_scale, "pending_card": pending_card, "pending_slot": pending_slot, "card_effects": card_effects}
 
 
@@ -53,6 +53,7 @@ static func from_snapshot(data: Dictionary) -> MatchPlayer:
 	player.score = data.score
 	player.is_bot = data.get("bot", false)
 	player.layout.numbers.assign(data.numbers)
+	if data.has("board_values"): player.layout.apply_snapshot(data.board_values)
 	player.bonus = data.bonus
 	player.multiplier = data.multiplier
 	player.speed_scale = data.get("speed_scale", 1.0)

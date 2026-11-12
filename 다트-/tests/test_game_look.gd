@@ -37,6 +37,8 @@ func _check_room_matches_rules() -> void:
 	for i in range(TableView.SEATS.size()):
 		assert(room.get_node_or_null("TableAndSeats/SeatStool_%d" % (i + 1)) != null)
 		assert(room.get_node_or_null("TableAndSeats/SeatRug_%d" % (i + 1)) != null)
+	assert(room.get_node("Lane").find_children("*Rope*", "", true, false).is_empty())
+	assert(room.find_child("NoEntryText", true, false) == null)
 	assert(room.find_child("ChalkScores", true, false) is Label3D)
 	assert(room.find_child("BoardSpot", true, false) is SpotLight3D)
 	room.free()
@@ -54,13 +56,14 @@ func _check_table_scene() -> void:
 	for child in table.get_children():
 		if child is StaticBody3D:
 			bodies += 1
+			assert(child.collision_layer != 4, "중앙 진입 제한벽이 남아 있으면 안 된다")
 			assert(child.find_children("*", "MeshInstance3D", true, false).is_empty())
-	# 바닥2·천장2·벽8·레인 벽6(가로막이 2 + 옆벽 4 — 2026-11-02 몸막 구역만큼 끊어 두어 둘로 나뉜다)
-	# ·테이블·바·NPC 테이블·당구대·럼주통4·작은 통4·NPC 스툴2 = 32
+	# 바닥2·천장2·벽8(2026-11-12 중앙 레인 벽 6개 제거)
+	# ·테이블·바·NPC 테이블·당구대·럼주통4·작은 통4·NPC 스툴2 = 26
 	# + 도면 v3 가구 상자(TableView.decor_blocks: 생맥주 통·뒤 조리대·연습 과녁·양동이·소파·안락의자·낮은 탁자·상자·자루·냉장고)
 	# + 다트 머신 몸체 1(2026-11-07 — 과녁 면 0.12m 뒤부터 과녁 벽까지)
 	# + 펍 전용 가구(2026-11-08 비스트로 테이블 2 + 의자 4, TableView.pub_only_blocks — 오락실 테마에서는 꺼진다)
-	assert(bodies == 33 + TableView.decor_blocks().size() + TableView.pub_only_blocks().size(), "충돌 몸체 수 %d" % bodies)
+	assert(bodies == 27 + TableView.decor_blocks().size() + TableView.pub_only_blocks().size(), "충돌 몸체 수 %d" % bodies)
 	# 다트 머신 그림: 롤 셔터 양쪽(2026-11-08 — 앞 바 1 + 좁은 날개 13장이 "Curtain" 아래) + 상태 화면. 보이기만 하므로 충돌 몸체가 아니다.
 	var shutter: Node = table.machine.find_child("ShutterLeft", true, false) if table.machine != null else null
 	assert(shutter != null and shutter.get_node("Curtain").get_child_count() == 14 and int(shutter.call("slat_count")) == 13)
@@ -189,7 +192,7 @@ func _check_board_follows_layout() -> void:
 	# 12시(0번 칸) 숫자 글자가 새 순서의 첫 숫자와 같다.
 	var top := face.find_child("Number_%d" % shuffled.numbers[0], true, false) as Label3D
 	assert(top.text == str(shuffled.numbers[0]) and top.position.x > -0.001 and top.position.x < 0.001 and top.position.y > 0)
-	assert(face.find_children("Triple_*", "MeshInstance3D", true, false).size() == 20)
+	assert(face.find_children("Triple_*", "MeshInstance3D", true, false).size() == 40)
 	board.queue_free()
 	await process_frame
 

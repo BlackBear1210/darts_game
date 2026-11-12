@@ -15,12 +15,11 @@ signal restart_requested
 const SETTINGS: Array[Dictionary] = [
 	{"key": "mark", "label": "쓴 카드 표시", "options": ["빨간 페인트 X (기본)", "불에 그을림"]},
 	{"key": "shuffle", "label": "섞기 모션", "options": ["매번 무작위", "정석 리플", "마술사", "딜러"]},
-	{"key": "reward", "label": "방해 성공 보상", "options": ["점수 +15", "라운드 한정 카드", "무작위"]},
 	{"key": "win", "label": "승리 조건 (새 게임부터)", "options": ["7라운드 최고점", "300점 먼저", "500 → 0 딱 맞추기"]},
 	{"key": "speed", "label": "진행 속도", "options": ["보통", "1.5배", "2배"]},
 	{"key": "voice", "label": "합성 목소리", "options": ["켜기", "끄기"]},
 ]
-const KEY_HELP := "Q·E 카드 넘기기 · 1~7 카드 꺼내기(한 번 더 = 내리기) · 8·9 보상 카드 · F 쓰기 · Tab 대상 바꾸기\nWASD 이동 · R 앉기/일어나기 · 왼클릭 = 손가락으로 가리키기(내 차례엔 길게 눌러 던지기) · T(누르는 동안) 감정표현\nV 말하기 · C 전체 보기 · Shift 빨리 감기 · 마우스 포인터는 T·Esc 때만 나온다"
+const KEY_HELP := "Q·E 카드 넘기기 · 1~7 카드 꺼내기(한 번 더 = 내리기) · F 쓰기 · Tab 대상 바꾸기 · Z·X 값/구역 선택\nWASD 이동 · R 앉기/일어나기 · 왼클릭 = 손가락으로 가리키기(내 차례엔 길게 눌러 던지기) · T(누르는 동안) 감정표현\nV 말하기 · C 전체 보기 · Shift 빨리 감기 · 마우스 포인터는 T·Esc 때만 나온다"
 ## 오른쪽 효과 패널: 맨 위 연산 줄은 최근 6개, 아래 목록은 최근 8개만 보인다(다 보이면 화면 아래로 넘친다).
 const EFFECT_LINE_MAX := 6
 const EFFECT_ROWS_MAX := 8
@@ -110,7 +109,7 @@ func set_scores(title: String, rows: Array) -> void:
 		var color: String = PlayerLook.COLORS[seat].lightened(0.3).to_html(false)
 		var marker: String = "▶ " if row.active else "   "
 		var name_text: String = "%s%d번 %s%s" % [PlayerLook.SYMBOLS[seat] + " ", seat + 1, row.name, " (나)" if row.local else ""]
-		lines.append("[font_size=26]%s[color=#%s][b]%s[/b][/color]  [color=#f0e6cf][b]%d[/b][/color][/font_size]  [font_size=18][color=#9a958a]카드 %d장[/color][/font_size]" % [marker, color, name_text, row.score, row.hand])
+		lines.append("[font_size=26]%s[color=#%s][b]%s[/b][/color]  [color=#f0e6cf][b]%.1f[/b][/color][/font_size]  [font_size=18][color=#9a958a]카드 %d장[/color][/font_size]" % [marker, color, name_text, row.score, row.hand])
 		var chips: PackedStringArray = row.get("chips", PackedStringArray())
 		if not chips.is_empty():
 			lines.append("[font_size=18]      [color=#ffb36b]%s[/color][/font_size]" % "  ".join(chips))
@@ -178,7 +177,7 @@ func _effect_value(effect: Rules.Effect) -> String:
 			return effect.label
 		"lost":
 			return "✕ " + effect.label
-	return "「%s」" % effect.label
+	return "「%s」%s" % [effect.label, " · %d인 시너지" % effect.contributors.size() if effect.contributors.size() >= 2 else ""]
 
 
 ## 자리 이름표(자리 색 글자). bracket = [1번 이름] 꼴, 아니면 모양 기호 + 이름.
@@ -286,7 +285,7 @@ func announce_scores(title: String, rows: Array, seconds_per_row: float = 0.55) 
 	var labels: Array[Label] = []
 	for row: Dictionary in rows:
 		var label := _label(32, PlayerLook.COLORS[int(row.seat)].lightened(0.35), true)
-		label.text = "%d위   %s%d번 %s   %d점" % [int(row.rank) + 1, PlayerLook.SYMBOLS[int(row.seat)], int(row.seat) + 1, row.name, int(row.score)]
+		label.text = "%d위   %s%d번 %s   %.1f점" % [int(row.rank) + 1, PlayerLook.SYMBOLS[int(row.seat)], int(row.seat) + 1, row.name, float(row.score)]
 		label.modulate.a = 0.0
 		_announce_rows.add_child(label)
 		labels.append(label)

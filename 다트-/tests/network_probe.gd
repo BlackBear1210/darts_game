@@ -39,8 +39,16 @@ func _boot() -> void:
 		rules.private_room = true
 		rules.capacity = 2
 		for entry: Dictionary in preload("res://game/card_round/rules/card_catalog.gd").CARDS:
-			if entry.id != "plus_10": rules.disabled_cards.append(str(entry.id))
+			if entry.id != "precision": rules.disabled_cards.append(str(entry.id))
 		_session.host_room(_options.name, int(_options.port), rules, "test-password")
+	elif _options.role == "synergy_host":
+		var rules := RoomSettings.new()
+		rules.social_lobby = true
+		rules.capacity = 4
+		rules.dart_seconds = 120.0
+		for entry: Dictionary in preload("res://game/card_round/rules/card_catalog.gd").CARDS:
+			if entry.id != "wind": rules.disabled_cards.append(str(entry.id))
+		_session.host_room(_options.name, int(_options.port), rules)
 	elif _options.role == "host":
 		_session.host_room(_options.name, int(_options.port))
 	else:

@@ -6,6 +6,7 @@ extends SceneTree
 ##   art/pub/pub_game.tscn       F5 실제 경기 방(팀 규칙 좌표 — game_room_builder.gd)
 ## 디자인 수치를 바꾼 뒤 아래 명령으로 한 번 실행해 .tscn 을 덮어쓴다.
 ##   godot --headless --path <다트- 폴더> --script res://art/pub/pub_builder.gd
+## F5 경기 방만 다시 만들기: 위 명령 뒤 -- --game-room-only
 ## 완료 로그: ART BUILD COMPLETE
 ##
 ## 주의: 생성 결과를 에디터에서 손으로 고친 뒤 이 생성기를 돌리면 수정이 사라진다.
@@ -59,6 +60,14 @@ func save_scene(node: Node, path: String) -> void:
 
 
 func build() -> void:
+	if OS.get_cmdline_user_args().has("--game-room-only"):
+		var game_room := GameRoomBuilder.build()
+		root.add_child(game_room)
+		save_scene(game_room, GAME_ROOM_SCENE_PATH)
+		game_room.free()
+		print("ART BUILD COMPLETE: game room")
+		quit()
+		return
 	wood = PubParts.wood()
 	trim = PubParts.trim()
 	green = PubParts.green()

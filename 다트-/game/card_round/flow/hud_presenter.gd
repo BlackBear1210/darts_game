@@ -97,6 +97,9 @@ func update_hud() -> void:
 	if mine != null and not _ctx.autoplay:
 		var target: int = int(_cards.target_choice.get(Context.LOCAL_SEAT, -1))
 		var target_text: String = "대상: 없음" if target < 0 else ("대상: 나" if target == Context.LOCAL_SEAT else "대상: %s  (Tab 바꾸기)" % _ctx.name_of(target))
+		if CardCatalog.card(mine.type).has("choice"):
+			var value: String = ("+5" if mine.choice == 0 else "−5") if str(CardCatalog.card(mine.type).choice) == "adjust" else "%d번째 칸 · %d" % [mine.choice + 1, _effects.layout.numbers[mine.choice]]
+			target_text += "\nZ ◀ %s ▶ X" % value
 		hud.show_card(mine.type, rules.ready_ratio(Context.LOCAL_SEAT, _ctx.now), target_text, rules.use_problem(Context.LOCAL_SEAT, target, _ctx.now), mine.temporary)
 	else:
 		hud.hide_card()
@@ -116,7 +119,7 @@ func prompt_text() -> String:
 			return "던지는 칸(바닥 금색 칸) 안에서만 던질 수 있다"
 		return "왼클릭을 길게 눌렀다 떼서 던지기 · 오른클릭 취소 · 남은 %d발" % (_ctx.rules.darts_left if _ctx.phase == "darts" else _darts.punish_left)
 	if _ctx.rules.seats[Context.LOCAL_SEAT].pending != null:
-		return "F 쓰기 · Q·E 다른 카드로 넘기기 · Tab 대상 바꾸기"
+		return "F 쓰기 · Q·E 카드 넘기기 · Tab 대상 · Z·X 값/구역 선택"
 	if not _ctx.cards_open:
 		return "카드를 나눠 주는 중… (위·가운데·밑장 중 어디서 빼는지 보기) · C 전체 보기 · Esc 설정"
 	if _ctx.phase == "darts":
@@ -143,7 +146,7 @@ func results_text(session_gold: Array[int]) -> String:
 	for seat in rules.ranking():
 		var owner: Rules.Seat = rules.seats[seat]
 		var color: String = PlayerLook.COLORS[seat].lightened(0.3).to_html(false)
-		lines.append("[font_size=32]%d위  [color=#%s][b]%s%d번 %s[/b][/color]   %d점   [color=#ffd27a]+%d 골드[/color][/font_size][font_size=20][color=#9a958a]%s[/color][/font_size]" % [
+		lines.append("[font_size=32]%d위  [color=#%s][b]%s%d번 %s[/b][/color]   %.1f점   [color=#ffd27a]+%d 골드[/color][/font_size][font_size=20][color=#9a958a]%s[/color][/font_size]" % [
 			rules.rank_of(seat) + 1, color, PlayerLook.SYMBOLS[seat], seat + 1, owner.name, owner.score, owner.gold,
 			"   (방해 성공 %d회 +%d)" % [owner.disrupts, owner.disrupts * Rules.GOLD_PER_DISRUPT] if owner.disrupts > 0 else ""])
 	lines.append("[font_size=22]벌칙: %s → 돌아가는 원판[/font_size]" % _ctx.name_of(rules.loser()))

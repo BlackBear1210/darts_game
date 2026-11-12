@@ -245,3 +245,21 @@ func _scattered_transform(index: int) -> Transform3D:
 	var radius: float = sqrt(_random.randf()) * 0.4
 	var spot: Vector3 = deck_center() + Vector3(cos(angle) * radius, index * 0.0012, sin(angle) * radius)
 	return Transform3D(Basis(Vector3.UP, _random.randf() * TAU), spot)
+
+
+## 손패 교환 뒤 규칙의 새 카드 배치로 표면을 맞춘다.
+func refresh_hands(rules: RefCounted) -> void:
+	clear_used()
+	for seat in range(rules.seats.size()):
+		for slot in range(CardHandRules.HAND_LIMIT):
+			var old: Node3D = card_at(seat, slot)
+			if old != null: old.queue_free()
+			slots[seat][slot] = null
+			var held = rules.seats[seat].slots[slot]
+			if held == null: continue
+			var card := CardView.new()
+			add_child(card)
+			card.set_type(held.type)
+			card.show_face(true)
+			card.transform = slot_transform(seat, slot)
+			slots[seat][slot] = card

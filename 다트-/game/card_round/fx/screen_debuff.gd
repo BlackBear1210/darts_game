@@ -16,10 +16,11 @@ const ASTIGMATISM_SHADER := """
 shader_type canvas_item;
 uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
 uniform float amount : hint_range(0.0, 1.0) = 0.0;
+uniform float sleep_blur = 0.0;
 
 void fragment() {
 	vec2 smear = amount * vec2(0.0011, 0.0019);
-	float lod = amount * 0.6;
+	float lod = max(amount * 0.6, sleep_blur * 1.8);
 	vec4 color = textureLod(screen, SCREEN_UV, lod) * 0.36;
 	color += textureLod(screen, SCREEN_UV + smear, lod) * 0.2;
 	color += textureLod(screen, SCREEN_UV - smear, lod) * 0.2;
@@ -44,6 +45,7 @@ var sway: float = 0.0
 var mouse_factor: float = 1.0
 
 var _astigmatism: float = 0.0
+var _sleep_blur: float = 0.0
 var _time: float = 0.0
 var _next_mouse_switch: float = 0.0
 var _smear_rect: ColorRect
@@ -80,10 +82,14 @@ func _process(delta: float) -> void:
 	if drowsy:
 		var cycle: float = fmod(_time, 2.6) / 2.6
 		target = smoothstep(0.35, 0.85, cycle) * 0.82 if cycle < 0.9 else 0.0
+	var closing: bool = target > eyelid and eyelid > 0.1
 	eyelid = move_toward(eyelid, target, delta * (0.9 if target > eyelid else 6.0))
 	var height: float = get_viewport().get_visible_rect().size.y * 0.5 * eyelid
 	_top.offset_bottom = height
 	_bottom.offset_top = -height
+	_sleep_blur = move_toward(_sleep_blur, 0.35 if drowsy and closing else 0.0, delta * 5.0)
+	_material.set_shader_parameter("sleep_blur", _sleep_blur)
+	_smear_rect.visible = _astigmatism > 0.01 or _sleep_blur > 0.01
 	_top.visible = eyelid > 0.005
 	_bottom.visible = _top.visible
 

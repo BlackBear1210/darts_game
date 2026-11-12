@@ -238,6 +238,12 @@ func _play(speaker: int, data: PackedByteArray) -> void:
 	playback.push_buffer(frames)
 
 
+## 확정된 경기 상태에서만 호출한다. 사람별 재생 피치를 바꿔 다른 음성에는 영향을 주지 않는다.
+func set_warped(peer: int, enabled: bool) -> void:
+	if _speakers.has(peer):
+		(_speakers[peer].player as AudioStreamPlayer).pitch_scale = 0.72 if enabled else 1.0
+
+
 func _speaker(peer: int) -> Dictionary:
 	if _speakers.has(peer):
 		return _speakers[peer]

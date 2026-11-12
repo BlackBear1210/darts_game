@@ -1,3 +1,5 @@
+> 2026-11-12 F5 중앙 로프·기둥·금지 표지는 제거했다. `pub_builder.gd -- --game-room-only`로 경기 방만 다시 생성한다.
+
 # art/ — 디자인 담당 폴더
 
 디자인 담당(김도형)이 소유하는 폴더다. 아스트라 AI로 만든 펍·캐릭터 예시안을 팀 프로젝트 안으로 옮겼다(2026-10-25).
@@ -15,7 +17,7 @@
 | 플레이어·봇 몸짓(서기·걷기·숙이기·점프·앉기·조준·던지기·카드 들기·가리키기·만세·마시기·엿보기·왕머리·깜빡임) | `characters/character_motion.gd` + `characters/character_pose_layer.gd` | PlayerView `_process`, 로비 `lobby_backdrop.gd` |
 | 펍 NPC 몸짓 | `characters/character_rig.gd` | `pub/npc_idle.gd` |
 | 자리 색·모양(●▲■◆)·캐릭터 이름 | `player_look.gd`(PlayerLook) | 이름표·발밑 매트·스툴·HUD·칠판·다트 깃이 모두 이 표 하나를 봄 |
-| 1인칭 손(자리 색 소매) | `characters/character_factory.gd` `create_hand()` | `game/game.gd` `_equip_hand()` |
+| 1인칭 오른팔 | `characters/first_person_arm.gd` (리깅 캐릭터 오른팔) | `game/game.gd` `_equip_hand()` |
 | 다트(은 촉·금 몸통·자리 색 깃) | `game/dart/dart.tscn` + `paint()` | 꽂힐 때 2.2배로 커짐(과녁이 실제의 2.5배라서) |
 | 칠판 점수판(과녁 왼쪽 문) | `pub/game_room_builder.gd`의 `ChalkScores` 글자 | `game/game.gd` `_chalk_text()` → `TableView.set_chalk_scores()` |
 | HUD·대기실 색 | `../ui/pub_theme.gd`(PubTheme) | `ui/game_hud.gd`, `lobby/lobby.gd` 첫 줄 |
@@ -59,7 +61,7 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | `characters/rigged/character_library.glb` | v18 리깅 + 게임 모션. 옷·머리 조각이 모두 들어 있다 | **아니오 — 생성물**. 아래 "리깅 캐릭터 다시 만들기" |
 | `characters/character_motion.gd` | 위치·자세·속도로 어떤 모션을 틀지 정한다. 팔 자세 우선순위도 여기 | 예 |
 | `characters/character_pose_layer.gd` | 온몸 모션 위에 팔·고개·기울기·왕머리를 얹는 SkeletonModifier3D | 예 |
-| `characters/character_factory.gd` | 펍 NPC(3등신) + 1인칭 손. 관절(피벗) 구조 포함 | 예 |
+| `characters/character_factory.gd` | 옛 상자 캐릭터 생성기. F5 투척 손과 F6 가리키는 손은 `first_person_arm.gd`의 리깅 모델을 쓴다 | 예 |
 | `characters/character_rig.gd` | 펍 NPC 몸짓. 마시기 박자 `drink_curve` 는 플레이어도 같이 쓴다 | 예 |
 | `characters/chr_*.tscn` | 위 스크립트가 만든 결과 | **아니오 — 생성물** |
 | `pub/pub_parts.gd` | 스툴·테이블·펜던트·벽등·로프·창문·화분·병 선반 부품 + 공용 재질 | 예 |
@@ -156,7 +158,14 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 "<Godot exe>" --headless --path . --script res://tests/test_game_look.gd      # F5 연결 검사(방 서명·관절·몸짓·레이어·다트판·다트)
 "<Godot exe>" --headless --path . --script res://tests/test_art_showcase.gd   # 쇼케이스 검사
 "<Godot exe>" --path . --script res://tests/render_game_look.gd               # F5 화면 10장 + 던지기 낱장 → ../output/game_look/
+"<Godot exe>" --path . --script res://tests/render_fp_arm.gd                  # 1인칭 오른팔만 몇 초 만에 → .godot/fp_arm/
 ```
+
+`render_fp_arm.gd`는 1인칭 팔 각도·크기를 맞출 때 쓴다. 경기 전체를 띄우지 않고 game.tscn의 실제 카메라·손·다트를 꺼내 사용한다.
+`first_person_arm.gd`의 `GRIP_ALONG_SHAFT`·`GRIP_ROLL`·`HAND_SCALE`을 고치고 바로 확인할 수 있다. 가리키는 손도 함께 촬영한다.
+
+1인칭 투척 손은 엄지·검지 끝 사이에 자루를 맞추고, 놓을 때 손가락이 펴진다. `game.gd`의 `HAND_CHARGE_OFFSET`을 실제 경기와 미리보기에서 함께 사용한다. 움직임 줄이기 설정은 충전 떨림을 없애고 손 이동·반동을 줄인다.
+충전 자세(깃이 손을 가리는지)와 옆·위 시점(몸통이 카메라 뒤에 있는지)도 같이 찍는다.
 
 `render_game_look.gd`는 약 20초 동안 전체 화면이 되고 마우스를 잡는다.
 

@@ -51,11 +51,16 @@ static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, gl
 		var end := angle + PI / 20.0 - WIRE_GAP
 		var single := mats[i % 2]
 		var special := mats[2 + i % 2]
+		var pieces: int = 2 if sector_groups.size() == 40 else 1
+		for piece in range(pieces):
+			var holder: Node3D = sector_groups[i * pieces + piece] if pieces == 2 else (sector_groups[i * sector_groups.size() / 20] if not sector_groups.is_empty() else parent)
+			var from_angle: float = start if piece == 0 else angle
+			var to_angle: float = end if piece == pieces - 1 else angle
+			MeshKit.sector(holder, "SingleInner_%s" % number, outer_bull, triple_in, from_angle, to_angle, 0, single)
+			MeshKit.sector(holder, "Triple_%s" % number, triple_in, triple_out, from_angle, to_angle, 0.0003 * k, special)
+			MeshKit.sector(holder, "SingleOuter_%s" % number, triple_out, double_in, from_angle, to_angle, 0, single)
+			MeshKit.sector(holder, "Double_%s" % number, double_in, scoring_radius, from_angle, to_angle, 0.0003 * k, special)
 		var holder: Node3D = sector_groups[i * sector_groups.size() / 20] if not sector_groups.is_empty() else parent
-		MeshKit.sector(holder, "SingleInner_%s" % number, outer_bull, triple_in, start, end, 0, single)
-		MeshKit.sector(holder, "Triple_%s" % number, triple_in, triple_out, start, end, 0.0003 * k, special)
-		MeshKit.sector(holder, "SingleOuter_%s" % number, triple_out, double_in, start, end, 0, single)
-		MeshKit.sector(holder, "Double_%s" % number, double_in, scoring_radius, start, end, 0.0003 * k, special)
 		var label := MeshKit.label(holder, "Number_%s" % number, str(number),
 			Vector3(sin(angle), cos(angle), 0) * scoring_radius * NUMBER_RATIO + Vector3(0, 0, 0.003 * k),
 			NUMBER_FONT_SIZE, Color("f0e6cd"), 0.00055 * k * 34.0 / NUMBER_FONT_SIZE * number_scale)

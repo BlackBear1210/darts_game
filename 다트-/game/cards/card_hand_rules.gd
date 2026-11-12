@@ -4,19 +4,19 @@ extends RefCounted
 ##
 ## 1. 손패 한도는 7장. 매 라운드 시작 전에 7장이 될 때까지 무작위로 채운다.
 ## 2. 안 쓴 카드는 그대로 남는다 → 한 장도 안 썼으면 한 장도 못 받는다. (새로고침·임의 버리기 없음)
-## 3. 카드는 등급이 아니라 방해 종류 4가지로 나눈다: 연산 · 다트 · 과녁 · 물리.
+## 3. 카드는 등급이 아니라 방해 종류 5가지로 나눈다: 연산 · 다트 · 과녁 · 피지컬 · 특수.
 ##
 ## 손패는 Array[int] 이고 원소는 Category 값이다. 종류별 세부 카드(+15, ×2, 바람 …)와 효과는 미확정이다.
 
-enum Category { OPERATION, DART, BOARD, PHYSICAL }
+enum Category { OPERATION, DART, BOARD, PHYSICAL, SPECIAL }
 
 ## 화면 표시 이름. Category 순서와 같아야 한다.
-const CATEGORY_NAMES: Array[String] = ["연산", "다트", "과녁", "물리"]
+const CATEGORY_NAMES: Array[String] = ["연산", "다트", "과녁", "피지컬", "특수"]
 ## 회의록 예시: 연산 +15/−10/×2/÷2 · 다트 속도/폭/무게 · 과녁 분리/숫자 변경/가림 · 물리 바람/어지러운 시야.
-const CATEGORY_HINTS: Array[String] = ["점수 연산", "다트 성질 변화", "과녁 변형·가림", "바람·시야 방해"]
+const CATEGORY_HINTS: Array[String] = ["점수 연산", "다트 성질 변화", "과녁 변형·가림", "바람·시야 방해", "손패·라운드 효과"]
 const HAND_LIMIT: int = 7
-## 종류별 지급 가중치(밸런스 조정 지점). 지금은 네 종류가 같은 확률이다 — 미확정 값.
-const DRAW_WEIGHTS: Array[float] = [1.0, 1.0, 1.0, 1.0]
+## 종류별 지급 가중치(밸런스 조정 지점). CARD_PLAN 승인 제안값(2026-11-12).
+const DRAW_WEIGHTS: Array[float] = [1.2, 1.0, 1.0, 1.0, 0.6]
 
 
 ## 손패를 7장까지 채우고 새로 받은 장수를 돌려준다. 이미 7장이면 0장(안 쓰면 못 받는다).

@@ -559,33 +559,15 @@ static func _board_wall(p: Node3D) -> void:
 	MeshKit.label(p, "ChalkRules", "하 우 스  룰\n\n한 차례 3발\n꾹 = 충전\n오른쪽 = 취소\n늦으면 슬로우!", Vector3(center.x + 2.05, center.y - 0.05, face + 0.12), 30, chalk, 0.0036)
 
 
-## 놋쇠 기둥 하나(물레 깎기 받침·기둥 + 둥근 꼭지). 높이 약 0.95m.
-static func _stanchion(p: Node3D, pos: Vector3) -> void:
-	var post := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, 0), Vector2(0.14, 0), Vector2(0.14, 0.025), Vector2(0.05, 0.055),
-		Vector2(0.024, 0.09), Vector2(0.022, 0.86), Vector2(0.04, 0.885), Vector2(0, 0.885)]), 0.012, 3)
-	RoundKit.lathe(p, "Stanchion", post, pos, _brass(), 20)
-	MeshKit.mesh_node(p, "Finial", RoundKit.sphere_mesh(0.052, 16), pos + Vector3(0, 0.925, 0), _brass())
-
-
-## 두 기둥 사이에 처진 벨벳 로프(매끈한 관 한 줄). a·b 는 기둥 바닥 위치. sag = 가운데가 처지는 정도(m).
-static func _rope(p: Node3D, a: Vector3, b: Vector3, sag := 0.17) -> void:
-	var points := PackedVector3Array()
-	for j in range(13):
-		var t := float(j) / 12.0
-		points.append(a.lerp(b, t) + Vector3(0, 0.89 - sin(t * PI) * sag, 0))
-	MeshKit.mesh_node(p, "VelvetRope", RoundKit.tube_mesh("rope|%s|%s" % [a, b], points, 0.022, 10), Vector3.ZERO, PubParts.rope())
-
-
-## 레인: 과녁 앞 벨벳 매트 + 놋쇠 투척선 + 투척 구역 경계 로프(이 선 앞으로는 못 들어간다 = TableView 투명벽).
-## 2026-11-02 "몸으로 막기": 로프와 투명벽을 몸막 구역(TableView.BLOCK_ZONE)만큼 끊어 두고 그 바닥을 붉게 칠한다.
+## 레인: 벨벳 매트와 놋쇠 투척선. 중앙 펜스·출입 금지판은 사용자 요청으로 제거(2026-11-12).
 static func _lane(p: Node3D) -> void:
 	var f := _faces()
 	var line_z: float = TableView.THROW_LINE_Z
-	var fence_z: float = TableView.NO_ENTRY_Z - 0.15
+	var mat_end_z: float = TableView.NO_ENTRY_Z - 0.15
 	# 레인 매트는 과녁 벽이 아니라 다트 머신 받침 앞(과녁 면 바로 아래)에서 끝난다.
 	var lane_end: float = TableView.BOARD_CENTER.z
-	var lane_length: float = fence_z - lane_end
-	var lane_center: float = (fence_z + lane_end) / 2.0
+	var lane_length: float = mat_end_z - lane_end
+	var lane_center: float = (mat_end_z + lane_end) / 2.0
 	var lane_half: float = TableView.LANE_HALF
 	MeshKit.mesh_node(p, "LaneMat", RoundKit.rounded_slab_mesh(Vector2(lane_half * 2, lane_length), 0.02, 0.12), Vector3(0, 0.01, lane_center), MeshKit.material("LaneVelvet", "244d43"))
 	for side: float in [-1.0, 1.0]:
@@ -594,26 +576,6 @@ static func _lane(p: Node3D) -> void:
 	MeshKit.rounded_box(p, "Oche", Vector3(f.hall_x1 - f.hall_x0 - 0.1, 0.03, 0.07), Vector3(0, 0.025, line_z), _brass(), 0.012)
 	var oche_text := MeshKit.label(p, "OcheText", "투 척 선", Vector3(0, 0.045, line_z + 0.34), 48, Color("dcc68f"), 0.004)
 	oche_text.rotation.x = -PI / 2
-	# 로프는 가운데 보호 복도만 두른다(TableView 의 레인 벽과 같은 자리). 복도 바깥 양옆은 비워 둔다.
-	var zone: Vector2 = TableView.BLOCK_ZONE
-	for side: float in [-1.0, 1.0]:
-		for run: Vector2 in [Vector2(fence_z, zone.y), Vector2(zone.x, lane_end + 0.45)]:
-			var from_post := Vector3(side * lane_half, 0, run.x)
-			var to_post := Vector3(side * lane_half, 0, run.y)
-			_stanchion(p, from_post)
-			_stanchion(p, to_post)
-			_rope(p, from_post, to_post, 0.14)
-	_rope(p, Vector3(-lane_half, 0, fence_z), Vector3(lane_half, 0, fence_z))
-	# 몸막 구역 바닥(붉은 띠 + 글자). 매트 위에 얇게 덧칠한다.
-	var zone_mid: float = (zone.x + zone.y) / 2.0
-	MeshKit.mesh_node(p, "BlockZoneFloor", RoundKit.rounded_slab_mesh(Vector2(lane_half * 2 - 0.02, zone.y - zone.x), 0.006, 0.05),
-		Vector3(0, 0.031, zone_mid), MeshKit.material("BlockZone", "7c3029"))
-	var zone_text := MeshKit.label(p, "BlockZoneText", "몸 으 로  막 기", Vector3(0, 0.05, zone_mid), 40, Color("ffb9a6"), 0.0034)
-	zone_text.rotation.x = -PI / 2
-	# 로프 가운데에 매단 안내판.
-	MeshKit.rounded_box(p, "NoEntryPlaque", Vector3(0.62, 0.24, 0.025), Vector3(0, 0.5, fence_z + 0.03), _brass(), 0.03)
-	MeshKit.rounded_box(p, "NoEntryPaper", Vector3(0.56, 0.18, 0.01), Vector3(0, 0.5, fence_z + 0.045), PubParts.dark(), 0.02)
-	MeshKit.label(p, "NoEntryText", "출입 금지", Vector3(0, 0.5, fence_z + 0.052), 40, Color("e0c58d"), 0.0022)
 
 
 ## 도면의 럼주통. 큰 통 4개와 곁의 작은 통. 충돌은 TableView.BARRELS / SMALL_BARRELS.

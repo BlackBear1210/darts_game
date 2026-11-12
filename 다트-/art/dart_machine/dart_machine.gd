@@ -147,7 +147,9 @@ func build(arcade_skin: bool) -> void:
 ## 아수라장 모양을 옮긴다(셔터 펼침·상태 글자·조명 맥박). shape = BoardChaos.pose(...). 판정은 하지 않는다.
 func show_chaos(shape: Dictionary, delta: float) -> void:
 	_time += delta
-	_close_left = float(shape.get("shutter", 0.0))
+	var amount: float = float(shape.get("shutter", 0.0))
+	_close_left = amount if int(shape.get("cover_side", -1)) < 0 else 0.0
+	_close_right = amount if int(shape.get("cover_side", -1)) > 0 else 0.0
 	if _left != null:
 		_left.show_amount(_close_left, delta)
 		_right.show_amount(_close_right, delta)
@@ -156,7 +158,7 @@ func show_chaos(shape: Dictionary, delta: float) -> void:
 		words.append("회전!")
 	if float(shape.get("split", 0.0)) > 0.001:
 		words.append("분리!")
-	if _close_left > 0.01:
+	if maxf(_close_left, _close_right) > 0.01:
 		words.append("셔터!")
 	if _status != null:
 		_status.text = "DARTY" if words.is_empty() else " ".join(words)

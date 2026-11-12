@@ -240,6 +240,9 @@ def run_loading_barrier(engine, folder):
 def run_connection_failure(engine, folder):
     peer = Peer(engine, folder, 0, free_port(), "client")
     try:
+        # 앱·리소스 초기 로딩 시간은 접속 제한 시간과 구분한다.
+        wait_for([peer], lambda ss: ss[0]["connecting"] or "실패" in ss[0]["message"] or "초과" in ss[0]["message"],
+                 "connection attempt starts")
         ss = wait_for([peer], lambda ss: ss[0]["command_id"] == 0 and not ss[0]["connecting"]
                       and ss[0]["local_id"] == 0 and ("실패" in ss[0]["message"] or "초과" in ss[0]["message"]),
                       "unreachable host shows failure", timeout=12)

@@ -101,7 +101,7 @@ func _run() -> void:
 	loose.queue_free()
 	# 6) 카드: 회전판·피자 분리는 맨 뒤에 붙어 기존 카드 번호가 밀리지 않는다. 셔터는 예전 가림판 자리 그대로.
 	_check(CardCatalog.type_of("cover") == 9, "셔터(가림판) 카드 번호 유지")
-	_check(CardCatalog.type_of("board_spin") == CardCatalog.count() - 2 and CardCatalog.type_of("board_split") == CardCatalog.count() - 1, "새 카드는 맨 뒤")
+	_check(CardCatalog.type_of("board_spin") == 12 and CardCatalog.type_of("board_split") == 13, "기존 카드 번호 보존")
 	for id: String in ["board_spin", "board_split"]:
 		var card: Dictionary = CardCatalog.card(CardCatalog.type_of(id))
 		_check(int(card.category) == CardHandRules.Category.BOARD and int(card.timing) == CardCatalog.Timing.TURN, id + " = 과녁 · 차례 동안")

@@ -300,6 +300,9 @@ func _follow_hand() -> void:
 
 
 func _on_skeleton_updated() -> void:
+	# 트리 이탈 뒤 도착한 뼈 갱신은 전역 좌표를 읽지 않는다.
+	if not is_inside_tree() or not is_instance_valid(_skeleton) or not _skeleton.is_inside_tree() or _hand < 0:
+		return
 	_hand_at = to_local((_skeleton.global_transform * _skeleton.get_bone_global_pose(_hand)).origin) + Vector3(0, -HAND_DROP, 0)
 	_follow_hand()
 

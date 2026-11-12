@@ -97,6 +97,8 @@ func handle(event: InputEvent) -> void:
 	if slot >= 0:
 		_cards.press_slot(Context.LOCAL_SEAT, slot)
 	match key:
+		KEY_Z: _cards.cycle_value(-1)
+		KEY_X: _cards.cycle_value(1)
 		KEY_F:
 			_cards.use(Context.LOCAL_SEAT, int(_cards.target_choice.get(Context.LOCAL_SEAT, -1)))
 		KEY_TAB:

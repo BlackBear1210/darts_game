@@ -11,8 +11,8 @@ const STEP: float = 1.0 / 120.0
 
 ## start 에서 aim_point 를 보고 charge(0~1)로 던진다. 최대 충전이면 aim_point 에 도착하고 약하면 아래로 떨어진다.
 ## plane_z = 도착 판정 평면(과녁·벌칙 과녁). bodies = [{seat, position}] (던진 사람은 빼고 넘긴다).
-static func solve(space: PhysicsDirectSpaceState3D, start: Vector3, aim_point: Vector3, charge: float, plane_z: float, bodies: Array) -> Dictionary:
-	var speed: float = lerpf(DART_CONFIG.minimum_speed, DART_CONFIG.maximum_speed, clampf(charge, 0.0, 1.0))
+static func solve(space: PhysicsDirectSpaceState3D, start: Vector3, aim_point: Vector3, charge: float, plane_z: float, bodies: Array, speed_multiplier: float = 1.0) -> Dictionary:
+	var speed: float = lerpf(DART_CONFIG.minimum_speed, DART_CONFIG.maximum_speed, clampf(charge, 0.0, 1.0)) * speed_multiplier
 	var direction: Vector3 = (aim_point - start).normalized()
 	var nominal_time: float = start.distance_to(aim_point) / DART_CONFIG.maximum_speed
 	var initial: Vector3 = direction * speed + Vector3.UP * DART_CONFIG.gravity * nominal_time * 0.5

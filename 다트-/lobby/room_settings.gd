@@ -5,7 +5,7 @@ extends Resource
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const PRESETS: Array[String] = ["캐주얼 · 함께 배우기", "파티 · 변수가 가득", "클래식 · 다트에 집중"]
 const DESCRIPTIONS: Array[String] = [
-	"네온 오락실에서 사칙연산 카드로 놀아요. 음주와 취기 연출은 꺼져 있어요.",
+	"네온 오락실에서 일반 카드로 놀아요. 음주와 취기 연출은 꺼져 있어요.",
 	"펍에서 모든 카드와 소품으로 서로 방해해요. 취기는 약하게 시작하며 조절할 수 있어요.",
 	"카드 없이 다트 실력을 겨뤄요. 정해진 라운드의 누적 점수로 승부해요."]
 
@@ -23,7 +23,7 @@ const DESCRIPTIONS: Array[String] = [
 @export var dart_seconds: float = 30.0
 @export var cards_enabled: bool = true
 @export var special_cards: bool = false
-@export var special_chance: float = 30.0
+@export var special_chance: float = 12.5
 @export var alcohol: bool = false
 @export var intoxication: float = 0.0
 @export var drink_on_deal: bool = false
@@ -63,7 +63,7 @@ func sanitize() -> void:
 	target_score = clampi(target_score, 50, 1000)
 	rounds = clampi(rounds, 1, 20)
 	dart_seconds = clampf(dart_seconds, 5, 120) if is_finite(dart_seconds) else 30.0
-	special_chance = clampf(special_chance, 0, 100) if is_finite(special_chance) else 30.0
+	special_chance = clampf(special_chance, 0, 100) if is_finite(special_chance) else 12.5
 	intoxication = clampf(intoxication, 0, 3) if alcohol and is_finite(intoxication) else 0.0
 	drink_on_deal = drink_on_deal and alcohol
 	hit_stun = clampf(hit_stun, 0, 3) if is_finite(hit_stun) else 1.0
@@ -86,8 +86,8 @@ func allowed_types(special: bool) -> Array[int]:
 	var result: Array[int] = []
 	for index in range(Catalog.count()):
 		var entry: Dictionary = Catalog.card(index)
-		if disabled_cards.has(str(entry.id)): continue
-		if (int(entry.category) != 0) == special: result.append(index)
+		if disabled_cards.has(str(entry.id)) or not Catalog.is_available(index): continue
+		if (int(entry.category) == CardHandRules.Category.SPECIAL) == special: result.append(index)
 	return result
 
 func draw_card(random: RandomNumberGenerator) -> int:
@@ -97,9 +97,17 @@ func draw_card(random: RandomNumberGenerator) -> int:
 	if types.is_empty() and special_cards: types = allowed_types(true)
 	if types.is_empty(): return -1
 	var weights := PackedFloat32Array()
+	var totals: Dictionary = {}
 	for type in types:
 		var entry: Dictionary = Catalog.card(type)
-		weights.append(float(entry.get("weight", 1.0)) * float(card_weights.get(str(entry.id), 1.0)))
+		var weight: float = float(entry.get("weight", 1.0)) * float(card_weights.get(str(entry.id), 1.0))
+		totals[int(entry.category)] = float(totals.get(int(entry.category), 0)) + weight
+	for type in types:
+		var entry: Dictionary = Catalog.card(type)
+		var category: int = int(entry.category)
+		var weight: float = float(entry.get("weight", 1.0)) * float(card_weights.get(str(entry.id), 1.0))
+		weights.append(weight / float(totals[category]) * CardHandRules.DRAW_WEIGHTS[category])
+
 	return types[random.rand_weighted(weights)]
 
 func to_snapshot() -> Dictionary:

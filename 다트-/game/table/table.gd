@@ -33,19 +33,13 @@ const BOARD_SCALE: float = 2.5
 ## 투척선 위치(z)와 그 앞 보호 레인의 경계. 투척선에서 과녁 면까지 7.2m다
 ## (2026-11-02 "두 배는 늘리자" — 3.6m 의 두 배. 투척선을 두는 대신 다트 홀을 그만큼 늘려 과녁 벽을 물렸다:
 ##  투척선을 라운지 쪽으로 밀면 던지는 칸이 사라지고 카드 라운드 시연의 방해 구역과 겹친다).
+## 제거된 펜스의 옛 기준선. 매트 끝 배치와 과거 검사 좌표 호환에만 사용한다.
 const NO_ENTRY_Z: float = -3.7
 const THROW_LINE_Z: float = -3.6
-## 보호 레인 반폭. 다트가 날아가는 이 가운데 복도만 막고, 양옆은 지나다니며 구경·방해할 수 있다.
+## 바닥 매트의 반폭. 이동을 제한하지 않는다.
 const LANE_HALF: float = 1.2
-## 몸으로 막기 구역(2026-11-02 F6 이식): 레인 옆벽에 뚫어 둔 틈의 z 구간 (앞 끝, 뒤 끝).
-## 여기로 들어와 다트 앞을 몸으로 가로막는다. 이 칸 말고는 레인 안으로 못 들어간다
-## (투척선 바로 앞은 막아 둔다 — 던지는 사람 코앞에 서면 무엇을 던져도 막히기 때문이다).
-## 앞뒤 거리는 실제 궤적을 재서 골랐다(투척선에 선 사람 기준). 다트는 중력 보정 때문에 던진 직후 직선보다
-## 위로 떴다가 과녁으로 내려오므로 앞으로 갈수록 빠르게 높아진다 — 투척선에서
-##   0.9m 앞(구역 뒤 끝): 1.83m · 1.6m 앞(구역 앞 끝): 2.03m · 2.0m 앞: 2.18m
-## 몸 캡슐 윗끝이 1.75m(판정 반지름 0.3m)라 이 구역 안에서만 서서 가운데 조준을 막을 수 있다.
-## 더 앞은 서서는 안 닿고(점프해야 한다), 더 뒤는 던지는 사람 코앞이라 막아 두었다.
-## 위를 노린 다트는 서 있으면 머리 위로 지나간다 → 점프로 막는다(F6 과 같은 느낌).
+## 봇이 서서 몸으로 막기 좋은 선호 구간. 펜스 제거 후 실제 몸 판정은 투척선 앞 다트 홀 전체다.
+## 기존 다트 궤적을 기준으로 골랐으며 더 앞에서는 머리 위를 지나가므로 점프가 필요하다.
 const BLOCK_ZONE := Vector2(-5.2, -4.5)
 ## 벽 안쪽 면에서 몸 중심이 더 들어오지 못하는 거리(벽 두께 절반 + 몸 반지름).
 const BODY_MARGIN: float = 0.45
@@ -195,7 +189,7 @@ static func layout_signature() -> String:
 
 
 ## 사람이 설 수 있는 바닥 두 칸(벽 안쪽에서 몸 반지름만큼 뺀 것).
-## 가운데 보호 레인은 여기서 빼지 않는다 — 레인 벽(레이어 4)이 막고 양옆은 지나다닐 수 있다.
+## 중앙 펜스와 투명 제한벽이 없어 두 칸 전체를 자유롭게 걸을 수 있다.
 ## 다트 홀 칸은 라운지까지 이어지므로 z 끝을 라운지와 같이 둔다 — 둘의 합집합이 ㄱ자다.
 static func walkable_halls() -> Array[Rect2]:
 	var front: float = DART_HALL.position.y + BODY_MARGIN
@@ -211,9 +205,9 @@ static func block_spot() -> Vector3:
 	return Vector3(0, 0, BLOCK_ZONE.y - 0.2)
 
 
-## 몸으로 막는 칸 안인가(레인 옆벽의 틈). 다트 앞을 가로막을 수 있는 유일한 자리다.
+## 투척선 앞 다트 홀 어디서든 몸으로 막을 수 있다. 투척자 뒤 대기 인원은 제외한다.
 static func in_block_zone(point: Vector3) -> bool:
-	return absf(point.x) <= LANE_HALF and point.z >= BLOCK_ZONE.x and point.z <= BLOCK_ZONE.y
+	return DART_HALL.has_point(Vector2(point.x, point.z)) and point.z < THROW_LINE_Z
 
 
 ## 여기서만 던질 수 있다. 라운지(테이블·바)에서는 못 던진다.
@@ -302,14 +296,7 @@ func _ready() -> void:
 	_wall_x(LOUNGE.position.x, LOUNGE.position.y, LOUNGE.end.y, wall_y, wall_height)
 	_wall_x(LOUNGE.end.x, LOUNGE.position.y, LOUNGE.end.y, wall_y, wall_height)
 	_wall_z(LOUNGE.end.y, LOUNGE.position.x, LOUNGE.end.x, wall_y, wall_height)
-	# 플레이어 마스크에만 포함되는 투명 벽(다트 레이는 통과한다): 가운데 보호 레인 복도.
-	# 앞(투척선 쪽)과 몸막 구역 앞을 가로막고, 옆벽은 몸막 구역만큼 끊어 둔다 — 그 틈으로만 레인에 들어온다.
-	# 레인 바깥 양옆 통로는 그대로 열려 있다(구경·헤클링).
-	for cross: float in [NO_ENTRY_Z, BLOCK_ZONE.x]:
-		_box(Vector3(0, 2, cross), Vector3(LANE_HALF * 2, 6, 0.1), 4)
-	for segment: Vector2 in [Vector2(DART_HALL.position.y, BLOCK_ZONE.x), Vector2(BLOCK_ZONE.y, NO_ENTRY_Z)]:
-		for side: float in [-1.0, 1.0]:
-			_box(Vector3(side * LANE_HALF, 2, (segment.x + segment.y) / 2.0), Vector3(0.1, 6, segment.y - segment.x), 4)
+	# 중앙 펜스와 레이어 4 진입 제한벽을 제거하여 과녁 앞을 자유롭게 걷는다.
 	# 사람이 부딪히는 가구.
 	_cylinder(TABLE_CENTER, TABLE_SIZE.x / 2.0, TABLE_HEIGHT)
 	_box(BAR_BOX.get_center(), BAR_BOX.size)

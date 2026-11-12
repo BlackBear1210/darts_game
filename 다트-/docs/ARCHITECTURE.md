@@ -19,9 +19,11 @@
 | `game/dart/` | 설정 Resource, 공통 운동식, 확정된 포물선 재생 |
 | `game/match/` | 방장 턴·시계·투척 요청 검증·점수·이탈·경기 종료·재경기, 라운드 전 카드 나눠 주기 |
 | `ui/game_hud.gd` | 점수·차례·상태·조작·공동 순위, 같은 월드를 보는 봇 SubViewport와 F1~F4 |
-| `game/cards/card_hand_rules.gd` | 손패 7장 채우기·카드 4종(연산/다트/과녁/물리) 순수 규칙. 현재 흐름도 시연에서만 사용 |
+| `game/cards/card_hand_rules.gd` | 손패 7장 채우기·카드 5분류(연산/다트/과녁/피지컬/특수) 손패·가중치 규칙. F5/F6 공용 |
 | `art/` | 디자인 담당의 펍·캐릭터·다트판 그림·몸짓과 F6 아트 쇼케이스. 2026-10-26부터 F5 경기의 외형을 그린다(충돌·채점은 안 함) |
 | `ui/pub_theme.gd` | HUD·대기실 공용 색·테두리(PubTheme) |
+
+2026-11-12 변경: F5 공용 맵은 중앙 펜스와 진입 제한벽을 없앴다. 투척선 앞 다트 홀 전체가 몸 판정 후보이며 선 뒤에서만 던진다. `RoundRules.Effect.contributors`가 동일 방해카드의 실제 사용자들을 추적하고 2/3인 협동을 계산한다. `MatchCards`는 실제 peer ID·인원·배율을 공개하고, `BoardChaos.boost`와 `BoardLayout.apply_card_change`를 F5/F6가 공유한다.
 
 Autoload는 없다. `/root/Main/NetworkSession`은 화면 전환 중 유지한다.
 RPC는 이 지속 노드에서만 수신하고, Game/MatchController는 로컬 signal 구독으로 자기 책임의 메시지를 받는다.
@@ -36,7 +38,7 @@ F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `Player
 - `lobby/room_settings.gd`: 공개 설정 Resource. 비밀번호·개발자 권한은 포함하지 않는다. sanitize/허용 카드 풀/상대 가중치가 여기 있다.
 - `network/network_session.gd`: 초대/암호 도전 응답, 정원, 설정 발신자 검증, 준비와 자동 시작. 개발자 값은 local server host+debug 개발 플래그 조건을 별도로 확인한다.
 - `ui/settings_panel.gd`, `player_preferences.gd`: ESC 개인 설정과 모니터 방장/개발자 설정. 개인 설정은 ConfigFile, 공유 설정은 server 승인만 사용한다.
-- `game/match/match_cards.gd`: 실제 peer ID와 기존 순수 RoundRules 자리 인덱스를 변환한다. 다트 턴(조준·비행) 중 누구나 쓰는 카드 선택·사용·대응과 카드 효과/승리를 MatchController로 연결한다. 효과 대상은 무효 ×0 말고는 늘 지금 던지는 사람이다(내부 `MatchRules`가 RoundRules의 대상 검사만 바꾼다). 점수·과녁 효과는 꽂힐 때 `landing_points`로, 비행 중 궤적 효과는 `MatchController.redirect_flight`로 반영한다. 봇 카드는 방장이 다트 턴마다 `tick_bots`로 정한다. 스냅샷은 hand/pending_card/pending_slot/card_effects/feed를 포함한다.
+- `game/match/match_cards.gd`: 실제 peer ID와 기존 순수 RoundRules 자리 인덱스를 변환한다. 다트 턴(조준·비행) 중 누구나 쓰는 카드 선택·사용·대응과 카드 효과/승리를 MatchController로 연결한다. 효과 대상은 기본적으로 현재 투척자이며, 무효 ×0은 대기 카드, 몸 받기·재도전은 사용자, 전체 효과는 전원이다(내부 `MatchRules`가 RoundRules의 대상 검사만 바꾼다). 점수·과녁 효과는 꽂힐 때 `landing_points`로, 비행 중 궤적 효과는 `MatchController.redirect_flight`로 반영한다. 봇 카드는 방장이 다트 턴마다 `tick_bots`로 정한다. 스냅샷은 hand/pending_card/pending_slot/card_effects/feed를 포함한다.
 - `game/lounge/lounge_world.gd`: 모니터·주크박스·소품과 테마. 방장만 물체 소유권/거리/요청 제한/병 궤적/적중/취기·스턴을 갱신한다. 시계는 남은 시간으로 보내 서로 다른 PC의 단조 시계 차이를 피한다. 과거 match_id 이벤트는 무시한다.
 - `game/lounge/youtube_bridge.gd`, `youtube_player.html`: 외부 브라우저 공식 임베드. 루프백에 /player·/state 읽기 전용 경로만 제공하고 헤더 크기·시간·동시 요청 수를 제한한다. 영상·전원·볼륨을 전달하고 파일/명령 실행 엔드포인트는 제공하지 않는다.
 - `ui/lounge_hud.gd`: 짧은 효과 피드·준비 인원·카드 키·상호작용·공동 순위. 기존 `GameHUD`는 legacy 예시/서버 검증 경로에 남긴다.
@@ -175,7 +177,7 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 - **방**: `TableView`(`game/table/table.gd`)는 충돌 상자만 만든다(바닥·벽·천장·제한 벽·테이블·바·주크박스·스툴 3개 = StaticBody3D 13개, 메시 없음). 보이는 펍은 `pub_builder.gd` → `art/pub/game_room_builder.gd`가 TableView 상수를 읽어 만든 `art/pub/pub_game.tscn`이고 `table.tscn`의 자식 `Pub`으로 붙는다. 방 루트의 `layout_signature` 메타가 `TableView.layout_signature()`와 다르면 시작 때 경고, `test_game_look` 실패. 화면이 있을 때만 `StaticBatch`로 정적 메시를 묶는다.
 - **과녁**: `BoardView`가 `BoardArt.build(Face, layout.numbers, BoardLayout.RADIUS, …)`로 그린다. 카드로 숫자 배치가 바뀌면 `show_layout()`이 다시 그린다. 채점은 그대로 `BoardScorer`.
 - **캐릭터**: `PlayerView._dress()`가 `PlayerLook.character(seat)`를 `Model`로 붙이고 180° 돌린다(캐릭터 +Z 정면). `CharacterRig`가 피벗(LegL/LegR/Body/ArmL/ArmR/Neck)을 돌려 서기·걷기·숙이기·앉기·점프·조준·던지기를 만든다. 몸짓은 각 화면에서 위치·자세·속도로 계산하며 네트워크로 보내지 않는다. 충돌 캡슐·눈높이·속도는 바뀌지 않았다.
-- **다트·손**: 비행 다트 깃은 던진 사람 색(`Dart.paint`), 꽂힌 뒤 `Visual`만 2.2배(과녁 2.5배와 맞춤, 채점 무관). 1인칭 손은 `CharacterFactory.create_hand(자리 색)`.
+- **다트·손**: 비행 다트 깃은 던진 사람 색(`Dart.paint`), 꽂힌 뒤 `Visual`만 2.2배(과녁 2.5배와 맞춤, 채점 무관). 1인칭 오른팔은 선수 몸과 같은 리깅 캐릭터의 팔이다(`art/characters/first_person_arm.gd` — 2026-11-09, 예전 도형 손 `CharacterFactory.create_hand` 를 대체했다).
 - **카드 충전 라운드 연출(2026-10-31 늦은 밤)**: `game/table/deck_show.gd`(`GameView.deck_show`)가 스냅샷이 CARDS 단계로 들어올 때마다 테이블 가운데 덱으로 돌아옴 → 섞기(`ShuffleMotions`, 방식 = `match_id + 라운드`) → 한 바퀴씩 나눠 주기를 재생한다. 새 카드는 `SeatCards.hold()`로 숨겼다가 날아와 닿을 때 `release()`로 뒤집혀 나타난다. 화면이 있을 때만 만들고(헤드리스 서버엔 없음) 규칙·네트워크는 건드리지 않는다. 손님 화면 확인 = `tests/run_deck_show_remote.py`.
 - **방 크기(방 넓히기 v4 → 2026-11-07)**: 다트 홀 13.2×12.5 m(11-02 과녁 7.2m · 11-07 다트 머신 자리 1.4m), 라운지 22×9 m, 층고 4.8 m(`TableView` 상수). 바 끝 냉장고는 `BAR_FRIDGE_AT`(장식 충돌 `decor_blocks()`). 네온 오락실(`game/lounge/arcade/arcade_room.gd`)은 펍 그림에서 `Bar·NpcCorner·PoolTable·Barrels·PubOnly·Windows` 묶음을 빼고(`LoungeWorld.ARCADE_SKIP`) 같은 자리에 주스 가게·가챠·농구·인형뽑기 코너를 세운다. 움직이지 않는 오락실 메시는 `Static` 아래 모아 `StaticBatch`로 묶는다.
 - **아수라장 다트 머신(2026-11-07)**: 그림 `art/dart_machine/dart_machine.gd`(`TableView.machine`, 펍/오락실 스킨 `set_machine_skin`). 과녁 모양 계산은 `game/board/board_chaos.gd` 한 곳(순수 계산, age → 회전각·벌어짐·셔터) — `MatchCards.landing_points`(방장 점수), `BoardView.show_chaos`(`Face/Spin/SectorGroup0~4`), `DartMachine.show_chaos` 가 같은 값을 쓴다. 효과 시작 시각은 `MatchCards._chaos_from`, 스냅샷에는 age 만 싣는다(`MatchController.chaos_shape`). 꽂힌 다트는 `BoardView.pin/clear_pins`.

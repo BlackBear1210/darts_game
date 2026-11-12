@@ -1,7 +1,7 @@
 extends SceneTree
 ## 몸으로 막기(2026-11-02 F6 이식): 몸막 구역에 선 사람에게 다트가 맞으면
 ## 그 발은 0점이고 맞은 사람은 스턴 + 방해 성공 보상(점수)을 받는다.
-## 구역 밖(레인 안쪽 복도)은 투명 벽으로 막혀 있어 거기서는 막을 수 없다.
+## 펜스 제거 후 투척선 앞 다트 홀 전체가 몸 판정 후보이며 뒤 대기 인원은 제외한다.
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
 
 var main: Node
@@ -16,9 +16,10 @@ func _run() -> void:
 	var middle: float = (TableView.BLOCK_ZONE.x + TableView.BLOCK_ZONE.y) / 2.0
 	assert(TableView.in_block_zone(Vector3(0, 0, middle)))
 	assert(TableView.in_block_zone(TableView.block_spot()), "서서 막는 자리는 구역 안이다")
-	assert(not TableView.in_block_zone(Vector3(0, 0, TableView.BLOCK_ZONE.y + 0.3)), "구역 뒤(투척선 쪽)는 막혀 있다")
-	assert(not TableView.in_block_zone(Vector3(0, 0, TableView.BLOCK_ZONE.x - 0.3)), "구역 앞(과녁 쪽)은 막혀 있다")
-	assert(not TableView.in_block_zone(Vector3(TableView.LANE_HALF + 0.4, 0, middle)), "레인 바깥은 구경 자리다")
+	assert(TableView.in_block_zone(Vector3(0, 0, TableView.BLOCK_ZONE.y + 0.3)), "펜스 제거 후 예전 구역 뒤에서도 막을 수 있다")
+	assert(TableView.in_block_zone(Vector3(0, 0, TableView.BLOCK_ZONE.x - 0.3)), "과녁 앞 어디서든 막을 수 있다")
+	assert(TableView.in_block_zone(Vector3(TableView.LANE_HALF + 0.4, 0, middle)), "레인 옆도 몸 판정에 포함")
+	assert(not TableView.in_block_zone(Vector3(0, 0, TableView.THROW_LINE_Z + 0.2)), "투척선 뒤 대기 인원은 제외")
 	# 구역은 투척선보다 앞(과녁 쪽)이고 다트 홀 안이다.
 	assert(TableView.BLOCK_ZONE.x < TableView.BLOCK_ZONE.y and TableView.BLOCK_ZONE.y < TableView.NO_ENTRY_Z)
 	assert(TableView.BLOCK_ZONE.x > TableView.DART_HALL.position.y)
@@ -69,7 +70,7 @@ func _run() -> void:
 	assert(int(controller.state.find_player(1).score) == 0, "던진 사람 점수는 그대로다")
 	# 방해 성공 보상(점수)과 스턴.
 	var after: int = controller.state.find_player(-1).score
-	assert(after == before + Rules.DISRUPT_SCORE, "막은 사람이 방해 성공 보상을 받는다: %d → %d" % [before, after])
+	assert(after == before, "카드 없는 피격은 점수 보상 없음: %d → %d" % [before, after])
 	assert(game._frozen(-1), "막은 사람은 잠깐 못 움직인다")
 	assert(controller.state.feed.any(func(line: String) -> bool: return line.begins_with("dizzy\t")), "킬로그에 남는다: %s" % [controller.state.feed])
 	# 스턴이 풀리면 다시 움직인다.
@@ -78,5 +79,5 @@ func _run() -> void:
 
 	main.queue_free()
 	await process_frame
-	print("PASS: body block scores zero, stuns the blocker, pays the disruption reward, and only works inside the block zone")
+	print("PASS: body block scores zero, stuns the blocker, pays the disruption reward, and works throughout the open dart hall")
 	quit()

@@ -43,7 +43,8 @@ const Hud = preload("res://game/card_round/ui/card_round_hud.gd")
 const RoundTracker = preload("res://game/card_round/ui/round_tracker.gd")
 const EmoteWheel = preload("res://game/card_round/ui/emote_wheel.gd")
 const BotDriver = preload("res://game/player/bot_driver.gd")
-const CharacterFactory = preload("res://art/characters/character_factory.gd")
+## 1인칭 오른팔(F5 경기와 같은 리깅 캐릭터 팔).
+const FirstPersonArm = preload("res://art/characters/first_person_arm.gd")
 const SynthAudio = preload("res://art/showcase/synth_audio.gd")
 
 ## 아래 값은 전부 시연값(팀 확정 전).
@@ -115,7 +116,12 @@ func _ready() -> void:
 	_throw_input.camera = ctx.camera
 	_throw_input.board = ctx.table.board
 	_throw_input.throw_requested.connect(darts.on_local_throw)
-	_hand.add_child(CharacterFactory.create_hand(Context.LOCAL_SEAT))
+	# 1인칭 오른팔은 F5 경기와 같은 리깅 캐릭터 팔을 쓴다(2026-11-09).
+	var arm := FirstPersonArm.new()
+	arm.name = "FirstPersonHand"
+	arm.seat = Context.LOCAL_SEAT
+	arm.dart_grip = ($Camera/Hand/HeldDart as Node3D).transform
+	_hand.add_child(arm)
 	($Camera/Hand/HeldDart as DartView).paint(PlayerLook.COLORS[Context.LOCAL_SEAT])
 	_hand.visible = false
 	effects.build_props()
@@ -147,7 +153,6 @@ func _fill_context() -> void:
 		names.append(PlayerLook.CHARACTER_NAMES[seat])
 		bots.append(ctx.bot_driven(seat))
 	ctx.rules = Rules.new(names, bots, settings.win_mode())
-	ctx.rules.reward_mode = settings.reward_mode()
 	if autoplay:
 		ctx.rules.round_limit = autoplay_rounds
 	ctx.hud = Hud.new()
@@ -363,6 +368,8 @@ func _dart_stage() -> void:
 		if ctx.rules.finished:
 			break
 		await _turn(position)
+		if ctx.rules.take_retry(ctx.rules.order[position]):
+			await _turn(position)
 
 
 ## 한 사람의 차례: 일어나 던지는 자리로 → (봇) 막는 사람이 있으면 비키거나 그냥 던짐 / (나) 30초 안에 3발 → 차례 정리.
@@ -524,8 +531,6 @@ func _on_setting_changed(key: String, value: int) -> void:
 	settings.values[key] = value
 	settings.save_file()
 	match key:
-		"reward":
-			ctx.rules.reward_mode = settings.reward_mode()
 		"speed":
 			Engine.time_scale = settings.base_speed(autoplay, ctx.capturing)
 		"voice":

@@ -23,6 +23,7 @@ func _run() -> void:
 	_check_turn_effects()
 	_check_win_modes()
 	_check_disrupt_and_ranking()
+	_check_throw_zone()
 	var args := OS.get_cmdline_user_args()
 	if args.has("--play") or args.has("--render"):
 		await _check_scene(args.has("--render"))
@@ -47,6 +48,7 @@ func _rules(mode: int = Rules.WinMode.ROUND_LIMIT) -> Rules:
 
 func _give(rules: Rules, seat: int, slot: int, id: String) -> void:
 	rules.seats[seat].slots[slot] = rules.new_card(CardCatalog.type_of(id))
+	rules.seats[seat].slots[slot].choice = 0
 
 
 func _check_deal_and_draw() -> void:
@@ -79,16 +81,16 @@ func _check_deal_and_draw() -> void:
 
 func _check_lift_and_use() -> void:
 	var rules := _rules()
-	_give(rules, 0, 0, "plus_10")
+	_give(rules, 0, 0, "precision")
 	_give(rules, 0, 1, "times_0")
-	_give(rules, 1, 3, "times_2")
+	_give(rules, 1, 3, "power_up")
 	_check(rules.lift(0, 0, 0.0), "카드 꺼내기")
 	_check(not rules.use_problem(0, 0, 0.5).is_empty(), "대기 시간 전에는 못 쓴다")
 	var used: Dictionary = rules.use(0, 0, 1.3)
 	_check(not used.is_empty() and used.slot == 0, "대기 후 사용")
 	_check(rules.seats[0].slots[0] == null and rules.seats[0].pending == null, "쓴 카드는 손·테이블 칸에서 빠진다")
 	var effect: Rules.Effect = used.effect
-	_check(effect.state == Rules.EffectState.QUEUED and effect.label == "+10", "효과는 다음 다트까지 대기")
+	_check(effect.state == Rules.EffectState.QUEUED and effect.label == "+5", "효과는 다음 다트까지 대기")
 	# 무효: 꺼내 든 상대가 없으면 못 쓴다 → 상대가 꺼내면 그 카드를 없앤다.
 	rules.lift(0, 1, 2.0)
 	_check(rules.use_problem(0, 1, 4.0) == "카드를 꺼내 든 상대가 없다", "무효는 꺼내 든 상대가 필요")
@@ -104,20 +106,21 @@ func _check_lift_and_use() -> void:
 
 func _check_scoring() -> void:
 	var rules := _rules()
-	_give(rules, 0, 0, "plus_10")
-	_give(rules, 0, 1, "times_2")
-	for slot in [0, 1]:
+	_give(rules, 0, 0, "precision")
+	_give(rules, 0, 1, "power_up")
+	for slot in [0]:
 		rules.lift(0, slot, 0.0)
 		rules.use(0, 0, 2.0)
 	rules.begin_turn(0)
 	var hit: Dictionary = rules.resolve_dart(0, 20)
-	_check(hit.points == 50, "곱하기 먼저, 더하기 나중: 20 ×2 +10 = 50 (실제 %d)" % hit.points)
+	_check(hit.points == 25, "정밀 조정: 20 +5 = 25 (실제 %d)" % hit.points)
 	_check(rules.resolve_dart(0, 20).points == 20, "다음 다트 효과는 한 번만")
-	_give(rules, 1, 0, "minus_20")
+	_give(rules, 1, 0, "precision")
 	rules.lift(1, 0, 0.0)
-	rules.use(1, 0, 2.0)
-	_check(rules.resolve_dart(0, 15).points == 0, "빼기는 0점 아래로 안 내려간다")
-	_give(rules, 0, 2, "plus_10")
+	rules.seats[1].pending.choice = 1
+	rules.use(1, 1, 2.0)
+	_check(rules.resolve_dart(1, 2).points == -3, "감점은 음수까지 허용")
+	_give(rules, 0, 2, "precision")
 	rules.lift(0, 2, 0.0)
 	rules.use(0, 0, 2.0)
 	_check(rules.resolve_dart(0, 0).points == 0, "빗나가면 0점")
@@ -170,15 +173,17 @@ func _check_win_modes() -> void:
 
 func _check_disrupt_and_ranking() -> void:
 	var rules := _rules()
-	rules.reward_mode = Rules.RewardMode.ROUND_CARD
 	var reward: Dictionary = rules.disrupt(1)
-	_check(reward.kind == "card" and reward.card.temporary and rules.hand_count(1) == 1, "방해 보상: 라운드 한정 카드")
+	_check(reward.kind == "none" and rules.seats[1].score == 0, "카드 없이는 보상 없음")
+	_check(rules.dart_modifiers(1).dizzy == 0.25, "피격은 약한 어지러움")
+	_give(rules, 1, 0, "body_reward")
+	rules.lift(1, 0, 0.0)
+	rules.use(1, 1, 2.0)
 	rules.disrupt(1)
 	rules.disrupt(1)
-	_check(rules.seats[1].reward.size() == Rules.RESERVE_SLOTS and rules.seats[1].score == Rules.DISRUPT_SCORE, "예약 칸이 차면 점수로")
-	var vanished: Array = rules.end_round()
-	_check(vanished.size() == 2 and rules.seats[1].reward.is_empty(), "라운드 한정 카드는 라운드 끝에 사라진다")
-	rules.reward_mode = Rules.RewardMode.SCORE
+	_check(rules.seats[1].score == 60, "사용 뒤 피격마다 +30")
+	rules.end_round()
+	_check(not rules.dart_modifiers(1).body_reward, "라운드 끝에 보상 해제")
 	rules.seats[0].score = 50
 	rules.seats[1].score = 80
 	rules.seats[2].score = 80
@@ -224,8 +229,26 @@ func _check_scene(render: bool) -> void:
 	_check(int(stats.get("used", 0)) >= 1, "카드가 한 장 이상 쓰였다")
 	_check(int(stats.get("darts", 0)) >= 12, "다트를 던졌다")
 	_check(bool(stats.get("refilled_to_7", false)), "충전 라운드 뒤 모두 7장")
-	# 2026-10-28 방해선: 봇(자동 진행이면 내 자리도)은 구역을 옆길로 돌아가야 한다 → 구역에 부딪혀 되돌려진 적이 없어야 한다.
-	_check(int(stats.get("zone_bumps", -1)) == 0, "차례 아닌 사람이 던지는 칸 근처 구역에 들어가지 않았다")
+	# 피격 넉백·추가 차례에서는 보호 구역으로 밀려들 수 있다. 진입 횟수 대신 _check_throw_zone에서 경계 집행을 검사한다.
 	print("SCENE STATS ", stats)
 	scene.queue_free()
 	await process_frame
+
+
+## F6의 별도 투척 보호 구역은 진입이 한 번도 없는지보다 실제로 경계 밖으로 되미는지가 계약이다.
+func _check_throw_zone() -> void:
+	var context = preload("res://game/card_round/flow/round_context.gd").new()
+	var zone = preload("res://game/card_round/flow/throw_zone.gd").new()
+	context.autoplay = true
+	for seat in range(4):
+		var actor := (load("res://game/player/player.tscn") as PackedScene).instantiate() as PlayerView
+		actor.position = Vector3(0, 0, 2)
+		actor.seated = false
+		context.actors.append(actor)
+	zone.setup(context)
+	zone.set_active(0)
+	context.actors[1].position = Vector3(0, 0, -2)
+	zone.keep_out(1.0 / 60.0)
+	_check(not zone.in_keep_out(context.actors[1].position), "F6 보호 구역에 들어온 상대를 경계 밖으로 되민다")
+	_check(int(context.stats.zone_bumps) == 1, "보호 구역 진입을 기록한다")
+	for actor: PlayerView in context.actors: actor.free()
