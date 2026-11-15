@@ -1,0 +1,246 @@
+{
+  "glb": {
+    "bytes": 12561844,
+    "sha256": "8b9db8b080adc178a248ee5c1cad674e63e73d3f14e933ab1a73e16abcd65f00",
+    "meshes": 1,
+    "bones": 65,
+    "triangles": 94928,
+    "vertices": 61860,
+    "bounds": [
+      [
+        -0.11621146649122238,
+        -0.14641012251377106,
+        -9.957830826579084e-08
+      ],
+      [
+        0.11621145904064178,
+        0.14641036093235016,
+        0.9987189769744873
+      ]
+    ],
+    "bounds_max_error": 8.940696716308594e-08,
+    "images": [
+      {
+        "name": "character_basecolor_repaired",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true
+      },
+      {
+        "name": "character_left_only리깅추가_glb_metallic-character_left_only리깅추가_glb_roughness",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true
+      },
+      {
+        "name": "left_character_kept_Normal_Bake",
+        "size": [
+          1024,
+          1024
+        ],
+        "packed": true
+      }
+    ],
+    "weighted_vertices": 61860,
+    "actions": 0,
+    "bone_names": [
+      "mixamorig:Hips",
+      "mixamorig:LeftUpLeg",
+      "mixamorig:LeftLeg",
+      "mixamorig:LeftFoot",
+      "mixamorig:LeftToeBase",
+      "mixamorig:LeftToe_End",
+      "mixamorig:RightUpLeg",
+      "mixamorig:RightLeg",
+      "mixamorig:RightFoot",
+      "mixamorig:RightToeBase",
+      "mixamorig:RightToe_End",
+      "mixamorig:Spine",
+      "mixamorig:Spine1",
+      "mixamorig:Spine2",
+      "mixamorig:LeftShoulder",
+      "mixamorig:LeftArm",
+      "mixamorig:LeftForeArm",
+      "mixamorig:LeftHand",
+      "mixamorig:LeftHandIndex1",
+      "mixamorig:LeftHandIndex2",
+      "mixamorig:LeftHandIndex3",
+      "mixamorig:LeftHandIndex4",
+      "mixamorig:LeftHandMiddle1",
+      "mixamorig:LeftHandMiddle2",
+      "mixamorig:LeftHandMiddle3",
+      "mixamorig:LeftHandMiddle4",
+      "mixamorig:LeftHandPinky1",
+      "mixamorig:LeftHandPinky2",
+      "mixamorig:LeftHandPinky3",
+      "mixamorig:LeftHandPinky4",
+      "mixamorig:LeftHandRing1",
+      "mixamorig:LeftHandRing2",
+      "mixamorig:LeftHandRing3",
+      "mixamorig:LeftHandRing4",
+      "mixamorig:LeftHandThumb1",
+      "mixamorig:LeftHandThumb2",
+      "mixamorig:LeftHandThumb3",
+      "mixamorig:LeftHandThumb4",
+      "mixamorig:Neck",
+      "mixamorig:Head",
+      "mixamorig:HeadTop_End",
+      "mixamorig:RightShoulder",
+      "mixamorig:RightArm",
+      "mixamorig:RightForeArm",
+      "mixamorig:RightHand",
+      "mixamorig:RightHandIndex1",
+      "mixamorig:RightHandIndex2",
+      "mixamorig:RightHandIndex3",
+      "mixamorig:RightHandIndex4",
+      "mixamorig:RightHandMiddle1",
+      "mixamorig:RightHandMiddle2",
+      "mixamorig:RightHandMiddle3",
+      "mixamorig:RightHandMiddle4",
+      "mixamorig:RightHandPinky1",
+      "mixamorig:RightHandPinky2",
+      "mixamorig:RightHandPinky3",
+      "mixamorig:RightHandPinky4",
+      "mixamorig:RightHandRing1",
+      "mixamorig:RightHandRing2",
+      "mixamorig:RightHandRing3",
+      "mixamorig:RightHandRing4",
+      "mixamorig:RightHandThumb1",
+      "mixamorig:RightHandThumb2",
+      "mixamorig:RightHandThumb3",
+      "mixamorig:RightHandThumb4"
+    ],
+    "importer_display_helpers": [
+      "Icosphere"
+    ]
+  },
+  "fbx": {
+    "bytes": 8880268,
+    "sha256": "0f8d3ac7b41122ce475abd9d02a715337461f525fde02b80b397eb1818728ecb",
+    "meshes": 1,
+    "bones": 65,
+    "triangles": 94928,
+    "vertices": 47466,
+    "bounds": [
+      [
+        -0.11621146649122238,
+        -0.14641016721725464,
+        -3.6304508288509396e-09
+      ],
+      [
+        0.11621147394180298,
+        0.14641040563583374,
+        0.9987187385559082
+      ]
+    ],
+    "bounds_max_error": 1.7881393432617188e-07,
+    "images": [
+      {
+        "name": "character_basecolor_repaired",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true
+      },
+      {
+        "name": "character_left_only리깅추가_glb_metallic",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true
+      },
+      {
+        "name": "character_left_only리깅추가_glb_roughness",
+        "size": [
+          2048,
+          2048
+        ],
+        "packed": true
+      },
+      {
+        "name": "tripo_image_954d3209_3",
+        "size": [
+          1024,
+          1024
+        ],
+        "packed": true
+      }
+    ],
+    "weighted_vertices": 47466,
+    "actions": 0,
+    "bone_names": [
+      "mixamorig:Hips",
+      "mixamorig:LeftUpLeg",
+      "mixamorig:LeftLeg",
+      "mixamorig:LeftFoot",
+      "mixamorig:LeftToeBase",
+      "mixamorig:LeftToe_End",
+      "mixamorig:RightUpLeg",
+      "mixamorig:RightLeg",
+      "mixamorig:RightFoot",
+      "mixamorig:RightToeBase",
+      "mixamorig:RightToe_End",
+      "mixamorig:Spine",
+      "mixamorig:Spine1",
+      "mixamorig:Spine2",
+      "mixamorig:LeftShoulder",
+      "mixamorig:LeftArm",
+      "mixamorig:LeftForeArm",
+      "mixamorig:LeftHand",
+      "mixamorig:LeftHandIndex1",
+      "mixamorig:LeftHandIndex2",
+      "mixamorig:LeftHandIndex3",
+      "mixamorig:LeftHandIndex4",
+      "mixamorig:LeftHandMiddle1",
+      "mixamorig:LeftHandMiddle2",
+      "mixamorig:LeftHandMiddle3",
+      "mixamorig:LeftHandMiddle4",
+      "mixamorig:LeftHandPinky1",
+      "mixamorig:LeftHandPinky2",
+      "mixamorig:LeftHandPinky3",
+      "mixamorig:LeftHandPinky4",
+      "mixamorig:LeftHandRing1",
+      "mixamorig:LeftHandRing2",
+      "mixamorig:LeftHandRing3",
+      "mixamorig:LeftHandRing4",
+      "mixamorig:LeftHandThumb1",
+      "mixamorig:LeftHandThumb2",
+      "mixamorig:LeftHandThumb3",
+      "mixamorig:LeftHandThumb4",
+      "mixamorig:Neck",
+      "mixamorig:Head",
+      "mixamorig:HeadTop_End",
+      "mixamorig:RightShoulder",
+      "mixamorig:RightArm",
+      "mixamorig:RightForeArm",
+      "mixamorig:RightHand",
+      "mixamorig:RightHandIndex1",
+      "mixamorig:RightHandIndex2",
+      "mixamorig:RightHandIndex3",
+      "mixamorig:RightHandIndex4",
+      "mixamorig:RightHandMiddle1",
+      "mixamorig:RightHandMiddle2",
+      "mixamorig:RightHandMiddle3",
+      "mixamorig:RightHandMiddle4",
+      "mixamorig:RightHandPinky1",
+      "mixamorig:RightHandPinky2",
+      "mixamorig:RightHandPinky3",
+      "mixamorig:RightHandPinky4",
+      "mixamorig:RightHandRing1",
+      "mixamorig:RightHandRing2",
+      "mixamorig:RightHandRing3",
+      "mixamorig:RightHandRing4",
+      "mixamorig:RightHandThumb1",
+      "mixamorig:RightHandThumb2",
+      "mixamorig:RightHandThumb3",
+      "mixamorig:RightHandThumb4"
+    ],
+    "importer_display_helpers": []
+  }
+}

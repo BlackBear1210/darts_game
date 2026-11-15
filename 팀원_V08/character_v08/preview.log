@@ -1,0 +1,13 @@
+00:01.766  blend            | Read blend: "C:\Users\아버지\Desktop\다트\output\character_v08\character_reference_hair.blend"
+00:01.859  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\아버지\.thumbnails\large\blender_17944_cafbd1cb52e7151dc83f586650b6656f.png.png"
+00:01.859  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\아버지\.thumbnails\large\blender_17944_9b3fda21f0cc4a3961d346bf34622fb2.png.png"
+00:01.859  blend            | Read blend: "C:\Users\아버지\Desktop\다트\output\character_v08\character_reference_hair.blend"
+C:\Users\아버지\Desktop\다트\output\character_v08\render_turnaround.py:52: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m=bpy.data.materials.new(name);m.use_nodes=True;nodes=m.node_tree.nodes;nodes.clear();e=nodes.new('ShaderNodeEmission');e.inputs['Color'].default_value=(*c,1);out=nodes.new('ShaderNodeOutputMaterial');m.node_tree.links.new(e.outputs[0],out.inputs['Surface']);return m
+00:11.016  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\character_v08\turnaround_draft.png'
+BlenderMCP addon registered
+Info: Saved as "character_reference_hair.blend"
+Info: Saved as "character_bald.blend"
+SHEET_PREVIEW_READY
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+BlenderMCP addon unregistered

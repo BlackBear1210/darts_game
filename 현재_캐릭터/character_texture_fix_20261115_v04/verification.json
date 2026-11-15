@@ -1,0 +1,35 @@
+{
+ "geometry_hashes_unchanged": true,
+ "hashes": {
+  "verts": "db5d16ec680707f0654e2b23f51769b3769d7eaa8cd25e22dd66d92900261fe3",
+  "topo": "deafc117966e43f3fa88aa74fb4722da9c6a02d683667b6320095d826a848221",
+  "uv": "b6c246453fd807909d1f2d8de727ba7190ee5cd44491466178e132345761e269",
+  "weights": "6445b07e43db62bc7b2c24d1f11630082d10f63526c2cadca02368074e23e7bf",
+  "bones": "e8879608bd9334bb0aedb3184312c62ce7b03a3c7b266d6ceea0611b0b33b9c6"
+ },
+ "glb": {
+  "bytes": 13738476,
+  "meshes": 1,
+  "bones": 65,
+  "triangles": 94928,
+  "weighted": true,
+  "images": [
+   "character_basecolor_v04",
+   "character_left_only리깅추가_glb_metallic-character_left_only리깅추가_glb_roughness",
+   "character_normal_v04"
+  ]
+ },
+ "fbx": {
+  "bytes": 10056620,
+  "meshes": 1,
+  "bones": 65,
+  "triangles": 94928,
+  "weighted": true,
+  "images": [
+   "character_basecolor_v04",
+   "character_left_only리깅추가_glb_metallic",
+   "character_left_only리깅추가_glb_roughness",
+   "character_normal_v04"
+  ]
+ }
+}

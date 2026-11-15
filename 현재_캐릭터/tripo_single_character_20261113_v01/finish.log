@@ -1,0 +1,10 @@
+00:01.797  blend            | Read blend: "C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\character_left_only.blend"
+C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\finish_preview.py:24: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world=bpy.data.worlds.new('preview_world');scene.world.use_nodes=True
+00:05.078  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\kept_front.png'
+00:06.953  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\kept_three_quarter.png'
+00:08.782  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\kept_back.png'
+Info: Saved as "character_left_only.blend"
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

@@ -1,0 +1,30 @@
+{
+ "objects": 1,
+ "bbox": [
+  0.229,
+  0.6986,
+  1.0
+ ],
+ "tri_faces": 13227,
+ "welded_verts": 6620,
+ "island_vertex_counts": [
+  6620
+ ],
+ "tris": 13227,
+ "verts": 14493,
+ "islands": 1,
+ "smooth_faces": 13195,
+ "flat_faces": 32,
+ "materials": [
+  "tripo_material_3826e275-65a3-4a4d-93b9-e2bbfd73bc91"
+ ],
+ "images": [
+  [
+   "Color_3826e275-65a3-4a4d-93b9-e2bbfd73bc91",
+   [
+    4096,
+    4096
+   ]
+  ]
+ ]
+}

@@ -1,0 +1,70 @@
+00:01.907  blend            | Read blend: "C:\Users\아버지\Desktop\다트\output\blender_midpoint_v02\character_midpoint_v02.blend"
+00:02.000  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\아버지\.thumbnails\large\blender_10224_458a23121969e34cfa1b242ef42b5843.png.png"
+00:05.719  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v02\face_detail.png'
+00:09.063  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v02\face_and_shoulders.png'
+Info: No new files have been packed
+Info: Saved as "character_midpoint_v02.blend"
+00:28:29 | INFO: Data are loaded, start creating Blender stuff
+00:28:29 | INFO: Blender create Mesh node ear_inner_l_mesh
+00:28:29 | INFO: Blender create Mesh node ear_inner_r_mesh
+00:28:29 | INFO: Blender create Mesh node ear_l_mesh
+00:28:29 | INFO: Blender create Mesh node ear_r_mesh
+00:28:29 | INFO: Blender create Mesh node Sphere.010
+00:28:29 | INFO: Blender create Mesh node Sphere.004
+00:28:29 | INFO: Blender create Mesh node Sphere.002
+00:28:29 | INFO: Blender create Mesh node Sphere
+00:28:29 | INFO: Blender create Mesh node Cube.001
+00:28:29 | INFO: Blender create Mesh node Cube
+00:28:29 | INFO: Blender create Mesh node finger_l_1_mesh
+00:28:29 | INFO: Blender create Mesh node finger_l_2_mesh
+00:28:29 | INFO: Blender create Mesh node finger_l_3_mesh
+00:28:29 | INFO: Blender create Mesh node finger_l_4_mesh
+00:28:29 | INFO: Blender create Mesh node finger_r_1_mesh
+00:28:29 | INFO: Blender create Mesh node finger_r_2_mesh
+00:28:29 | INFO: Blender create Mesh node finger_r_3_mesh
+00:28:29 | INFO: Blender create Mesh node finger_r_4_mesh
+00:28:29 | INFO: Blender create Mesh node Sphere.011
+00:28:29 | INFO: Blender create Mesh node Sphere.012
+00:28:29 | INFO: Blender create Mesh node Sphere.013
+00:28:29 | INFO: Blender create Mesh node Sphere.014
+00:28:29 | INFO: Blender create Mesh node Sphere.005
+00:28:29 | INFO: Blender create Mesh node Sphere.006
+00:28:29 | INFO: Blender create Mesh node Sphere.007
+00:28:29 | INFO: Blender create Mesh node Sphere.008
+00:28:29 | INFO: Blender create Mesh node forearm_l_mesh
+00:28:29 | INFO: Blender create Mesh node forearm_r_mesh
+00:28:29 | INFO: Blender create Mesh node Mesh_2.002
+00:28:29 | INFO: Blender create Mesh node hand_palm_l_mesh
+00:28:29 | INFO: Blender create Mesh node hand_palm_r_mesh
+00:28:29 | INFO: Blender create Mesh node head_face_mesh
+00:28:29 | INFO: Blender create Mesh node mouth_line_mesh
+00:28:29 | INFO: Blender create Mesh node neck_mesh
+00:28:29 | INFO: Blender create Mesh node nose_wedge_mesh
+00:28:29 | INFO: Blender create Mesh node Sphere.003
+00:28:29 | INFO: Blender create Mesh node Sphere.001
+00:28:29 | INFO: Blender create Mesh node shirt_connected_mesh
+00:28:29 | INFO: Blender create Mesh node shirt_neckband_mesh
+00:28:29 | INFO: Blender create Mesh node shoe_sole_l_mesh
+00:28:29 | INFO: Blender create Mesh node shoe_sole_r_mesh
+00:28:29 | INFO: Blender create Mesh node shoe_upper_l_mesh
+00:28:29 | INFO: Blender create Mesh node shoe_upper_r_mesh
+00:28:29 | INFO: Blender create Mesh node Cube.005
+00:28:29 | INFO: Blender create Mesh node Cube.006
+00:28:29 | INFO: Blender create Mesh node Cube.007
+00:28:29 | INFO: Blender create Mesh node Cube.002
+00:28:29 | INFO: Blender create Mesh node Cube.003
+00:28:29 | INFO: Blender create Mesh node Cube.004
+00:28:29 | INFO: Blender create Mesh node thumb_l_mesh
+00:28:29 | INFO: Blender create Mesh node thumb_r_mesh
+00:28:29 | INFO: Blender create Mesh node Sphere.015
+00:28:29 | INFO: Blender create Mesh node Sphere.009
+00:28:29 | INFO: Blender create Mesh node trouser_leg_l_mesh
+00:28:29 | INFO: Blender create Mesh node trouser_leg_r_mesh
+00:28:29 | INFO: Blender create Mesh node trousers_hips_mesh
+00:28:29 | INFO: Blender create Mesh node upper_arm_l_mesh
+00:28:29 | INFO: Blender create Mesh node upper_arm_r_mesh
+00:28:29 | INFO: glTF import finished in 0.14s
+VERIFIED {"blend_reopened": true, "glb_reimported": true, "matching_mesh_count": 58, "both_hands_five_fingers": true, "reference_packed": true, "materials_present": true, "finite_vertices": true, "head_and_shirt_closed_manifold": true, "original_game_model_unchanged": true, "rigged": false, "animated": false}
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

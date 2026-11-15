@@ -1,0 +1,10 @@
+{
+  "texture_resolution": [
+    2048,
+    2048
+  ],
+  "unchanged_pixel_fraction": 0.9886651039123535,
+  "changed_over_3_levels_fraction": 0.0068645477294921875,
+  "mean_absolute_channel_difference": 0.14569218953450522,
+  "glb_contains_exact_final_basecolor_png": true
+}

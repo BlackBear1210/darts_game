@@ -1,0 +1,29 @@
+Mode: built-in image_gen, reference-based generation then pose correction.
+Initial generation prompt:
+Use case: stylized-concept.
+Create ONE clean five-panel animation storyboard illustrating CORRECT RIGHT-HANDED DART AIMING, using the attached image ONLY as character identity/style reference, NOT as a pose reference. The existing reference pose is WRONG; replace that open-palm low-arm pose completely.
+Exactly FIVE equal panels numbered 1, 2, 3, 4, 5 in a single horizontal row on a pale warm-gray background, thin gutters, high-resolution wide composition. Medium waist-up framing, generous room around head and raised elbow. Same camera, same scale, same character in every panel. No UI, no playback controls, no card border.
+Character: the reference's slender stylized adult man, angular elongated face, long nose, big cream eyes, chunky brown hair, purple short-sleeved shirt, mild forward head and very slight rounded shoulders. Moderate low-poly 3D render, soft neutral studio light. Show his RIGHT side with his nose pointing screen RIGHT, camera very slightly toward his front so the grip is readable. Right arm is the foreground arm. Gaze aims at an unseen target offscreen right.
+CRITICAL DART GRIP AND ANATOMY: a small REAL VISIBLE dart is always pinched delicately by the RIGHT thumb and index finger around its slim barrel, with middle finger lightly supporting. Other fingers relaxed and curled, not spread. Silver pointed tip aims horizontally RIGHT toward the target, small red flights behind the fingers toward his face. The palm NEVER faces toward the target as a flat open hand. NO magic blast, NO pushing palm. Exactly two natural arms and hands. Left hand holds a small fan of playing cards in front of lower ribs consistently in all five frames.
+CRITICAL AIM POSTURE: right shoulder relaxed; right upper arm reaches forward so the ELBOW IS RAISED in front of the chest near shoulder height, a little below shoulder level, and remains in the SAME location through all frames. Right forearm rises upward and backward from that elbow to place the RIGHT HAND BESIDE THE RIGHT EYE / CHEEKBONE. The bent elbow makes a compact V from shoulder to elbow to hand. Wrist neutral, dart tip clear of face. This is the recognizable pub-darts pre-throw stance, NOT arm extended straight from chest, NOT palm facing forward.
+Five consecutive beats of an aiming practice cycle, WITHOUT actually throwing:
+1: held aim, hand beside right eye, forearm almost vertical but leaning back toward face, dart horizontal.
+2: small draw-back, hand a little closer to right cheek, dart still level.
+3: small practice movement forward, hand only a short distance forward of panel 2, still near eye height; elbow remains bent roughly 90 degrees or tighter, NEVER straight; dart remains gripped.
+4: controlled return, hand back near right cheek, same elbow pivot.
+5: settled aim matching panel 1, ready to repeat or transition into a separate throw.
+The total practice-stroke travel is small, about a palm-width, NOT a full throwing extension. Keep the upper arm, elbow, torso, head, left hand stable. All five darts remain in the right hand. NO release, no projectile in flight, no follow-through, no stepping.
+Small readable Korean captions below panels, exactly: "1 조준", "2 당김", "3 예비 전진", "4 다시 당김", "5 조준 유지". The visual must clearly communicate a dart held at EYE HEIGHT in every frame. Prioritize physically coherent dart gripping and high bent elbow over copying the reference's bad posture.
+
+Final correction prompt:
+Edit the five-panel storyboard. Preserve the exact character identity, purple shirt, brown hair, left-hand cards, clean gray background, five-panel horizontal layout and Korean captions.
+CRITICAL CORRECTION: all five right-arm poses currently have the elbow tucked DOWN beside the torso and hand next to the EAR. That is NOT the intended pose. Rebuild ONLY the right arm, hand and dart in each panel into an unmistakable HIGH-ELBOW DART AIM posture. The elbow must project FAR FORWARD of the chest toward screen RIGHT, at approximately shoulder height. The upper arm should extend almost horizontally FORWARD, not hang downward. The forearm folds UP and BACK from that forward elbow to a hand IN FRONT OF THE RIGHT EYE, not behind it next to the ear. The side-view silhouette is a sharp triangular bent arm with its elbow corner pointing forward.
+Use these normalized panel coordinates as a strong layout guide: shoulder around (28% width, 49% height), elbow around (73% width, 47% height), right hand around (59% width, 27% height), eye around (52% width, 25% height). Thus elbow is CLEARLY forward of both shoulder and hand, NOT at the left side near the ribs. Head and torso stay still. Leave ample space at the right of each panel to fit that raised forward elbow.
+Grip a visible small dart naturally between right thumb and index/middle fingers, fingers curled around the barrel, palm closed sideways. Right hand is a little in FRONT of the eye along the sight line. Dart tip points horizontally screen RIGHT, red flights screen LEFT. NO open palm, no touching ear, no elbow hanging down.
+The five panels show small pre-throw forearm movements about this forward fixed elbow:
+1 high elbow and hand just in front of the eye, aiming.
+2 draw back only a few centimeters toward the eye.
+3 practice forward a palm-width, STILL HOLDING DART, elbow still bent.
+4 back toward eye again.
+5 matches frame 1, holding aim.
+No throwing or release. Vary hand forward/back horizontally while maintaining eye-level height. Keep the elbow fixed at the forward raised location across all frames. The forward-raised elbow is the MOST IMPORTANT requested correction. Exactly five panels, same captions "1 조준", "2 당김", "3 예비 전진", "4 다시 당김", "5 조준 유지".

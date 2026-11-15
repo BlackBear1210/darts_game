@@ -1,0 +1,34 @@
+{
+ "shirt": [
+  1.114,
+  1.205,
+  1.159
+ ],
+ "pants": [
+  1.165,
+  1.206,
+  1.404
+ ],
+ "hair": [
+  1.0,
+  1.0,
+  1.0
+ ],
+ "skin": [
+  1.097,
+  1.212,
+  1.368
+ ],
+ "shoes": [
+  1.162,
+  1.077,
+  1.0
+ ],
+ "eye": [
+  0.97,
+  0.93,
+  0.87
+ ],
+ "hair_image": "C:\\Users\\아버지\\Desktop\\다트\\output\\character-base-v01\\generated\\p2-sheet-paint\\model.png",
+ "eye_scale": 1.0
+}

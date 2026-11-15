@@ -1,0 +1,20 @@
+{
+  "status": "approved",
+  "approved_date": "2026-11-12",
+  "selection": "center panel: 중간 시안",
+  "reference_image": "approved_face_comparison.png",
+  "reference_sha256": "1113e639369e8b113481d41e01a1e2eef09b8dbb76ea014f76f6c25fdf5fc816",
+  "design": {
+    "identity": "retain existing in-game character proportions and softer silhouette",
+    "facets": "moderate low-poly planes, between existing model and strong low-poly proposal",
+    "brows": "medium thickness, subtle ㅅ shape",
+    "eyes": "large round eyes with restrained protrusion and mild facets",
+    "nose": "moderate wedge-shaped nose",
+    "hair": "brown broad polygonal locks preserving existing silhouette",
+    "outfit": "existing purple T-shirt"
+  },
+  "source_model": "다트-/art/characters/rigged/tripo_character.glb",
+  "implementation_status": "not applied; no game model changes requested",
+  "scope": "design approval and reference storage only; user explicitly deferred 3D model changes",
+  "source_model_sha256": "3cca4d5e5a014a447930403b726442d27228ab517702dd376ae04ecc258b45f7"
+}

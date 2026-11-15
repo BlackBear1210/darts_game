@@ -1,0 +1,17 @@
+Mode: built-in image_gen edit
+Input: character_midpoint_full_body_front_side_20261112_v01.png
+Output: character_midpoint_full_body_front_side_20261112_v02.png
+Change: modest forward-head posture and extremely slight rounded shoulders
+Scope: visual concept only; no game model changes
+
+Use case: precise-object-edit.
+Edit target: supplied approved intermediate low-poly full-body character sheet, with FRONT on the left and SIDE facing right on the right.
+User request: keep the design, but restore a modest forward-head posture ("거북목") and add VERY, VERY SLIGHT rounded shoulders. This is a small CHARACTER POSTURE adjustment only, not a medical diagram.
+Change BOTH views to show the exact same revised 3D posture, with the change easiest to read in the right SIDE view:
+- Move the head forward relative to the shoulder line by a small but clearly readable amount, approximately 3–5 cm at human scale. In the right profile, the ear/head center should sit just ahead of the shoulder joint rather than directly stacked over it.
+- Give the neck a gentle forward slope emerging from the upper back; the head itself and the eyes still look horizontally forward. No downward gaze and no exaggerated raised chin.
+- Add ONLY the faintest rounded-shoulder character: shoulders roll forward very slightly, a tiny relaxed softening of the upper-back curve and upper chest. Arms hang correspondingly a little forward of the torso. This should feel like a naturally slightly slouchy, awkward person, not an elderly stooped person or someone bending over.
+- Keep the lower torso and pelvis balanced upright over the legs, with feet unchanged. Do not tilt the entire body from the ankles or waist.
+- From the FRONT, preserve head symmetry, all face proportions and expression; show only the subtle matching relaxed shoulder posture. No dramatic narrowing of shoulders or hunch.
+Preserve all other visual invariants: the approved intermediate face identity and moderate broad polygonal planes; medium-thickness subtle Korean "ㅅ" eyebrows; large round off-white eyes and small brown pupils, long modest wedge nose, closed neutral mouth, soft angular chin, rounded faceted ears, chunky swept brown hair; same hair silhouette and head size, same lanky adult physique, same clothing and materials (plain muted purple crewneck short-sleeved T-shirt, charcoal straight trousers, dark sneakers with off-white soles); same hand anatomy and proportions, leg length and stance, two-view layout, scale, crop with full hair-to-shoes visibility, studio lighting, warm-gray background, ground shadows, and the exact labels "정면" and "측면". No extra views, arrows, guide lines, explanatory text, props, or accessories.
+Important magnitude: forward head is subtle but visible in profile, rounded shoulders are EXTREMELY slight. Keep him approachable and comical, with just a relaxed forward-head silhouette. Do not lengthen the neck, change the face or increase the polygonal sharpness. Output a clean updated design sheet matching the original framing.

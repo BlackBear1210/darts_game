@@ -1,0 +1,101 @@
+[
+  {
+    "name": "tripo_mat_954d3209",
+    "nodes": [
+      {
+        "name": "Principled BSDF",
+        "type": "BSDF_PRINCIPLED"
+      },
+      {
+        "name": "Material Output",
+        "type": "OUTPUT_MATERIAL"
+      },
+      {
+        "name": "Normal Map",
+        "type": "NORMAL_MAP"
+      },
+      {
+        "name": "Image Texture",
+        "type": "TEX_IMAGE",
+        "image": "tripo_image_954d3209_0",
+        "filepath": "//source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\tripo_image_954d3209-6b1c-413f-9c5c-acc1b483b08f_0_0.jpg",
+        "size": [
+          2048,
+          2048
+        ],
+        "colorspace": "sRGB"
+      },
+      {
+        "name": "Image Texture.001",
+        "type": "TEX_IMAGE",
+        "image": "tripo_image_954d3209_3",
+        "filepath": "//source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\left_character_kept_Normal_Bake.jpg",
+        "size": [
+          1024,
+          1024
+        ],
+        "colorspace": "Non-Color"
+      },
+      {
+        "name": "Image Texture.002",
+        "type": "TEX_IMAGE",
+        "image": "character_left_only리깅추가_glb_roughness",
+        "filepath": "//source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\character_left_only리깅추가_glb_roughness.JPEG",
+        "size": [
+          2048,
+          2048
+        ],
+        "colorspace": "Non-Color"
+      },
+      {
+        "name": "Image Texture.003",
+        "type": "TEX_IMAGE",
+        "image": "character_left_only리깅추가_glb_metallic",
+        "filepath": "//source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\character_left_only리깅추가_glb_metallic.JPEG",
+        "size": [
+          2048,
+          2048
+        ],
+        "colorspace": "Non-Color"
+      }
+    ],
+    "links": [
+      {
+        "from": "Principled BSDF",
+        "output": "BSDF",
+        "to": "Material Output",
+        "input": "Surface"
+      },
+      {
+        "from": "Normal Map",
+        "output": "Normal",
+        "to": "Principled BSDF",
+        "input": "Normal"
+      },
+      {
+        "from": "Image Texture",
+        "output": "Color",
+        "to": "Principled BSDF",
+        "input": "Base Color"
+      },
+      {
+        "from": "Image Texture.001",
+        "output": "Color",
+        "to": "Normal Map",
+        "input": "Color"
+      },
+      {
+        "from": "Image Texture.002",
+        "output": "Color",
+        "to": "Principled BSDF",
+        "input": "Roughness"
+      },
+      {
+        "from": "Image Texture.003",
+        "output": "Color",
+        "to": "Principled BSDF",
+        "input": "Metallic"
+      }
+    ]
+  }
+]

@@ -1,0 +1,49 @@
+{
+  "source_fbx": "tripo_convert_b0013ff6-64e6-4c2e-b00f-4fe7955e3053.fbx",
+  "source_fbx_sha256": "ac37304491901577d8760f15d1f3c2adb45ddb6e25824135448dc873a3b8c6e6",
+  "removed": "right-side profile character in user screenshot",
+  "retained": "left front-facing character in user screenshot",
+  "source_vertices": 950063,
+  "source_faces": 1900113,
+  "retained_vertices": 479219,
+  "retained_faces": 958434,
+  "removed_vertices": 470844,
+  "removed_faces": 941679,
+  "gap_between_characters": 0.1957092434167862,
+  "crossing_faces": 0,
+  "kept_vertex_positions_exact": true,
+  "kept_original_faces": true,
+  "kept_uv_exact": true,
+  "uv_sha256": {
+    "UVMap": "bb2c315ec9bfe27558a7bf2693ccbafa67c4382470e7f7c5677fc58ca3ca962b"
+  },
+  "texture_sha256": {
+    "cartoon_character_3d_model_basecolor.JPEG": "e3eddd6a215aa9106a6d93bcb4b2c9dbf2955ecb050bd73024b8b41862a30671",
+    "cartoon_character_3d_model_metallic.JPEG": "f04ce123de85087fde12201f1e8624f62e8076f34b6b175b10b23bbd51bd9952",
+    "cartoon_character_3d_model_normal.PNG": "aba58ba043cf88de6bf56497c711b5dd05a031e5812d1af1692ae4964bc2f0e1",
+    "cartoon_character_3d_model_roughness.JPEG": "ffa097ea53dd6ef9ab01fa7e7b9e4618c5798574115f527ec03fe499dd1fd3c5"
+  },
+  "kept_geometry_sha256": "3f9ddec475998ecabf9cb794828bcefd7afa8f51f2a8adcb3df944f50a4d5780",
+  "bounds_local_min": [
+    -0.3535461723804474,
+    -0.12683100998401642,
+    0.0
+  ],
+  "bounds_local_max": [
+    -0.065643310546875,
+    0.10184486210346222,
+    0.9794921875
+  ],
+  "object_transform_preserved": true,
+  "decimated": false,
+  "bounds_world_min": [
+    -0.3530884087085724,
+    -0.1268462985754013,
+    -4.45178027774773e-09
+  ],
+  "bounds_world_max": [
+    -0.065185546875,
+    0.10182961821556091,
+    0.9794921875
+  ]
+}

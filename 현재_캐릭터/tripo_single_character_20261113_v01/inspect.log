@@ -1,0 +1,12 @@
+C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\inspect_source.py:21: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  if not mat.use_nodes:continue
+FBX version: 7400
+MATERIAL tripo_mat_b0013ff6
+IMAGE Image Texture C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\source\tripo_convert_b0013ff6-64e6-4c2e-b00f-4fe7955e3053.fbm\cartoon_character_3d_model_basecolor.JPEG
+IMAGE Image Texture.001 C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\source\tripo_convert_b0013ff6-64e6-4c2e-b00f-4fe7955e3053.fbm\cartoon_character_3d_model_normal.PNG
+IMAGE Image Texture.002 C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\source\tripo_convert_b0013ff6-64e6-4c2e-b00f-4fe7955e3053.fbm\cartoon_character_3d_model_roughness.JPEG
+IMAGE Image Texture.003 C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\source\tripo_convert_b0013ff6-64e6-4c2e-b00f-4fe7955e3053.fbm\cartoon_character_3d_model_metallic.JPEG
+SOURCE_INFO [{"name": "tripo_node_b0013ff6", "vertices": 950063, "faces": 1900113, "bounds_min": [-0.3530884087085724, -0.14723210036754608, -6.43505115860421e-09], "bounds_max": [0.3540039360523224, 0.1472015678882599, 0.979583740234375], "location": [0.000457763671875, -1.5288591384887695e-05, 0.0], "rotation": [-4.371138828673793e-08, 0.0, 0.0], "scale": [1.0, 1.0, 1.0], "materials": ["tripo_mat_b0013ff6"]}]
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

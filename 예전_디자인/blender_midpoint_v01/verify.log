@@ -1,0 +1,68 @@
+00:01.829  blend            | Read blend: "C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\character_midpoint_v01.blend"
+00:01.907  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\아버지\.thumbnails\large\blender_10600_e1ac3ac9e3840df46c8b4cd6dde54396.png.png"
+00:05.547  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\face_detail.png'
+Info: Packed 1 file(s)
+Info: Saved as "character_midpoint_v01.blend"
+23:55:38 | INFO: Data are loaded, start creating Blender stuff
+23:55:38 | INFO: Blender create Mesh node ear_inner_l_mesh
+23:55:38 | INFO: Blender create Mesh node ear_inner_r_mesh
+23:55:38 | INFO: Blender create Mesh node ear_l_mesh
+23:55:38 | INFO: Blender create Mesh node ear_r_mesh
+23:55:38 | INFO: Blender create Mesh node Sphere.010
+23:55:38 | INFO: Blender create Mesh node Sphere.004
+23:55:38 | INFO: Blender create Mesh node Sphere.002
+23:55:38 | INFO: Blender create Mesh node Sphere
+23:55:38 | INFO: Blender create Mesh node Cube.001
+23:55:38 | INFO: Blender create Mesh node Cube
+23:55:38 | INFO: Blender create Mesh node finger_l_1_mesh
+23:55:38 | INFO: Blender create Mesh node finger_l_2_mesh
+23:55:38 | INFO: Blender create Mesh node finger_l_3_mesh
+23:55:38 | INFO: Blender create Mesh node finger_l_4_mesh
+23:55:38 | INFO: Blender create Mesh node finger_r_1_mesh
+23:55:38 | INFO: Blender create Mesh node finger_r_2_mesh
+23:55:38 | INFO: Blender create Mesh node finger_r_3_mesh
+23:55:38 | INFO: Blender create Mesh node finger_r_4_mesh
+23:55:38 | INFO: Blender create Mesh node Sphere.011
+23:55:38 | INFO: Blender create Mesh node Sphere.012
+23:55:38 | INFO: Blender create Mesh node Sphere.013
+23:55:38 | INFO: Blender create Mesh node Sphere.014
+23:55:38 | INFO: Blender create Mesh node Sphere.005
+23:55:38 | INFO: Blender create Mesh node Sphere.006
+23:55:38 | INFO: Blender create Mesh node Sphere.007
+23:55:38 | INFO: Blender create Mesh node Sphere.008
+23:55:38 | INFO: Blender create Mesh node forearm_l_mesh
+23:55:38 | INFO: Blender create Mesh node forearm_r_mesh
+23:55:38 | INFO: Blender create Mesh node Mesh_2.002
+23:55:38 | INFO: Blender create Mesh node hand_palm_l_mesh
+23:55:38 | INFO: Blender create Mesh node hand_palm_r_mesh
+23:55:38 | INFO: Blender create Mesh node head_face_mesh
+23:55:38 | INFO: Blender create Mesh node mouth_line_mesh
+23:55:38 | INFO: Blender create Mesh node neck_mesh
+23:55:38 | INFO: Blender create Mesh node nose_wedge_mesh
+23:55:38 | INFO: Blender create Mesh node Sphere.003
+23:55:38 | INFO: Blender create Mesh node Sphere.001
+23:55:38 | INFO: Blender create Mesh node shirt_body_mesh
+23:55:38 | INFO: Blender create Mesh node shoe_sole_l_mesh
+23:55:38 | INFO: Blender create Mesh node shoe_sole_r_mesh
+23:55:38 | INFO: Blender create Mesh node shoe_upper_l_mesh
+23:55:38 | INFO: Blender create Mesh node shoe_upper_r_mesh
+23:55:38 | INFO: Blender create Mesh node Cube.005
+23:55:38 | INFO: Blender create Mesh node Cube.006
+23:55:38 | INFO: Blender create Mesh node Cube.007
+23:55:38 | INFO: Blender create Mesh node Cube.002
+23:55:38 | INFO: Blender create Mesh node Cube.003
+23:55:38 | INFO: Blender create Mesh node Cube.004
+23:55:38 | INFO: Blender create Mesh node thumb_l_mesh
+23:55:38 | INFO: Blender create Mesh node thumb_r_mesh
+23:55:38 | INFO: Blender create Mesh node Sphere.015
+23:55:38 | INFO: Blender create Mesh node Sphere.009
+23:55:38 | INFO: Blender create Mesh node trouser_leg_l_mesh
+23:55:38 | INFO: Blender create Mesh node trouser_leg_r_mesh
+23:55:38 | INFO: Blender create Mesh node trousers_hips_mesh
+23:55:38 | INFO: Blender create Mesh node upper_arm_l_mesh
+23:55:38 | INFO: Blender create Mesh node upper_arm_r_mesh
+23:55:38 | INFO: glTF import finished in 0.13s
+VERIFIED {"blend_reopened": true, "glb_reimported": true, "matching_mesh_count": 57, "both_hands_five_fingers": true, "reference_packed": true, "materials_present": true, "finite_vertices": true, "original_game_model_unchanged": true, "rigged": false, "animated": false}
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

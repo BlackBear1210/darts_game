@@ -1,0 +1,8 @@
+Mode: built-in image_gen
+Input: character_face_concept_20261112_v01.png
+Output: character_face_concept_20261112_v02.png
+
+Use case: precise-object-edit.
+Edit target: the supplied three-view low-poly male character head concept sheet.
+Make ONE very small, precise change: tilt BOTH eyebrows into a subtle Korean "ㅅ" shape, like a gentle inverted V across the pair of eyebrows. IMPORTANT geometric direction: each eyebrow's INNER end nearest the bridge of the nose is slightly HIGHER, and each OUTER end nearest the temple is slightly LOWER. Viewed from the front the left brow is "/" and the right brow is "\", with a gap between them; together they suggest "/ \". This must be a mild worried/earnest, slightly plaintive expression. Do not use the opposite angry V shape where the inner ends point down. Do not connect the eyebrows into a unibrow. Keep them thick, dark brown, straight-edged and angular, with the same length and thickness as the original. Apply the same anatomically consistent slight eyebrow tilt in all THREE views: FRONT, 3/4 and SIDE. Only the eyebrows and the absolutely minimal adjacent shadow required by their new positions may change.
+Preserve every other detail: same character identity, head geometry and proportions, huge bulging eyes, pupil size and gaze, eyelids, long wedge nose, mouth expression, chin and jaw, ears, neck, hairstyle and color, purple shirt, low-poly facets, materials, lighting, shadows, background color, exact three-bust layout, framing, image dimensions, and the labels FRONT / 3/4 / SIDE. Do not redesign the face or add new details. A subtle eyebrow adjustment only.

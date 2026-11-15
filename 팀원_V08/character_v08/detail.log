@@ -1,0 +1,14 @@
+00:01.766  blend            | Read blend: "C:\Users\아버지\Desktop\다트\output\character_v08\before.blend"
+C:\Users\아버지\Desktop\다트\output\character_v08\detail_pass.py:113: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  chinmat=bpy.data.materials.new('Chin_Plane');chinmat.use_nodes=True;color(chinmat,(.725,.365,.181))
+00:01.828  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\아버지\.thumbnails\large\blender_17468_cafbd1cb52e7151dc83f586650b6656f.png.png"
+00:04.984  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\character_v08\detail_front.png'
+00:07.797  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\character_v08\detail_side.png'
+00:10.688  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\character_v08\detail_quarter.png'
+BlenderMCP addon registered
+Info: Saved as "character_reference_hair.blend"
+DETAIL_PASS_READY
+BlenderMCP addon unregistered
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

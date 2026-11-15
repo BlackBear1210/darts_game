@@ -1,0 +1,144 @@
+C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\build_character.py:29: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  mat.use_nodes = True
+23:54:22 | INFO: Data are loaded, start creating Blender stuff
+23:54:22 | INFO: Blender create Mesh node Mesh_0.001
+23:54:22 | INFO: Blender create Mesh node Mesh_1.001
+23:54:23 | INFO: Blender create Mesh node Mesh_2.001
+23:54:23 | INFO: Blender create Mesh node Mesh_3.001
+23:54:23 | INFO: Blender create Mesh node Mesh_4.001
+23:54:23 | INFO: Blender create Mesh node Mesh_5.001
+23:54:23 | INFO: Blender create Mesh node Mesh_6.001
+23:54:23 | INFO: Blender create Mesh node Mesh_7.001
+23:54:23 | INFO: Blender create Mesh node Mesh_8.001
+23:54:23 | INFO: glTF import finished in 0.96s
+C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\build_character.py:395: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scn.world.use_nodes=True
+00:08.515  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\front.png'
+00:11.437  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\side.png'
+00:16.953  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\three_quarter.png'
+00:21.968  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\blender_midpoint_v01\front_and_side.png'
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+23:54:41 | INFO: Starting glTF 2.0 export
+23:54:41 | INFO: Extracting primitive: ear_inner_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: ear_inner_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: ear_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: ear_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.010
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.004
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.002
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.001
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_l_1_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_l_2_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_l_3_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_l_4_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_r_1_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_r_2_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_r_3_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: finger_r_4_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.011
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.012
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.013
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.014
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.005
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.006
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.007
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.008
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: forearm_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: forearm_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Mesh_2.002
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: hand_palm_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: hand_palm_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: head_face_mesh
+23:54:41 | INFO: Primitives created: 3
+23:54:41 | INFO: Extracting primitive: mouth_line_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: neck_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: nose_wedge_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.003
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.001
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: shirt_body_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: shoe_sole_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: shoe_sole_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: shoe_upper_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: shoe_upper_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.005
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.006
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.007
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.002
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.003
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Cube.004
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: thumb_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: thumb_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.015
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: Sphere.009
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: trouser_leg_l_mesh
+23:54:41 | INFO: Primitives created: 2
+23:54:41 | INFO: Extracting primitive: trouser_leg_r_mesh
+23:54:41 | INFO: Primitives created: 2
+23:54:41 | INFO: Extracting primitive: trousers_hips_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: upper_arm_l_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Extracting primitive: upper_arm_r_mesh
+23:54:41 | INFO: Primitives created: 1
+23:54:41 | INFO: Finished glTF 2.0 export in 0.1509253978729248 s
+00:22.281  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\아버지\.thumbnails\large\blender_18748_e1ac3ac9e3840df46c8b4cd6dde54396.png.png"
+
+Info: Saved as "character_midpoint_v01.blend"
+MODEL_COMPLETE {"mesh_objects": 57, "vertices": 6860, "triangles": 12078, "height_metres": 1.7803272008895874, "reference": "C:\\Users\\\uc544\ubc84\uc9c0\\Desktop\\\ub2e4\ud2b8\\output\\imagegen\\character_midpoint_full_body_front_side_20261112_v02.png", "rigged": false, "game_model_modified": false}
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

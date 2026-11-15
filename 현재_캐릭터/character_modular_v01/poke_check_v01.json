@@ -1,0 +1,54 @@
+{
+ "A_old_auto": {
+  "rest_visible_pokes": 55,
+  "rest": 0,
+  "armsup": 192,
+  "armfwd": 94,
+  "throw": 151,
+  "hug": 289,
+  "squat": 440,
+  "sit": 441,
+  "bend": 258,
+  "twist_look": 0,
+  "rest_baseline": 55
+ },
+ "B_copied": {
+  "rest_visible_pokes": 55,
+  "rest": 0,
+  "armsup": 129,
+  "armfwd": 65,
+  "throw": 95,
+  "hug": 125,
+  "squat": 41,
+  "sit": 39,
+  "bend": 0,
+  "twist_look": 0,
+  "rest_baseline": 55
+ },
+ "C_copied_smooth": {
+  "rest_visible_pokes": 55,
+  "rest": 0,
+  "armsup": 112,
+  "armfwd": 65,
+  "throw": 117,
+  "hug": 111,
+  "squat": 41,
+  "sit": 39,
+  "bend": 0,
+  "twist_look": 0,
+  "rest_baseline": 55
+ },
+ "D_final_hide": {
+  "rest_visible_pokes": 0,
+  "rest": 0,
+  "armsup": 0,
+  "armfwd": 0,
+  "throw": 0,
+  "hug": 0,
+  "squat": 0,
+  "sit": 0,
+  "bend": 0,
+  "twist_look": 0,
+  "rest_baseline": 55
+ }
+}

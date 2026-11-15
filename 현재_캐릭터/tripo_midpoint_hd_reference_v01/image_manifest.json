@@ -1,0 +1,26 @@
+{
+  "mode": "built-in image_gen",
+  "scope": "individual visual references for user-operated 3D generation",
+  "views": [
+    {
+      "file": "01_front.png",
+      "width": 887,
+      "height": 1774
+    },
+    {
+      "file": "02_left.png",
+      "width": 887,
+      "height": 1774
+    },
+    {
+      "file": "03_back.png",
+      "width": 887,
+      "height": 1774
+    },
+    {
+      "file": "04_right.png",
+      "width": 887,
+      "height": 1774
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+FBX version: 7400
+Info: Packed 4 file(s)
+Info: Saved as "character_left_only.blend"
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+00:52:45 | INFO: Starting glTF 2.0 export
+00:52:45 | INFO: Extracting primitive: left_character_original_hd_mesh
+00:52:47 | WARNING: More than one shader node tex image used for a texture. The resulting glTF sampler will behave like the first shader node tex image.
+00:52:48 | INFO: Primitives created: 1
+00:52:48 | INFO: Finished glTF 2.0 export in 2.861952781677246 s
+
+
+FBX export starting... 'C:\\Users\\아버지\\Desktop\\다트\\output\\tripo_single_character_20261113_v01\\character_left_only.fbx'
+export finished in 2.2924 sec.
+REMOVAL_COMPLETE {"source_fbx": "tripo_convert_b0013ff6-64e6-4c2e-b00f-4fe7955e3053.fbx", "source_fbx_sha256": "ac37304491901577d8760f15d1f3c2adb45ddb6e25824135448dc873a3b8c6e6", "removed": "right-side profile character in user screenshot", "retained": "left front-facing character in user screenshot", "source_vertices": 950063, "source_faces": 1900113, "retained_vertices": 479219, "retained_faces": 958434, "removed_vertices": 470844, "removed_faces": 941679, "gap_between_characters": 0.1957092434167862, "crossing_faces": 0, "kept_vertex_positions_exact": true, "kept_original_faces": true, "kept_uv_exact": true, "uv_sha256": {"UVMap": "bb2c315ec9bfe27558a7bf2693ccbafa67c4382470e7f7c5677fc58ca3ca962b"}, "texture_sha256": {"cartoon_character_3d_model_basecolor.JPEG": "e3eddd6a215aa9106a6d93bcb4b2c9dbf2955ecb050bd73024b8b41862a30671", "cartoon_character_3d_model_metallic.JPEG": "f04ce123de85087fde12201f1e8624f62e8076f34b6b175b10b23bbd51bd9952", "cartoon_character_3d_model_normal.PNG": "aba58ba043cf88de6bf56497c711b5dd05a031e5812d1af1692ae4964bc2f0e1", "cartoon_character_3d_model_roughness.JPEG": "ffa097ea53dd6ef9ab01fa7e7b9e4618c5798574115f527ec03fe499dd1fd3c5"}, "kept_geometry_sha256": "3f9ddec475998ecabf9cb794828bcefd7afa8f51f2a8adcb3df944f50a4d5780", "bounds_local_min": [-0.3535461723804474, -0.12683100998401642, 0.0], "bounds_local_max": [-0.065643310546875, 0.10184486210346222, 0.9794921875], "object_transform_preserved": true, "decimated": false, "bounds_world_min": [-0.3530884087085724, -0.14723210036754608, -6.43505115860421e-09], "bounds_world_max": [0.3540039360523224, 0.1472015678882599, 0.979583740234375]}
+C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\remove_right_character.py:141: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world.use_nodes=True
+00:26.656  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\kept_front.png'
+00:29.203  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\kept_three_quarter.png'
+00:31.719  render           | Saved: 'C:\Users\아버지\Desktop\다트\output\tripo_single_character_20261113_v01\kept_back.png'
+PREVIEWS_COMPLETE
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

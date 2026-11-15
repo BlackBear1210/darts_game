@@ -1,0 +1,29 @@
+{
+  "blend": {
+    "mesh_objects": 1,
+    "vertices": 479219,
+    "faces": 958434,
+    "bounds_match_retained_character": true,
+    "right_character_absent": true
+  },
+  "native_fidelity": {
+    "original_kept_vertices_exact": true,
+    "original_kept_uv_exact": true,
+    "original_packed_textures_exact": true
+  },
+  "glb": {
+    "mesh_objects": 1,
+    "vertices": 605701,
+    "faces": 958434,
+    "bounds_match_retained_character": true,
+    "right_character_absent": true
+  },
+  "fbx": {
+    "mesh_objects": 1,
+    "vertices": 479219,
+    "faces": 958434,
+    "bounds_match_retained_character": true,
+    "right_character_absent": true
+  },
+  "source_fbx_unchanged": true
+}

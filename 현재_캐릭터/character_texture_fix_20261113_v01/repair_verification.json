@@ -1,0 +1,144 @@
+{
+  "scope": "localized material color repair only",
+  "before": {
+    "vertices_sha256": "db5d16ec680707f0654e2b23f51769b3769d7eaa8cd25e22dd66d92900261fe3",
+    "topology_sha256": "deafc117966e43f3fa88aa74fb4722da9c6a02d683667b6320095d826a848221",
+    "uv_sha256": "b6c246453fd807909d1f2d8de727ba7190ee5cd44491466178e132345761e269",
+    "weights_sha256": "273666059ce95be7f5da23526af08d36861d587f13aa12205543cd977b46dcf4",
+    "skeleton_sha256": "334b62059ea53a200bb8a73029860407da4f2cd20651970399cbb8ed37ec0f31",
+    "mesh_transform": [
+      [
+        1.0,
+        5.4016709327697754e-08,
+        -7.450580596923828e-09,
+        -1.4319084584712982e-08
+      ],
+      [
+        1.8626450382086546e-09,
+        1.0000001192092896,
+        -2.854740444035997e-09,
+        3.7369321859159754e-08
+      ],
+      [
+        -3.725290298461914e-09,
+        -6.04752017352439e-08,
+        1.0,
+        4.8283254727721214e-08
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "rig_transform": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        4.371138828673793e-08,
+        0.0
+      ],
+      [
+        0.0,
+        -4.371138828673793e-08,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "vertices": 47466,
+    "faces": 47464,
+    "bones": 65,
+    "actions": []
+  },
+  "after": {
+    "vertices_sha256": "db5d16ec680707f0654e2b23f51769b3769d7eaa8cd25e22dd66d92900261fe3",
+    "topology_sha256": "deafc117966e43f3fa88aa74fb4722da9c6a02d683667b6320095d826a848221",
+    "uv_sha256": "b6c246453fd807909d1f2d8de727ba7190ee5cd44491466178e132345761e269",
+    "weights_sha256": "273666059ce95be7f5da23526af08d36861d587f13aa12205543cd977b46dcf4",
+    "skeleton_sha256": "334b62059ea53a200bb8a73029860407da4f2cd20651970399cbb8ed37ec0f31",
+    "mesh_transform": [
+      [
+        1.0,
+        5.4016709327697754e-08,
+        -7.450580596923828e-09,
+        -1.4319084584712982e-08
+      ],
+      [
+        1.8626450382086546e-09,
+        1.0000001192092896,
+        -2.854740444035997e-09,
+        3.7369321859159754e-08
+      ],
+      [
+        -3.725290298461914e-09,
+        -6.04752017352439e-08,
+        1.0,
+        4.8283254727721214e-08
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "rig_transform": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        4.371138828673793e-08,
+        0.0
+      ],
+      [
+        0.0,
+        -4.371138828673793e-08,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "vertices": 47466,
+    "faces": 47464,
+    "bones": 65,
+    "actions": []
+  },
+  "model_structure_unchanged": true,
+  "source_textures_unchanged": true,
+  "source_texture_sha256": {
+    "C:\\Users\\아버지\\Desktop\\다트\\output\\character_design_review_20261113\\source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\character_left_only리깅추가_glb_metallic.JPEG": "78a9929a6d258c928321e927cccf8b94c650360b081dec3513dd22fc7a85b372",
+    "C:\\Users\\아버지\\Desktop\\다트\\output\\character_design_review_20261113\\source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\character_left_only리깅추가_glb_roughness.JPEG": "2d74a53450b0ff134972cd83361e66486720d0bcae693aeb03f3f1680099fc94",
+    "C:\\Users\\아버지\\Desktop\\다트\\output\\character_design_review_20261113\\source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\tripo_image_954d3209-6b1c-413f-9c5c-acc1b483b08f_0_0.jpg": "f70db2ce9bc26aa7c9ad0cc2ecacc5e28aa20b8eee0fba67b8719eb5e973bf62",
+    "C:\\Users\\아버지\\Desktop\\다트\\output\\character_design_review_20261113\\source\\tripo_convert_954d3209-6b1c-413f-9c5c-acc1b483b08f.fbm\\left_character_kept_Normal_Bake.jpg": "5c2ce555b077a751d15a546e8438385debdc8266999c3982151a8a15e56fd516"
+  },
+  "bake_patch_faces": null,
+  "region_vertex_counts": {
+    "brow": 715,
+    "eye_rim": 0,
+    "shirt": 982,
+    "arm": 1247
+  }
+}
