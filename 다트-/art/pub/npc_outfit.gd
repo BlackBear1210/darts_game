@@ -127,7 +127,35 @@ static func _bartender(skeleton: Skeleton3D) -> void:
 		var piece := PackedVector2Array([Vector2(lerpf(-0.07, -0.058, (y0 - 1.09) / 0.08), y0), Vector2(lerpf(-0.07, -0.058, (y0 + 0.012 - 1.09) / 0.08), y0 + 0.012)])
 		MeshKit.mesh_node(chest, "TowelStripe", RoundKit.sweep_mesh("outfit_towel_stripe_%d" % k, RoundKit.rounded_rect_profile(Vector2(0.118, 0.015), 0.005, 3),
 			_drape_rails(piece, TOWEL_X, Vector2(0.09, 1.2))), Vector3.ZERO, stripe)
-	# 중절모(볼러): 둥근 머리 + 말린 챙 + 빨간 띠. 살짝 기울여 쓴다.
+	bowler(head)
+	mustache(head)
+	# 긴 앞치마(허리 → 무릎, 검정, 다리를 따라 살짝 둥글게) — 바 앞에서 보면 대부분 카운터에 가린다. 엉덩이 뼈에 붙인다.
+	_curved_apron(_on_bone(skeleton, "hips"), "Apron", 0.4, 0.86, _clay("apron", "1c1a20", 0.85))
+
+
+# ─────────────────────── 선수 꾸미기에서도 쓰는 부품(art/characters/player_outfit.gd) ───────────────────────
+# 2026-11-15 꾸미기 방: 바텐더 모자·콧수염과 손님 모자·안경을 선수도 고를 수 있게 따로 부를 수 있는 함수로 뺐다.
+# head = on_bone(skeleton, "head") 가 돌려준 받침(뼈대 공간 좌표).
+
+## 뼈 받침(선수 꾸미기가 부른다). 같은 뼈는 받침 하나를 같이 쓴다.
+static func on_bone(skeleton: Skeleton3D, bone: String) -> Node3D:
+	return _on_bone(skeleton, bone)
+
+
+static func cap(head: Node3D, accent: Color) -> void:
+	_cap(head, accent)
+
+
+static func beanie(head: Node3D, accent: Color) -> void:
+	_beanie(head, accent)
+
+
+static func glasses(head: Node3D) -> void:
+	_glasses(head)
+
+
+## 중절모(볼러): 둥근 머리 + 말린 챙 + 빨간 띠. 살짝 기울여 쓴다.
+static func bowler(head: Node3D) -> void:
 	var hat_root := Node3D.new()
 	hat_root.name = "BowlerHat"
 	hat_root.position = HEAD_AXIS + Vector3(0, HAT_BASE_Y, 0.0)
@@ -135,12 +163,15 @@ static func _bartender(skeleton: Skeleton3D) -> void:
 	hat_root.scale = Vector3(1, 1, HAT_DEPTH_SCALE)
 	head.add_child(hat_root)
 	var felt := _clay("bowler", "1e1b20", 0.55)
-	var bowler := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, -0.012), Vector2(0.17, -0.012), Vector2(0.235, -0.004), Vector2(0.25, 0.012),
+	var crown := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, -0.012), Vector2(0.17, -0.012), Vector2(0.235, -0.004), Vector2(0.25, 0.012),
 		Vector2(0.215, 0.016), Vector2(0.178, 0.026), Vector2(0.182, 0.09), Vector2(0.162, 0.15), Vector2(0.1, 0.185), Vector2(0, 0.192)]), 0.02, 3)
-	RoundKit.lathe(hat_root, "Bowler", bowler, Vector3.ZERO, felt, 36)
+	RoundKit.lathe(hat_root, "Bowler", crown, Vector3.ZERO, felt, 36)
 	MeshKit.mesh_node(hat_root, "BowlerBand", RoundKit.ring_mesh("outfit_bowler_band", 0.18, RoundKit.rounded_rect_profile(Vector2(0.01, 0.032), 0.004, 3), 36),
 		Vector3(0, 0.046, 0), _clay("bowler_band", "7d1d26", 0.5))
-	# 콧수염(끝이 말려 올라간 손잡이 모양): 코끝 바로 아래 윗입술 앞 → 양옆 → 볼 쪽으로 말려 올라감.
+
+
+## 콧수염(끝이 말려 올라간 손잡이 모양): 코끝 바로 아래 윗입술 앞 → 양옆 → 볼 쪽으로 말려 올라감.
+static func mustache(head: Node3D) -> void:
 	# 코가 길게 아래로 내려온 얼굴이라 코끝(z −0.23)보다 안쪽(윗입술 z ≈ −0.2)에 붙인다.
 	var hair := _clay("mustache", "3a2418", 0.7)
 	var middle := Vector3(-0.012, 1.372, -0.205)
@@ -149,8 +180,6 @@ static func _bartender(skeleton: Skeleton3D) -> void:
 		var tip := middle + Vector3(side * 0.08, 0.012, 0.04)
 		RoundKit.rod(head, "Mustache", middle + Vector3(side * 0.006, 0, 0), mid, 0.016, hair, 0.012, 10)
 		RoundKit.rod(head, "MustacheCurl", mid, tip, 0.012, hair, 0.006, 8)
-	# 긴 앞치마(허리 → 무릎, 검정, 다리를 따라 살짝 둥글게) — 바 앞에서 보면 대부분 카운터에 가린다. 엉덩이 뼈에 붙인다.
-	_curved_apron(_on_bone(skeleton, "hips"), "Apron", 0.4, 0.86, _clay("apron", "1c1a20", 0.85))
 
 
 ## 수건 x 자리(왼쪽 어깨 위).

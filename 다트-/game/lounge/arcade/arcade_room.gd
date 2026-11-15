@@ -57,6 +57,15 @@ const KITCHEN_Z := 6.0
 const SHOP_MICROWAVE_Z := 6.25
 ## 벽 간판·메뉴판을 벽에서 띄우는 거리(m) — 펍 벽 기둥(0.05)·허리 난간(0.078) 앞.
 const SIGN_STANDOFF: float = 0.1
+## 벽 네온 간판 위 끝이 천장에서 떨어지는 거리(m). 벽 위 네온 레일(천장 − 0.8 ± 0.025) 아래로 2cm.
+const SIGN_TOP_CLEAR: float = 0.87
+## [바닥에 겹쳐 까는 것들의 높이 — 2026-11-15 겹침 깜빡임(z-파이팅) 수정]
+## 카펫(CARPET_Y) 위에 러그·네온 띠를 깔 때 윗면끼리 4mm 이상 벌린다(펍 생성기 FLOOR_LAYER_GAP 와 같은 규칙).
+##   카펫 0.018 → 테이블 러그 윗면 0.026 → 러그 네온 줄 0.030 → 자리 깔개 윗면 0.0325(펍 생성기 SEAT_RUG_*).
+##   펍 레인 매트 윗면 0.030 → 레인 LED 윗면 0.035. 펍 놋쇠 투척선 윗면 0.040 → 네온 투척선 윗면 0.046.
+const CARPET_Y: float = 0.018
+const TABLE_RUG_TOP: float = 0.026
+const RUG_STRIPE_Y: float = 0.030
 
 const CYAN := Color("3be5db")
 const MAGENTA := Color("ef65cb")
@@ -235,9 +244,11 @@ func _neon_sign(text: String, at: Vector3, yaw: float, size: int, color: Color, 
 	root.rotation.y = yaw
 	var extent: Vector2 = text_size(text, size, pixel) + Vector2(pad, pad) * 2.0
 	# 2026-11-08: 펍 벽에 월넛 기둥·아치 틀·코니스가 생겨(art/pub/game_room_builder.gd) 벽에 딱 붙이면 판이 기둥에 묻힌다 →
-	# 판을 벽에서 SIGN_STANDOFF 만큼 띄우고, 위 끝이 코니스 아래(천장 − 0.82m)에 오도록 필요하면 내린다.
+	# 판을 벽에서 SIGN_STANDOFF 만큼 띄우고, 위 끝이 코니스 아래(천장 − SIGN_TOP_CLEAR)에 오도록 필요하면 내린다.
+	# 2026-11-15: 0.82 → 0.87. 예전 값은 간판 위 테두리 관(두께 0.03)이 벽 위 네온 레일(천장 − 0.8, 두께 0.05)과
+	# 앞면이 같은 평면에서 겹쳐 두 네온 색이 깜빡였다(z-파이팅) → 레일 아래로 2cm 띄운다.
 	root.position = at + Basis(Vector3.UP, yaw) * Vector3(0, 0, SIGN_STANDOFF)
-	root.position.y = minf(at.y, TableView.CEILING_HEIGHT - 0.82 - extent.y / 2.0)
+	root.position.y = minf(at.y, TableView.CEILING_HEIGHT - SIGN_TOP_CLEAR - extent.y / 2.0)
 	Kit.box(root, "SignBoard", Vector3(extent.x, extent.y, 0.04), Vector3(0, 0, 0.02), _mat("sign_board", Color("0d0a1c"), 0.0, 0.6))
 	var tube := _neon_mat(color, 2.0)
 	for y: float in [-1.0, 1.0]:
@@ -270,6 +281,67 @@ func _model(key: String, at: Vector3, yaw: float, node_name: String) -> Node3D:
 	node.rotation.y = yaw
 	_static.add_child(node)
 	return node
+
+
+## 오락기 GLB 의 덧판을 몸통 밖으로 꺼낸다(2026-11-15 겹침 깜빡임 수정). GLB 는 고치지 않고 세울 때 부품만 옮긴다.
+## 모델을 재 보니(부품 경계 상자, 모델 기준 m):
+##   A형: 남색 옆판 바깥 면 = 크림 몸통 옆면과 같은 평면(틈 0) → 두 색이 겹쳐 깜빡였다. 환기구는 옆판보다 1mm 안쪽이라 묻혔다.
+##   B형: 옆판이 몸통 옆면보다 7mm 안쪽, 네온 테두리 2mm 안쪽, 환기구 1mm 안쪽 → 몸통에 묻혀 안 보이거나 비쳐서 깜빡였다.
+##        검은 화면 테(ScreenBezel)는 경사진 몸통 앞면에서 1~4mm 라 깜빡였다.
+## 고친 방법: 옆면 묶음(옆판·네온 테두리·환기구)을 좌우 바깥으로 밀어 옆판 바깥 면이 몸통보다 PANEL_PROUD 만큼 나오게 하고,
+##   환기구는 옆판보다 VENT_PROUD 이상 더 나오게 한다. 화면 테와 화면은 앞(경사면 바깥)으로 FRONT_LIFT 만큼 같이 민다
+##   (화면은 테보다 5mm 앞이라 테만 밀면 이번엔 화면과 겹친다).
+const PANEL_PROUD: float = 0.004
+const VENT_PROUD: float = 0.003
+const FRONT_LIFT: float = 0.005
+## 경사진 화면 면의 바깥 방향(모델 기준, 정면 -Z · 약 11도 뒤로 누움).
+const FRONT_OUT := Vector3(0, 0.19, -0.98)
+func _separate_cabinet_panels(cabinet: Node3D) -> void:
+	var shell := cabinet.find_child("CabinetShell", true, false) as MeshInstance3D
+	if shell == null:
+		return
+	var shell_box: AABB = _box_in(cabinet, shell)
+	var middle_x: float = shell_box.get_center().x
+	for side: String in ["Left", "Right"]:
+		var panel := cabinet.find_child("SidePanel" + side, true, false) as MeshInstance3D
+		if panel == null:
+			continue
+		# sign = 이 옆면의 바깥 방향(모델 x). 바깥 면 좌표 = 가운데에서 가장 먼 x.
+		var panel_box: AABB = _box_in(cabinet, panel)
+		var sign: float = signf(panel_box.get_center().x - middle_x)
+		var shell_face: float = shell_box.end.x if sign > 0.0 else -shell_box.position.x
+		var panel_face: float = panel_box.end.x if sign > 0.0 else -panel_box.position.x
+		var lift: float = maxf(shell_face - panel_face, 0.0) + PANEL_PROUD
+		_push_part(cabinet, panel, Vector3(sign * lift, 0, 0))
+		var trim := cabinet.find_child("NeonTrim" + side, true, false) as MeshInstance3D
+		if trim != null:
+			_push_part(cabinet, trim, Vector3(sign * lift, 0, 0))
+		var vent := cabinet.find_child("Vent" + side, true, false) as MeshInstance3D
+		if vent != null:
+			var vent_box: AABB = _box_in(cabinet, vent)
+			var vent_face: float = vent_box.end.x if sign > 0.0 else -vent_box.position.x
+			var extra: float = maxf(panel_face + VENT_PROUD - vent_face, 0.0)
+			_push_part(cabinet, vent, Vector3(sign * (lift + extra), 0, 0))
+	for part_name: String in ["ScreenBezel", "Screen"]:
+		var part := cabinet.find_child(part_name, true, false) as MeshInstance3D
+		if part != null:
+			_push_part(cabinet, part, FRONT_OUT.normalized() * FRONT_LIFT)
+
+
+## 부품을 cabinet 기준 방향 move 만큼 옮긴다(부품 부모가 돌아가 있어도 같은 방향으로 가게 부모 기준으로 바꿔 더한다).
+func _push_part(cabinet: Node3D, part: Node3D, move: Vector3) -> void:
+	part.position += _basis_in(cabinet, part.get_parent() as Node3D).inverse() * move
+
+
+## node 의 방향(basis)을 root 기준으로(트리 밖에서도 되게 부모 변환을 직접 곱한다).
+func _basis_in(root: Node3D, node: Node3D) -> Basis:
+	var result := Basis.IDENTITY
+	var cursor: Node = node
+	while cursor != null and cursor != root:
+		if cursor is Node3D:
+			result = (cursor as Node3D).transform.basis * result
+		cursor = cursor.get_parent()
+	return result
 
 
 ## 부품 메시의 경계 상자를 root 기준 좌표로(트리 밖에서도 되게 부모 변환을 직접 곱한다).
@@ -317,22 +389,24 @@ func _carpet() -> void:
 		material.uv1_scale = Vector3(room.size.x / 2.2, room.size.y / 2.2, 1)
 		var plane := PlaneMesh.new()
 		plane.size = room.size
-		# 펍 바닥 널빤지 윗면(0.01m)보다 살짝 위.
-		Kit.mesh_node(self, "Carpet", plane, Vector3(room.get_center().x, 0.018, room.get_center().y), material)
+		# 펍 바닥(0m)·펍 러그(0.012m)·문 매트(0.014m)를 덮는 높이.
+		Kit.mesh_node(self, "Carpet", plane, Vector3(room.get_center().x, CARPET_Y, room.get_center().y), material)
 	_table_rug()
 
 
 ## 2026-11-08 사용자 지적 "오락실 맵에는 테이블 아래에 카펫이 없어":
 ##   펍의 둥근 러그(TableRug, 윗면 0.012m)가 오락실 블랙라이트 카펫(0.018m) 아래에 묻혀 안 보였다.
-##   → 카펫 위(윗면 0.022m)에 오락실 색 둥근 러그를 따로 깐다: 진한 보라 바탕 + 청록·분홍 네온 줄 두 겹.
-##   자리 깔개(SeatRug, 윗면 0.0245m)는 이보다 높아 그대로 위에 보인다. 크기는 펍 러그와 같다(반지름 2.55m).
+##   → 카펫 위(윗면 TABLE_RUG_TOP)에 오락실 색 둥근 러그를 따로 깐다: 진한 보라 바탕 + 청록·분홍 네온 줄 두 겹.
+##   자리 깔개(SeatRug, 윗면 0.0325m)는 이보다 높아 그대로 위에 보인다. 크기는 펍 러그와 같다(반지름 2.55m).
+## 2026-11-15: 러그 윗면이 카펫에서 4mm · 자리 깔개에서 2.5mm · 네온 줄에서 0.5mm 라 멀리서 깜빡였다 →
+##   카펫에서 8mm, 네온 줄은 러그에서 4mm, 자리 깔개는 러그에서 6.5mm 로 벌렸다.
 func _table_rug() -> void:
 	var center: Vector3 = TableView.TABLE_CENTER
-	var base := PackedVector2Array([Vector2(0, 0.019), Vector2(2.5, 0.019), Vector2(2.55, 0.02), Vector2(2.5, 0.022), Vector2(0, 0.022)])
+	var base := PackedVector2Array([Vector2(0, CARPET_Y + 0.001), Vector2(2.5, CARPET_Y + 0.001), Vector2(2.55, CARPET_Y + 0.003), Vector2(2.5, TABLE_RUG_TOP), Vector2(0, TABLE_RUG_TOP)])
 	Kit.mesh_node(_static, "ArcadeTableRug", RoundKit.lathe_mesh(base, 64), Vector3(center.x, 0, center.z), _mat("arcade_rug", Color("221a3f"), 0.0, 0.95))
-	# 네온 줄: 위에서 보이는 얇은 고리(바탕 윗면보다 0.5mm 위 → 깜빡임 없음).
+	# 네온 줄: 위에서 보이는 얇은 고리(바탕 윗면보다 4mm 위).
 	for ring: Array in [[2.38, 2.31, CYAN], [2.2, 2.16, MAGENTA]]:
-		var stripe := PackedVector2Array([Vector2(ring[0], 0.0225), Vector2(ring[1], 0.0225)])
+		var stripe := PackedVector2Array([Vector2(ring[0], RUG_STRIPE_Y), Vector2(ring[1], RUG_STRIPE_Y)])
 		Kit.mesh_node(_static, "ArcadeRugStripe", RoundKit.lathe_mesh(stripe, 64), Vector3(center.x, 0, center.z), _neon_mat(ring[2], 0.9))
 
 
@@ -394,8 +468,11 @@ func _ceiling_neon() -> void:
 	for side: float in [-1.0, 1.0]:
 		var lane_end: float = TableView.BOARD_CENTER.z
 		var depth: float = TableView.NO_ENTRY_Z - lane_end
-		Kit.box(_static, "LaneLed", Vector3(0.04, 0.012, depth), Vector3(side * TableView.LANE_HALF, 0.016, (TableView.NO_ENTRY_Z + lane_end) / 2.0), _neon_mat(CYAN, 2.0))
-	Kit.box(_static, "ThrowLine", Vector3(TableView.LANE_HALF * 2.0, 0.014, 0.06), Vector3(0, 0.017, TableView.THROW_LINE_Z), _neon_mat(YELLOW, 3.0))
+		# 2026-11-15: 레인 LED 윗면 0.022 → 0.035(카펫에서 17mm, 펍 레인 매트 윗면 0.030 에서 5mm).
+		# 예전 높이는 카펫에서 4mm 뿐이고 매트와 겹친 안쪽 절반은 매트 아래 묻혔다.
+		Kit.box(_static, "LaneLed", Vector3(0.04, 0.03, depth), Vector3(side * TableView.LANE_HALF, 0.02, (TableView.NO_ENTRY_Z + lane_end) / 2.0), _neon_mat(CYAN, 2.0))
+	# 네온 투척선: 예전(윗면 0.024)은 펍 놋쇠 투척선(Oche, 윗면 0.040) 속에 묻혀 안 보였다 → 놋쇠 위 6mm 로 올린다.
+	Kit.box(_static, "ThrowLine", Vector3(TableView.LANE_HALF * 2.0, 0.014, 0.06), Vector3(0, 0.039, TableView.THROW_LINE_Z), _neon_mat(YELLOW, 3.0))
 
 
 ## 벽 간판. 창문이 없는 벽 · 과녁 판넬(x ±2.7) 밖 · 오락기·선반 위 높이에만 건다. 판 크기는 글자로 계산.
@@ -608,6 +685,7 @@ func _cabinets() -> void:
 		# 따로 된 부품 노드이고, 크림 에나멜·남색·얇은 네온 테두리가 모델에 들어 있다(예전 네온 모서리 띠·버튼을 덧붙이지 않는다).
 		# B 조작판은 메시에 이미 X −34.7도 기울어 있다 — 여기서 또 돌리지 않는다.
 		var cabinet := _model(CABINET_MODELS[index % CABINET_MODELS.size()], at, yaw, "Cabinet")
+		_separate_cabinet_panels(cabinet)
 		# 화면: 모델의 빈 검은 유리(ScreenBlank)를 대마다 복제해 빛나게 덮는다 → show_state 의 색 순환이 대마다 따로 돈다.
 		var screen := cabinet.find_child("Screen", true, false) as MeshInstance3D
 		var lit := screen.get_active_material(0).duplicate() as StandardMaterial3D
@@ -733,7 +811,8 @@ func _claw_machine() -> void:
 	Kit.rounded_box(_claw_body, "ClawHeader", Vector3(size.x + 0.04, 0.36, size.z + 0.04), Vector3(0, 2.23, 0), navy, 0.08)
 	Kit.rounded_box(_claw_body, "ClawMarqueePlate", Vector3(size.x - 0.16, 0.24, 0.03), Vector3(0, 2.24, front - 0.03), cream, 0.025)
 	Kit.box(_claw_body, "ClawHeaderEdge", Vector3(size.x - 0.04, 0.014, 0.014), Vector3(0, 2.05, front - 0.03), _neon_mat(CYAN, 2.2))
-	Kit.box(_claw_body, "ClawLamp", Vector3(size.x - 0.12, 0.02, size.z - 0.12), Vector3(0, 2.04, 0), _neon_mat(Color("fff3e0"), 1.2))
+	# 2026-11-15: 등 윗면이 유리 윗면(2.05m)과 같은 평면이었다 → 5mm 내린다.
+	Kit.box(_claw_body, "ClawLamp", Vector3(size.x - 0.12, 0.02, size.z - 0.12), Vector3(0, 2.035, 0), _neon_mat(Color("fff3e0"), 1.2))
 	Kit.box(_claw_body, "ClawGlass", Vector3(size.x - 0.04, 1.1, size.z - 0.04), Vector3(0, 1.5, 0), _glass(Color("d8f4ff"), 0.12))
 	# 상품 구멍(앞 왼쪽 구석, 크림 테두리 투명 통) + 상품 문(남색).
 	Kit.box(_claw_body, "ClawChute", Vector3(0.26, 0.16, 0.26), Vector3(Rules.CLAW_CHUTE.x, 1.06, Rules.CLAW_CHUTE.y), _glass_mat("claw_chute", CREAM, 0.3))
@@ -882,7 +961,8 @@ func _hoop_machine() -> void:
 	_body(Vector3(center.x, box.end.y + 1.25, box.end.z - 0.03), Vector3(box.size.x, 2.5, 0.06))
 	var board_at := Vector3(center.x, Rules.HOOP_RING.y + 0.3, Rules.HOOP_RING.z + 0.28)
 	Kit.box(self, "Backboard", Vector3(1.0, 0.68, 0.03), board_at, _glass(Color("ffffff"), 0.35))
-	Kit.box(self, "BackboardSquare", Vector3(0.4, 0.3, 0.035), board_at + Vector3(0, -0.12, -0.002), _neon_mat(ORANGE, 1.6))
+	# 2026-11-15: 주황 네모가 백보드 유리(두께 0.03) 뒷면에서 0.5mm 만 나와 깜빡였다 → 두께 0.05 로 앞뒤 1cm 씩 내민다.
+	Kit.box(self, "BackboardSquare", Vector3(0.4, 0.3, 0.05), board_at + Vector3(0, -0.12, 0), _neon_mat(ORANGE, 1.6))
 	_body(board_at, Vector3(1.0, 0.68, 0.06))
 	_hoop_ring = Node3D.new()
 	add_child(_hoop_ring)

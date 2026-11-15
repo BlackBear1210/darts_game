@@ -130,6 +130,8 @@ func _run() -> void:
 	assert(local.position.x <= TableView.LOUNGE.end.x - TableView.BODY_MARGIN + 0.01)
 	# 봇은 자기 차례에만 자리를 뜬다. 사람 차례로 되돌리고 모두 앉을 때까지 기다린다.
 	_game.controller.state.turn_index = 0
+	# 라운드당 다트(2026-11-15): 시험이 차례를 직접 다시 시작할 때는 라운드 시작처럼 다트도 다시 채운다.
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	await _wait_until(func() -> bool: return bots.all(func(bot: PlayerView) -> bool: return bot.seated), 8.0, "봇이 모두 자리로 돌아오지 않았습니다.")
 	for bot in bots:
@@ -170,6 +172,7 @@ func _run() -> void:
 	_game.throw_input.config.flight_limit = limit
 	# 비행 중 F3/F4가 별도로 채점하거나 턴을 바꾸지 못한다.
 	_game.controller.state.turn_index = 0
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	assert(not local.seated)
 	# 라운지(테이블 쪽)에서는 방장이 투척을 거부한다 — 다트 홀로 들어와야 던질 수 있다.
@@ -205,6 +208,7 @@ func _run() -> void:
 	# 마감 시각과 요청이 겹쳐도 수락/실패 중 하나만 확정된다.
 	_game.controller._land_dart()
 	assert(_game.controller.state.find_player(1).score == 150)
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	_game.controller._turn_end = _game.controller._now()
 	_game.controller.submit_throw(Vector2.ZERO, 1)
@@ -213,6 +217,7 @@ func _run() -> void:
 	assert(_game.controller.state.phase == MatchState.Phase.SETTLING)
 	_game.controller._process(0)
 	assert(_game.controller.state.find_player(1).score == 150)
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	_game.controller._turn_end = _game.controller._now() + 0.1
 	_game.controller.submit_throw(Vector2.ZERO, 1)
@@ -228,6 +233,7 @@ func _run() -> void:
 	controller.config.card_seconds = 0.1
 	controller.state.turn_index = 3
 	controller.state.round_number = 1
+	controller._refill_darts()
 	controller._begin_turn()
 	controller._timeout_turn()
 	controller._advance_turn()
@@ -251,6 +257,7 @@ func _run() -> void:
 	# 다음 집합이 시작되면 슬로우가 풀리고, 전원 앉아 있으면 기다리지 않고 바로 다음 라운드다.
 	_game.force_seat(1)
 	controller.state.turn_index = 3
+	controller._refill_darts()
 	controller._begin_turn()
 	controller._timeout_turn()
 	controller._advance_turn()
@@ -265,6 +272,7 @@ func _run() -> void:
 	var room: RoomState = _main.get_node("NetworkSession").room
 	_game.controller.state.turn_index = 3
 	_game.controller.state.round_number = 1
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	room.remove_player(-3)
 	_game.controller.sync_roster(room)

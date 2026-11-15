@@ -178,6 +178,35 @@ static func used() -> Dictionary:
 		"jar_pickles": ["rest:Jar_2_A", 0.05, {}],
 		"bag_food": ["rest:BagFood_1_A", 0.0, {}],
 	})
+	# 2026-11-15 사용자 "맵이 너무 휑하니까 인디 펍 느낌 나게 채워줘" — 구경판에서 고른 모델로 다트 홀 벽·창턱·바를 채운다.
+	# 물약병 6색(벽 선반 진열) · 뿔 벽걸이 · 화살 두 자루(엇갈린 벽 장식) · 마늘 다발(바 뒤에 건다) · 밀대 · 밀가루 · 빵 · 치즈 ·
+	# 병조림 2 · 허브 화분 2 · 꽃 3 · 작은 오리 · 창턱 긴 꽃 상자. 쓰는 곳 = art/pub/game_room_builder.gd _indie_decor.
+	# 원래 색을 거의 살린다(당김 0.1~0.2): 휑한 크림 벽에 색 점을 찍는 것이 목적이다.
+	list.merge({
+		"potion_a": ["med:Potion_1_2", 0.15, {}],
+		"potion_b": ["med:Potion_1_4", 0.15, {}],
+		"potion_c": ["med:Potion_2_3", 0.15, {}],
+		"potion_d": ["med:Potion_2_1", 0.15, {}],
+		"potion_e": ["med:Potion_3_2", 0.15, {}],
+		"potion_f": ["med:Potion_4_3", 0.15, {}],
+		"horn_trophy": ["med:Horn_1_A", 0.2, {}],
+		"arrow_a": ["med:Arrow_2_A", 0.2, {}],
+		"arrow_b": ["med:Arrow_2_B", 0.2, {}],
+		"garlic_braid": ["rest:Garlic_Braid", 0.1, {}],
+		"rolling_pin": ["med:RollingPin_A", 0.2, {}],
+		"flour_sack": ["rest:Flour", 0.1, {}],
+		"bread_loaf": ["rest:Bread_1", 0.1, {}],
+		"cheese_wedge": ["rest:Cheese_3", 0.1, {}],
+		"pickle_jar_a": ["rest:Jar_2_C", 0.1, {}],
+		"pickle_jar_b": ["rest:Jar_1_F", 0.1, {}],
+		"herb_pot_a": ["city:Plant_2_A_1", 0.15, {}],
+		"herb_pot_b": ["city:Plant_2_B_1", 0.15, {}],
+		"flowers_a": ["city:Flowers_2_A", 0.15, {}],
+		"flowers_b": ["city:Flowers_2_C", 0.15, {}],
+		"flowers_c": ["city:Flowers_2_F", 0.15, {}],
+		"duck_small": ["city:Duck_2", 0.05, {}],
+		"flower_box": ["city:FlowerPot_5_2_F", 0.15, {}],
+	})
 	for letter: String in ["a", "b", "c", "d", "e"]:
 		list["soda_can_" + letter] = ["rest:SodaCan_1_" + letter.to_upper(), 0.0, {}]
 	# 음료 캔: 빨간 몸통(띠 "red")을 네온 색으로 바꿔 4색.

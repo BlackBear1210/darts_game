@@ -134,6 +134,8 @@ func _run() -> void:
 	# 상호작용 키(F)로 착석하면 라운지 투척은 잠긴다. 다트 홀로 나와 실제 마우스 입력을 검사한다.
 	local.position = TableView.SEATS[0] + Vector3(0, 0.01, 0.6)
 	_game.controller.state.turn_index = 0
+	# 라운드당 다트(2026-11-15): 시험이 차례를 직접 다시 시작할 때는 라운드 시작처럼 다트도 다시 채운다.
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	_game.set_process_unhandled_input(true)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED

@@ -38,6 +38,9 @@ const HAND_SCALE: float = 0.52
 static var _right_arm_mesh: ArrayMesh
 
 var seat: int = 0
+## 꾸미기 옷 색 번호(art/characters/player_outfit.gd SHIRT_COLORS). 0 = 원래 그림 색. 소매가 3인칭 내 몸과 같은 색이 된다.
+var shirt: int = 0
+const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
 ## 카드 시연의 가리키는 손도 같은 메시를 쓰되 Point_R 자세를 고정한다.
 var pointing: bool = false
 ## 손이 맞출 다트의 자세(이 노드 기준). 비워 두면 이 노드 축에 그대로 맞춘다.
@@ -62,6 +65,7 @@ func _ready() -> void:
 	var rig := skeletons[0] as Skeleton3D
 	_pose_hand(players[0] as AnimationPlayer)
 	_show_arm_only(model)
+	PlayerOutfit.tint_shirt(model, shirt)
 	_grip_at_origin(model, rig)
 	if not pointing:
 		_prepare_fingers(rig)

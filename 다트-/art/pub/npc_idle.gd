@@ -56,6 +56,34 @@ var _puff: CPUParticles3D
 ## 시가 몸통 길이 절반(0.7배 = 0.15m 의 반). 불 붙은 끝(모델 +Z, 빨간 끝 — 4면 렌더로 확인)이 +CIGAR_HALF 다.
 const CIGAR_HALF := 0.075
 
+## ── 화내기·보복(2026-11-15 "바텐더·NPC 에게 물건을 던지면 화난 이모티콘 → 되던지기 또는 싸대기") ──
+## 맞히기 판정·결과(쓰러뜨리기)는 방장 LoungeWorld 가 하고, 여기서는 모든 화면이 같은 박자로 몸짓만 보인다.
+## 박자: [화내기 ANGER_SECONDS: 💢 + 손가락질] → 되던지기: 던지는 몸짓(THROW_RELEASE 에 손을 떠남) / 싸대기: SLAP_DASH 동안
+## 상대 앞으로 달려가 SLAP_HIT 에 때리고 RETURN_SECONDS 동안 제자리로 돌아온다.
+const ANGER_SECONDS := 1.1
+## 되던지기: 화내기가 끝나고 이만큼 뒤에 물건이 손을 떠난다(던지는 몸짓의 팔이 앞으로 나오는 박자).
+const THROW_RELEASE := 0.3
+const THROW_FOLLOW := 0.7
+## 싸대기: 달려가는 시간 · 때린 뒤 서 있는 시간 · 돌아오는 시간. 때리는 순간 = ANGER_SECONDS + SLAP_DASH(방장도 같은 값).
+const SLAP_DASH := 0.6
+const SLAP_HOLD := 0.55
+const RETURN_SECONDS := 0.9
+## 싸대기를 칠 때 상대 앞에 서는 거리(m).
+const SLAP_STAND := 0.62
+## 화난 표시 크기·높이.
+const ANGER_HEIGHT := 2.05
+const ANGER_PIXEL := 0.0055
+## 지금 보복 중인가(PubService 는 이동 중이면 멈춘다 · LoungeWorld 는 이때 다시 맞아도 새로 화내지 않는다).
+var reacting: bool = false
+var _react_mode: String = ""
+var _react_time: float = 0.0
+var _react_target: Node3D
+var _home: Transform3D
+var _home_seated: bool = false
+var _swung: bool = false
+var _anger: Sprite3D
+static var _anger_texture: Texture2D
+
 
 ## NPC 한 명을 만든다. at = 서 있는(앉은 의자) 바닥 자리, look = 바라볼 곳.
 ## seat_top = 앉을 의자 윗면 높이(높은 바 스툴이면 그 차이만큼 몸을 올린다).
@@ -101,6 +129,9 @@ func _dress(model: Node3D) -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	if reacting:
+		_react_step(delta)
+		return
 	var ratio: float = fmod(_time, period) / period
 	match style:
 		0:
@@ -118,6 +149,158 @@ func _process(delta: float) -> void:
 	_motion.animate(delta, walk_ratio, posture, false, sin(_time * 0.37) * 0.06, false)
 	if style == 4:
 		_smoke_step(ratio)
+
+
+## 보복 시작(모든 화면). mode = "throw"(되던지기) · "slap"(싸대기), target = 던진 사람(PlayerView).
+func react(mode: String, target: Node3D) -> void:
+	if _motion == null:
+		return
+	if not reacting:
+		_home = transform
+		_home_seated = seated
+	reacting = true
+	_react_mode = mode
+	_react_time = 0.0
+	_react_target = target
+	_swung = false
+	_motion.drinking = 0.0
+	_motion.stop_emote()
+	_show_anger(true)
+	if _cigar != null: _cigar.visible = false
+
+
+## 보복이 몇 초 걸리는가(방장이 물건을 놓거나 때리는 박자를 맞출 때 쓴다).
+static func reaction_seconds(mode: String) -> float:
+	if mode == "slap":
+		return ANGER_SECONDS + SLAP_DASH + SLAP_HOLD + RETURN_SECONDS
+	return ANGER_SECONDS + THROW_RELEASE + THROW_FOLLOW
+
+
+## 보복 중 한 프레임: 상대를 바라보고 화낸 뒤 던지거나, 달려가 때리고 돌아온다.
+func _react_step(delta: float) -> void:
+	_react_time += delta
+	var t: float = _react_time
+	var target: Vector3 = _react_target.global_position if is_instance_valid(_react_target) else global_position
+	var home: Vector3 = (get_parent() as Node3D).global_transform * _home.origin if get_parent() is Node3D else _home.origin
+	var walk: float = 0.0
+	var face: Vector3 = target
+	_motion.pointing = t < ANGER_SECONDS
+	if _anger != null:
+		_anger.scale = Vector3.ONE * (1.0 + 0.18 * absf(sin(t * 11.0)))
+		_anger.visible = t < ANGER_SECONDS + 0.4
+	if _react_mode == "slap":
+		# 싸대기는 서서 친다: 앉아 있던 손님도 일어나 바닥 높이로 내려온다.
+		seated = false
+		var from_home: Vector3 = Vector3(home.x - target.x, 0.0, home.z - target.z)
+		var stand: Vector3 = target + (from_home.normalized() if from_home.length() > 0.01 else Vector3.FORWARD) * SLAP_STAND
+		stand.y = target.y
+		var floor_home := Vector3(home.x, target.y, home.z)
+		var dash_end: float = ANGER_SECONDS + SLAP_DASH
+		var hold_end: float = dash_end + SLAP_HOLD
+		if t < ANGER_SECONDS:
+			pass
+		elif t < dash_end:
+			global_position = floor_home.lerp(stand, smoothstep(0.0, 1.0, (t - ANGER_SECONDS) / SLAP_DASH))
+			walk = 1.6
+		elif t < hold_end:
+			global_position = stand
+			if not _swung:
+				_swung = true
+				_motion.play_throw()
+		elif t < hold_end + RETURN_SECONDS:
+			global_position = stand.lerp(floor_home, smoothstep(0.0, 1.0, (t - hold_end) / RETURN_SECONDS))
+			walk = 1.0
+			face = floor_home
+		else:
+			_end_reaction()
+			return
+	else:
+		if t >= ANGER_SECONDS and not _swung:
+			_swung = true
+			_motion.play_throw()
+		if t >= reaction_seconds("throw"):
+			_end_reaction()
+			return
+	_face(face, delta)
+	var posture := CharacterMotion.Posture.SEAT if seated else CharacterMotion.Posture.STAND
+	_motion.animate(delta, walk, posture, false, 0.0, false)
+
+
+## 모델 정면(-Z)이 point 를 보도록 몸을 돌린다(부드럽게).
+func _face(point: Vector3, delta: float) -> void:
+	var offset: Vector3 = global_position - point
+	if Vector2(offset.x, offset.z).length() < 0.05:
+		return
+	var yaw: float = atan2(offset.x, offset.z)
+	global_rotation.y = lerp_angle(global_rotation.y, yaw, 1.0 - exp(-10.0 * delta))
+
+
+## 보복을 마치고 제자리 · 원래 자세로 돌아간다.
+func _end_reaction() -> void:
+	reacting = false
+	transform = _home
+	seated = _home_seated
+	_motion.pointing = false
+	_show_anger(false)
+	if _cigar != null: _cigar.visible = true
+
+
+## 머리 위 화난 표시(💢). 글꼴에 이모지가 없을 수 있어 그림을 직접 그려 붙인다.
+func _show_anger(on: bool) -> void:
+	if on and _anger == null:
+		_anger = Sprite3D.new()
+		_anger.name = "Anger"
+		_anger.texture = anger_texture()
+		_anger.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_anger.pixel_size = ANGER_PIXEL
+		_anger.shaded = false
+		_anger.render_priority = 2
+		_anger.position = Vector3(0.18, ANGER_HEIGHT, 0)
+		# 실행 중에 생기는 노드는 안쪽 자식(방 생성기가 장면을 저장할 때 같이 저장되지 않게).
+		add_child(_anger, false, Node.INTERNAL_MODE_BACK)
+	if _anger != null:
+		_anger.visible = on
+
+
+## 💢 모양: 가운데를 향해 꺾인 빨간 ㄱ자 네 개(진한 테두리). 한 번만 그려 모든 NPC 가 함께 쓴다.
+static func anger_texture() -> Texture2D:
+	if _anger_texture != null:
+		return _anger_texture
+	var size := 72
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var middle := size / 2
+	for pass_index in range(2):
+		var grow: int = 3 if pass_index == 0 else 0
+		var color: Color = Color("4a0d0d") if pass_index == 0 else Color("ff3b3b")
+		for sx: int in [-1, 1]:
+			for sy: int in [-1, 1]:
+				# 가로 막대(가운데 쪽 끝에서 바깥으로)와 세로 막대가 가운데 가까운 모서리에서 만난다.
+				var near := 7
+				var far := 30
+				var thick := 7
+				var x0: int = middle + sx * near
+				var x1: int = middle + sx * far
+				var y0: int = middle + sy * near
+				var y1: int = middle + sy * far
+				image.fill_rect(Rect2i(mini(x0, x1) - grow, mini(y0, y0 + sy * thick) - grow, absi(x1 - x0) + grow * 2, thick + grow * 2), color)
+				image.fill_rect(Rect2i(mini(x0, x0 + sx * thick) - grow, mini(y0, y1) - grow, thick + grow * 2, absi(y1 - y0) + grow * 2), color)
+	_anger_texture = ImageTexture.create_from_image(image)
+	return _anger_texture
+
+
+## 손 위치(되던질 물건을 쥐는 곳). 뼈를 못 찾으면 가슴 앞.
+func hand_point() -> Vector3:
+	var model := get_node_or_null("Character") as Node3D
+	var rig: Skeleton3D = null
+	if model != null:
+		var found := model.find_children("*", "Skeleton3D", true, false)
+		if not found.is_empty(): rig = found[0]
+	if rig != null:
+		var bone: int = rig.find_bone("hand.R")
+		if bone >= 0:
+			return (rig.global_transform * rig.get_bone_global_pose(bone)).origin
+	return global_position + global_basis * Vector3(0.25, 1.3, -0.3)
 
 
 ## 시가 피우기 팔 높이(CharacterMotion.drinking 0~1 = 손이 입까지).

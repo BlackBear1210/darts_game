@@ -1,0 +1,341 @@
+extends CanvasLayer
+## 꾸미기 방(2026-11-15 사용자 요청 "당구대 근처 문을 열고 들어가면 커스터마이징 방 — 배그·덕 어몽어스처럼
+## 선글라스·콧수염·시가·옷 색·시계·모자들. 대신 게임에는 지장이 생기면 안 돼"). 디자인 담당 소유.
+## class_name 을 만들지 않고 preload 로 부른다(열린 편집기가 새 class_name 을 못 읽어 파스 오류가 나는 함정).
+##
+## [게임에 지장이 없게 만든 방법]
+##   - 방은 펍 안에 짓지 않는다. 화면 전체를 덮는 SubViewport 의 **따로 떨어진 3D 세계**(own_world_3d)에 탈의실을 짓는다.
+##     → 펍 벽·바닥·조명·충돌·다트 판정과 섞일 일이 없고(빛 새기·z-파이팅 없음), 방 밖 사람들의 화면도 그대로다.
+##   - 들어가 있는 동안 몸은 문 앞에 서 있다(마우스가 풀려 있어 이동 입력이 0). 이름표에 "꾸미는 중"이 붙는다.
+##   - 내 차례가 오거나·자리에 앉게 되거나·쓰러지면 GameView 가 이 방을 바로 닫는다(고른 것은 저장).
+##   - 고른 값은 보이기만 하는 차림(art/characters/player_outfit.gd)이고, 방장이 검사해서 모두에게 보낸다.
+##
+## [조작] 오른쪽 패널 ◀ ▶ 로 칸마다 고르기 · 캐릭터를 끌어서 돌려 보기 · "입고 나가기"/Esc = 저장하고 나가기 · "되돌리기" = 들어올 때 차림.
+## 다 끝나면 closed(look) 신호를 한 번 보내고 스스로 사라진다.
+
+signal closed(look: Dictionary)
+
+const Style = preload("res://ui/lounge_style.gd")
+const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
+const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
+const MeshKit = preload("res://art/mesh_kit.gd")
+const RoundKit = preload("res://art/pub/round_kit.gd")
+const PubParts = preload("res://art/pub/pub_parts.gd")
+
+## 들어갈 때·나올 때 검은 화면으로 바뀌는 시간(초) — "문을 열고 들어가는" 느낌.
+const FADE_SECONDS: float = 0.35
+## 캐릭터를 끌어 돌리는 빠르기(라디안/픽셀)와 가만히 두면 천천히 도는 빠르기(라디안/초).
+const DRAG_TURN: float = 0.012
+const IDLE_TURN: float = 0.25
+## 카메라: 캐릭터(원점)를 화면 왼쪽 가운데쯤 두려고 오른쪽으로 비켜 선다(오른쪽엔 패널이 있다).
+const CAMERA_AT := Vector3(0.62, 1.22, 3.3)
+const CAMERA_LOOK := Vector3(0.62, 0.98, 0.0)
+
+var seat: int = 0
+## 지금 고른 차림(칸 번호). 열기 전에 넣어 둔다.
+var look: Dictionary = {}
+var _entered_look: Dictionary = {}
+var _viewport: SubViewport
+var _world: Node3D
+var _model: Node3D
+var _rig: CharacterMotion
+var _turn: float = 0.0
+var _dragging: bool = false
+var _idle_after: float = 0.0
+var _values: Dictionary = {}
+var _swatch: ColorRect
+var _fade: ColorRect
+var _fade_to: float = 0.0
+var _closing: bool = false
+
+
+func _ready() -> void:
+	layer = 30
+	look = PlayerOutfit.sanitize(look)
+	_entered_look = look.duplicate()
+	_build_view()
+	_build_room()
+	_build_panel()
+	_fade = ColorRect.new()
+	_fade.color = Color.BLACK
+	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_fade)
+	_dress_model()
+
+
+## 3D 탈의실을 그리는 화면(창 크기에 맞춰 늘어난다).
+func _build_view() -> void:
+	var container := SubViewportContainer.new()
+	container.stretch = true
+	container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(container)
+	_viewport = SubViewport.new()
+	_viewport.own_world_3d = true
+	_viewport.msaa_3d = Viewport.MSAA_4X
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	container.add_child(_viewport)
+	_world = Node3D.new()
+	_world.name = "DressingRoom"
+	_viewport.add_child(_world)
+	# 캐릭터 끌어 돌리기는 패널 뒤 빈 곳이 받는다(SubViewport 로 입력을 넘기지 않는다).
+	var drag := Control.new()
+	drag.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	drag.mouse_filter = Control.MOUSE_FILTER_STOP
+	drag.gui_input.connect(_on_drag)
+	add_child(drag)
+
+
+## 탈의실: 따뜻한 조명 · 나무 바닥 · 자주 벽지 · 전신 거울 · 옷걸이(옷 색 견본) · 모자 선반 · 화분. 모두 보이기만 한다.
+func _build_room() -> void:
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color("140d12")
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color("f2d2b0")
+	environment.ambient_light_energy = 0.32
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.4
+	var holder := WorldEnvironment.new()
+	holder.environment = environment
+	_world.add_child(holder)
+	var camera := Camera3D.new()
+	camera.fov = 42.0
+	camera.position = CAMERA_AT
+	_world.add_child(camera)
+	camera.look_at(CAMERA_LOOK)
+	camera.current = true
+	# 조명: 앞 위 따뜻한 스포트(주인공) · 왼쪽 옅은 채움 · 뒤 차가운 테두리 빛.
+	var key := SpotLight3D.new()
+	key.light_color = Color("ffd9a8")
+	key.light_energy = 3.2
+	key.spot_range = 9.0
+	key.spot_angle = 32.0
+	key.shadow_enabled = true
+	key.position = Vector3(0.8, 3.4, 2.6)
+	_world.add_child(key)
+	key.look_at(Vector3(0, 0.9, 0))
+	var fill := OmniLight3D.new()
+	fill.light_color = Color("ffc78a")
+	fill.light_energy = 0.7
+	fill.omni_range = 6.0
+	fill.position = Vector3(-2.2, 1.6, 1.6)
+	_world.add_child(fill)
+	var rim := OmniLight3D.new()
+	rim.light_color = Color("8fb4ff")
+	rim.light_energy = 1.1
+	rim.omni_range = 3.5
+	rim.position = Vector3(0.4, 2.0, -1.0)
+	_world.add_child(rim)
+	# 바닥·벽.
+	var floor_mat := RoundKit.clay("wardrobe_floor", "5a3826", 0.75)
+	MeshKit.rounded_box(_world, "Floor", Vector3(9.0, 0.1, 6.0), Vector3(0, -0.05, 0.4), floor_mat, 0.02)
+	var rug := RoundKit.lathe_mesh(PackedVector2Array([Vector2(0, 0), Vector2(0.95, 0), Vector2(1.0, 0.012), Vector2(0, 0.014)]), 40)
+	MeshKit.mesh_node(_world, "Rug", rug, Vector3(0, 0.001, 0), RoundKit.clay("wardrobe_rug", "8c2f3c", 0.95))
+	MeshKit.mesh_node(_world, "RugRing", RoundKit.ring_mesh("wardrobe_rug_ring", 0.8, RoundKit.rounded_rect_profile(Vector2(0.06, 0.004), 0.002, 2), 40),
+		Vector3(0, 0.014, 0), RoundKit.clay("wardrobe_rug_ring", "e2b65a", 0.8))
+	MeshKit.rounded_box(_world, "BackWall", Vector3(9.0, 4.0, 0.2), Vector3(0, 2.0, -1.7), RoundKit.clay("wardrobe_wallpaper", "4a2a44", 0.9), 0.02)
+	MeshKit.rounded_box(_world, "Wainscot", Vector3(9.0, 1.0, 0.08), Vector3(0, 0.5, -1.58), RoundKit.clay("wardrobe_wainscot", "3a2219", 0.7), 0.02)
+	MeshKit.rounded_box(_world, "WainscotRail", Vector3(9.0, 0.06, 0.12), Vector3(0, 1.02, -1.55), RoundKit.clay("wardrobe_rail", "c9a24f", 0.35, 0.8), 0.02)
+	MeshKit.rounded_box(_world, "SideWall", Vector3(0.2, 4.0, 6.0), Vector3(-3.0, 2.0, 0.4), RoundKit.clay("wardrobe_wallpaper", "4a2a44", 0.9), 0.02)
+	_mirror(Vector3(-1.75, 0, -1.48))
+	_rack(Vector3(2.15, 0, -0.85))
+	_hat_shelf(Vector3(0.7, 1.95, -1.5))
+	PubParts.plant(_world, Vector3(-2.55, 0, -1.1))
+	# 문(들어온 곳 — 왼쪽 벽, 살짝 열린 채): 나무 문짝 + 놋쇠 손잡이.
+	var door := Node3D.new()
+	door.name = "Door"
+	door.position = Vector3(-2.88, 0, 1.2)
+	door.rotation.y = 0.45
+	_world.add_child(door)
+	MeshKit.rounded_box(door, "DoorLeaf", Vector3(0.06, 2.1, 0.95), Vector3(0, 1.05, 0.475), RoundKit.clay("wardrobe_door", "6b4128", 0.7), 0.02)
+	MeshKit.mesh_node(door, "DoorKnob", RoundKit.sphere_mesh(0.035, 12), Vector3(0.06, 1.0, 0.82), RoundKit.clay("wardrobe_brass", "c9a24f", 0.3, 0.85))
+
+
+## 전신 거울: 금테 + 반짝이는 판(진짜 비추지는 않는다 — 화면이 하나 더 필요해서 비싸다).
+func _mirror(at: Vector3) -> void:
+	var gold := RoundKit.clay("wardrobe_brass", "c9a24f", 0.3, 0.85)
+	MeshKit.rounded_box(_world, "MirrorFrame", Vector3(1.0, 2.05, 0.08), at + Vector3(0, 1.1, 0), gold, 0.04)
+	var glass := StandardMaterial3D.new()
+	glass.resource_name = "WardrobeMirror"
+	glass.albedo_color = Color("9fb3c4")
+	glass.metallic = 0.9
+	glass.roughness = 0.08
+	MeshKit.rounded_box(_world, "MirrorGlass", Vector3(0.86, 1.9, 0.02), at + Vector3(0, 1.1, 0.045), glass, 0.01)
+	MeshKit.rounded_box(_world, "MirrorFoot", Vector3(0.7, 0.06, 0.4), at + Vector3(0, 0.03, 0.15), gold, 0.02)
+
+
+## 옷걸이: 기둥 둘 + 봉 + 옷 색 견본 셔츠(옷 색 목록 그대로).
+func _rack(at: Vector3) -> void:
+	var metal := RoundKit.clay("wardrobe_rack", "2a2428", 0.4, 0.7)
+	for side: float in [-1.0, 1.0]:
+		RoundKit.rod(_world, "RackPost", at + Vector3(side * 0.75, 0, 0), at + Vector3(side * 0.75, 1.7, 0), 0.02, metal, -1.0, 10)
+		MeshKit.rounded_box(_world, "RackFoot", Vector3(0.08, 0.04, 0.5), at + Vector3(side * 0.75, 0.02, 0), metal, 0.015)
+	RoundKit.rod(_world, "RackBar", at + Vector3(-0.78, 1.66, 0), at + Vector3(0.78, 1.66, 0), 0.018, metal, -1.0, 10)
+	var colors: Array[Color] = PlayerOutfit.SHIRT_COLORS
+	for i in range(1, colors.size()):
+		var x: float = lerpf(-0.62, 0.62, float(i - 1) / float(colors.size() - 2))
+		var shirt := MeshKit.rounded_box(_world, "RackShirt", Vector3(0.05, 0.62, 0.42), at + Vector3(x, 1.28, 0),
+			RoundKit.clay("wardrobe_shirt_%d" % i, colors[i].to_html(false), 0.9), 0.02)
+		shirt.rotation.y = 0.12 * sin(i * 1.7)
+		RoundKit.rod(_world, "RackHanger", at + Vector3(x, 1.6, 0), at + Vector3(x, 1.66, 0), 0.006, metal, -1.0, 6)
+
+
+## 모자 선반: 벽 선반 위에 꾸미기 모자 셋(실크햇·중절모·밀짚모자) — 실제로 씌우는 모자와 같은 부품.
+func _hat_shelf(at: Vector3) -> void:
+	MeshKit.rounded_box(_world, "HatShelf", Vector3(1.9, 0.05, 0.36), at, RoundKit.clay("wardrobe_shelf", "6b4128", 0.7), 0.015)
+	var gold := RoundKit.clay("wardrobe_brass", "c9a24f", 0.3, 0.85)
+	for side: float in [-1.0, 1.0]:
+		MeshKit.rounded_box(_world, "HatShelfBracket", Vector3(0.04, 0.2, 0.3), at + Vector3(side * 0.8, -0.12, 0), gold, 0.01)
+	var hats: Array[int] = [4, 1, 5]
+	var shrink: float = 0.85
+	for i in range(hats.size()):
+		# 모자 부품은 "머리 받침" 좌표(모자 밑면 = 머리 가운데 + HAT_BASE_Y)로 만들어진다
+		# → 받침을 그만큼(줄인 크기로) 내려 모자 밑면이 선반 윗면에 닿게 한다.
+		var stand := Node3D.new()
+		stand.name = "ShelfHat"
+		stand.scale = Vector3.ONE * shrink
+		stand.position = at + Vector3(-0.62 + i * 0.62, 0.025 + 0.012 * shrink, 0) - (NpcOutfit.HEAD_AXIS + Vector3(0, NpcOutfit.HAT_BASE_Y, 0)) * shrink
+		_world.add_child(stand)
+		PlayerOutfit.hat(stand, hats[i])
+
+
+## 오른쪽 패널: 칸마다 ◀ 이름 ▶ + 아래 버튼 둘.
+func _build_panel() -> void:
+	var panel := PanelContainer.new()
+	panel.theme = Style.theme()
+	panel.anchor_left = 1.0
+	panel.anchor_right = 1.0
+	panel.anchor_top = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -470
+	panel.offset_right = -36
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.95), Style.INK, Style.SHADOW, 3, 18, 20))
+	add_child(panel)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	panel.add_child(column)
+	Style.heading(column, "꾸미기 방", 36)
+	Style.label(column, "고른 차림은 모두에게 보여요 · 점수·판정은 그대로", 15, Style.MUTED)
+	for slot: Array in PlayerOutfit.SLOTS:
+		var key: String = slot[0]
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 8)
+		column.add_child(line)
+		var caption := Style.label(line, str(slot[1]), 19)
+		caption.custom_minimum_size.x = 86
+		caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		var left := Style.secondary(line, "◀", _step.bind(key, -1))
+		left.custom_minimum_size = Vector2(52, 46)
+		var value := Style.label(line, "", 19, Style.GOLD)
+		value.custom_minimum_size.x = 150
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_values[key] = value
+		var right := Style.secondary(line, "▶", _step.bind(key, 1))
+		right.custom_minimum_size = Vector2(52, 46)
+		if key == "shirt":
+			_swatch = ColorRect.new()
+			_swatch.custom_minimum_size = Vector2(26, 26)
+			_swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			_swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			line.add_child(_swatch)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 12)
+	column.add_child(buttons)
+	var wear := Style.button(buttons, "입고 나가기", close.bind(true))
+	wear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var reset := Style.secondary(buttons, "되돌리기", _reset)
+	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Style.label(column, "캐릭터를 끌어서 돌려 보기 · Esc = 입고 나가기", 15, Style.MUTED)
+	_refresh_values()
+
+
+func _step(key: String, direction: int) -> void:
+	if _closing:
+		return
+	for slot: Array in PlayerOutfit.SLOTS:
+		if slot[0] == key:
+			var count: int = (slot[2] as Array).size()
+			look[key] = posmod(int(look.get(key, 0)) + direction, count)
+	_refresh_values()
+	_dress_model()
+
+
+func _reset() -> void:
+	look = _entered_look.duplicate()
+	_refresh_values()
+	_dress_model()
+
+
+func _refresh_values() -> void:
+	for key: String in _values:
+		(_values[key] as Label).text = PlayerOutfit.choice_name(key, int(look.get(key, 0)))
+	if _swatch != null:
+		_swatch.color = PlayerOutfit.SHIRT_COLORS[int(look.get("shirt", 0))]
+
+
+## 미리보기 캐릭터: 처음 한 번 만들고, 고를 때마다 옷 부품만 갈아 끼운다.
+func _dress_model() -> void:
+	if _model == null:
+		_model = PlayerLook.character(seat)
+		_model.name = "Preview"
+		_world.add_child(_model)
+		_rig = CharacterMotion.new(_model, 0.0)
+		_model.rotation.y = PI - 0.35
+		_turn = _model.rotation.y
+	PlayerOutfit.undress(_model)
+	PlayerOutfit.dress(_model, look)
+
+
+func _on_drag(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		_dragging = event.pressed
+	elif event is InputEventMouseMotion and _dragging:
+		_turn += event.relative.x * DRAG_TURN
+		_idle_after = 2.5
+
+
+func _input(event: InputEvent) -> void:
+	# 방이 열려 있는 동안 Esc 는 이 방 것(펍 화면의 마우스 잡기·설정으로 넘기지 않는다).
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		close(true)
+		get_viewport().set_input_as_handled()
+
+
+func _process(delta: float) -> void:
+	_fade.color.a = move_toward(_fade.color.a, _fade_to, delta / FADE_SECONDS)
+	_fade.visible = _fade.color.a > 0.001
+	if _closing and _fade.color.a >= 1.0:
+		set_process(false)
+		closed.emit(look.duplicate())
+		queue_free()
+		return
+	if _model != null:
+		_idle_after = maxf(_idle_after - delta, 0.0)
+		if not _dragging and _idle_after <= 0.0:
+			_turn += IDLE_TURN * delta
+		_model.rotation.y = lerp_angle(_model.rotation.y, _turn, 1.0 - exp(-10.0 * delta))
+		_rig.animate(delta, 0.0, CharacterMotion.Posture.STAND, false, 0.0, false)
+
+
+## 방을 닫는다(save = 고른 것을 그대로 입고 나간다. 지금은 늘 저장 — 되돌리려면 "되돌리기" 뒤 나간다).
+## GameView 가 차례·착석·쓰러짐 때 바로 부르기도 한다. 화면이 검게 바뀐 뒤 closed 를 보낸다.
+func close(_save: bool = true) -> void:
+	if _closing:
+		return
+	_closing = true
+	_fade_to = 1.0
+
+
+## 화면 없이 바로 닫는다(경기 화면이 사라질 때·시험). closed 를 곧바로 보낸다.
+func close_now() -> void:
+	if not is_inside_tree():
+		return
+	_closing = true
+	set_process(false)
+	closed.emit(look.duplicate())
+	queue_free()

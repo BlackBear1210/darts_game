@@ -31,6 +31,8 @@ static var input_device: String = "Default"
 static var output_device: String = "Default"
 ## 사람마다 목소리 볼륨·음소거. 표시 이름 → [볼륨(0~2), 음소거]. 다음 판에도 같은 이름이면 그대로 쓴다.
 static var voice_people: Dictionary = {}
+## 내 꾸미기 차림(2026-11-15 꾸미기 방). 다음 판에도 그대로 입고 들어간다. 값 검사는 art/characters/player_outfit.gd sanitize.
+static var look: Dictionary = {}
 static var loaded: bool = false
 const KEYS: Array[String] = ["master", "music", "sfx", "ui_scale", "sensitivity", "visual_effects", "reduced_motion", "fullscreen", "quality", "interact_key",
 	"voice_enabled", "voice_mode", "voice_key", "voice_gain", "voice_sensitivity", "voice_volume", "input_device", "output_device"]
@@ -62,6 +64,8 @@ static func load_saved() -> void:
 		output_device = str(file.get_value("voice", "output_device", "Default"))
 		var people: Variant = file.get_value("voice", "people", {})
 		if people is Dictionary: voice_people = people
+		var saved_look: Variant = file.get_value("outfit", "look", {})
+		if saved_look is Dictionary: look = saved_look
 	apply()
 
 static func apply() -> void:
@@ -107,5 +111,6 @@ static func save() -> void:
 	file.set_value("voice", "input_device", input_device)
 	file.set_value("voice", "output_device", output_device)
 	file.set_value("voice", "people", voice_people)
+	file.set_value("outfit", "look", look)
 	file.save("user://player_preferences.cfg")
 	apply()

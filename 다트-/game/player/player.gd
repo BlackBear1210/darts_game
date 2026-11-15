@@ -36,13 +36,16 @@ const DRINK_LOOK_UP: float = 0.3
 ## 머리 위 이름표 높이(m). 캐릭터 키(약 1.6~1.75m) 바로 위. 앉거나 숙이면 LOW_LABEL_RATIO 만큼 내린다.
 const LABEL_HEIGHT: float = 2.0
 const LOW_LABEL_RATIO: float = 0.72
-## 음성 채팅 스피커(말하는 중) 자리: 머리 왼쪽 옆. 감정 말풍선(lounge/emotes.gd, 머리 오른쪽 1.72 m)과 마주 보게 둔다.
-## 머리 위에 두면 테이블 건너편 사람 것이 위 가운데 라운드 표시에 가려진다(말풍선과 같은 이유).
-const SPEAKER_HEIGHT: float = 1.72
-const SPEAKER_SIDE: float = 0.46
-## 스피커 그림 크기(m/px)와 목소리가 클 때 커지는 비율.
-const SPEAKER_PIXEL: float = 0.0019
-const SPEAKER_PULSE: float = 0.35
+## 머리 위 이름표 글자 크기(2026-11-15 "머리 위에 작게 닉네임과 마이크 표시"): 예전 32 → 작게. 점수는 왼쪽 위 점수판에 있어 뺐다.
+const LABEL_FONT: int = 22
+const LABEL_PIXEL: float = 0.0026
+## 마이크 그림: 이름표 바로 왼쪽(같은 높이). 크기(m/px) · 이름표와의 틈(m) · 말할 때 커지는 비율.
+const SPEAKER_HEIGHT: float = LABEL_HEIGHT
+const MIC_PIXEL: float = 0.00075
+const MIC_GAP: float = 0.06
+const SPEAKER_PULSE: float = 0.3
+## 이름표 글자 폭의 절반(m). 글자가 바뀔 때 다시 재서 마이크를 그 왼쪽에 붙인다.
+var _label_half: float = 0.2
 
 var identity: MatchPlayer
 var seated: bool = false
@@ -66,6 +69,19 @@ var drink_pose: float = 0.0
 var knockback: Vector3 = Vector3.ZERO
 ## 가챠 "왕머리" 같은 장난 효과(보이기만). LoungeWorld 가 매 프레임 넣는다.
 var head_scale: float = 1.0
+## [쓰러지기 — 2026-11-15] 다트 두 번 · NPC 반격 · 싸대기에 맞으면 애니메이터를 끄고 래그돌(줄 끊긴 인형)을 켠다.
+## 모든 화면이 GameView 의 "player_fall" 이벤트를 받고 각자 물리로 쓰러뜨린다(보이기만 — 위치는 방장 몸이 정한다).
+const Ragdoll = preload("res://art/characters/ragdoll.gd")
+## 쓰러져 있는 시간(초). 이 시간이 지나면 일어난다(애니메이션으로 섞여 돌아온다). 방장은 그동안 조작을 막는다.
+const FALL_SECONDS: float = 3.2
+var fallen: bool = false
+var _fall_left: float = 0.0
+var _ragdoll: Node
+## [꾸미기 — 2026-11-15] 모자·안경·콧수염·시가·시계·옷 색(art/characters/player_outfit.gd). 보이기만 한다.
+## 값은 방장이 모두에게 보낸다(GameView "looks" 이벤트). dressing = 꾸미기 방에 들어가 있는 중(이름표에 표시).
+const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
+var look: Dictionary = {}
+var dressing: bool = false
 var _model: Node3D
 var _rig: CharacterMotion
 var _label: Label3D
@@ -79,9 +95,9 @@ func _ready() -> void:
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.position.y = LABEL_HEIGHT
-	_label.font_size = 32
-	_label.pixel_size = 0.003
-	_label.outline_size = 8
+	_label.font_size = LABEL_FONT
+	_label.pixel_size = LABEL_PIXEL
+	_label.outline_size = 6
 	_label.outline_modulate = Color("122b27")
 	add_child(_label)
 	_collision = CollisionShape3D.new()
@@ -116,14 +132,19 @@ func show_state(player: MatchPlayer) -> void:
 ## 이름표: 자리 표식(●▲■◆)을 붙이고 자리 색으로 칠한다(색약이어도 모양으로 구분 — 기획 2-4).
 ## 엿보는 중이면 "엿보는 중"을 붙인다 → 들여다보이는 옆 사람도 눈치채고 견제할 수 있다(모든 화면).
 func _refresh_label() -> void:
-	var tags: String = (" · 슬로우" if identity.speed_scale < 1.0 else "") + (" · 엿보는 중" if _peek_tagged else "")
-	_label.text = "%s · %.1f%s" % [PlayerLook.tag(identity.seat, identity.display_name), identity.score, tags]
+	var tags: String = (" · 슬로우" if identity.speed_scale < 1.0 else "") + (" · 엿보는 중" if _peek_tagged else "") + (" · 꾸미는 중" if dressing else "")
+	_label.text = "%s%s" % [PlayerLook.tag(identity.seat, identity.display_name), tags]
 	_label.modulate = COLORS[identity.seat].lightened(0.35)
+	var font: Font = _label.font if _label.font != null else ThemeDB.fallback_font
+	_label_half = font.get_string_size(_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT).x * LABEL_PIXEL * 0.5
 
 
 ## 기본 몸짓은 위치·자세·속도로 만들고, 선택 모션은 방장이 승인한 감정표현 이벤트로 시작한다.
 func _process(delta: float) -> void:
 	if _rig == null:
+		return
+	if fallen:
+		_process_fallen(delta)
 		return
 	var posture := CharacterMotion.Posture.SEAT if seated else (CharacterMotion.Posture.CROUCH if crouched else CharacterMotion.Posture.STAND)
 	var ground_speed := Vector2(velocity.x, velocity.z).length() / SPEED
@@ -144,6 +165,59 @@ func _process(delta: float) -> void:
 	if tagged != _peek_tagged and identity != null:
 		_peek_tagged = tagged
 		_refresh_label()
+
+
+## 쓰러져 있는 동안: 애니메이터는 꺼져 있고 래그돌 물리가 뼈를 움직인다. 이름표·스피커는 쓰러진 몸을 따라간다.
+func _process_fallen(delta: float) -> void:
+	_fall_left -= delta
+	var center: Vector3 = fallen_center()
+	_label.global_position = center + Vector3.UP * 0.75
+	if _speaker != null: _speaker.global_position = center + Vector3.UP * 0.75
+	if _fall_left <= 0.0:
+		get_up()
+
+
+## 쓰러진다. push = 날아가는 방향과 세기(m/s). 이미 쓰러져 있으면 무시한다(겹쳐 맞아도 한 번만).
+func fall(push: Vector3) -> void:
+	if fallen or _model == null:
+		return
+	if _ragdoll == null or not is_instance_valid(_ragdoll):
+		_ragdoll = Ragdoll.attach(_model)
+	if _ragdoll == null:
+		return
+	fallen = true
+	_fall_left = FALL_SECONDS
+	knockback = Vector3.ZERO
+	velocity = Vector3.ZERO
+	aiming = false
+	# 쓰러진 동안 충돌 캡슐을 끈다: 바닥에 누운 몸 대신 빈 자리에 서 있는 캡슐에 사람·소품이 걸리지 않게.
+	_collision.set_deferred("disabled", true)
+	# 1) 애니메이터 끄기 → 2) 래그돌 켜기(순서가 반대면 첫 프레임에 애니메이션이 물리 자세를 덮는다).
+	_rig.set_animator_enabled(false)
+	_ragdoll.start(push, global_position + Vector3.UP * 1.1)
+
+
+## 일어난다. 방장은 몸(캡슐)을 쓰러진 자리(골반)로 옮긴다 → 다른 화면은 위치 동기화로 따라온다.
+func get_up() -> void:
+	if not fallen:
+		return
+	fallen = false
+	var center: Vector3 = fallen_center()
+	if multiplayer.is_server() and not seated:
+		position = TableView.clamp_floor(Vector3(center.x, position.y, center.z))
+	if _ragdoll != null and is_instance_valid(_ragdoll):
+		_ragdoll.stop()
+	_rig.set_animator_enabled(true)
+	_collision.set_deferred("disabled", false)
+	_label.position = Vector3(0, LABEL_HEIGHT * (LOW_LABEL_RATIO if crouched else 1.0), 0)
+	if _speaker != null: _speaker.position = Vector3(0, SPEAKER_HEIGHT, 0)
+
+
+## 쓰러진 몸 가운데(골반). 안 쓰러졌으면 허리 높이. 1인칭 카메라가 쓰러진 동안 이곳을 내려다본다.
+func fallen_center() -> Vector3:
+	if fallen and _ragdoll != null and is_instance_valid(_ragdoll):
+		return _ragdoll.center()
+	return global_position + Vector3.UP * 0.9
 
 
 ## 앉아 있으면 보이는 몸(Model)을 의자 정면(테이블 쪽) ± SEATED_TURN_LIMIT 안으로 되돌린다. 서 있으면 0(시선 그대로).
@@ -168,28 +242,29 @@ func _turn_body_in_chair(delta: float) -> void:
 	_model.rotation.y = model_turn
 
 
-## 음성 채팅으로 말하는 중이면 머리 옆에 스피커를 띄운다(level 0~1 = 목소리 크기, 음수 = 숨김).
-## GameView 가 매 프레임 넣는다. 캐릭터와 같은 레이어라 내 스피커는 내 화면에 안 보인다(내 상태는 Tab 목록·HUD).
-func set_speaking(level: float) -> void:
-	if level < 0.0:
+## 이름표 왼쪽 마이크 표시(2026-11-15). GameView 가 매 프레임 넣는다.
+## state: -1 숨김(봇 — 목소리가 없다) · 0 조용 · 1 말하는 중(level 0~1 = 목소리 크기만큼 커진다) · 2 내가 음소거한 사람.
+## 캐릭터와 같은 레이어라 내 마이크는 내 화면에 안 보인다(내 상태는 Tab 목록·HUD).
+func set_mic(state: int, level: float = 0.0) -> void:
+	if state < 0:
 		if _speaker != null: _speaker.visible = false
 		return
 	if _speaker == null:
 		_speaker = Sprite3D.new()
-		_speaker.name = "Speaking"
-		_speaker.texture = preload("res://ui/ui_icon.gd").speaker_texture()
+		_speaker.name = "Mic"
 		_speaker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_speaker.pixel_size = SPEAKER_PIXEL
+		_speaker.pixel_size = MIC_PIXEL
 		_speaker.shaded = false
-		_speaker.no_depth_test = true
 		_speaker.render_priority = 2
-		# offset 은 그림 면 기준 픽셀이라 빌보드면 늘 화면 가로 방향 = 어디서 봐도 머리 왼쪽 옆.
-		_speaker.offset.x = -SPEAKER_SIDE / SPEAKER_PIXEL
 		_speaker.layers = 1 << (identity.seat + 1) if identity != null else 1
 		add_child(_speaker)
+	_speaker.texture = preload("res://ui/ui_icon.gd").mic_texture(state)
 	_speaker.visible = true
-	_speaker.position.y = SPEAKER_HEIGHT * (LOW_LABEL_RATIO if crouched else 1.0)
-	_speaker.scale = Vector3.ONE * (1.0 + clampf(level, 0.0, 1.0) * SPEAKER_PULSE)
+	# offset 은 그림 면 기준 픽셀이라 빌보드면 늘 화면 가로 방향 = 어디서 봐도 이름표 바로 왼쪽.
+	_speaker.offset.x = -(_label_half + MIC_GAP) / MIC_PIXEL
+	if not fallen:
+		_speaker.position.y = _label.position.y
+	_speaker.scale = Vector3.ONE * (1.0 + (clampf(level, 0.0, 1.0) * SPEAKER_PULSE if state == 1 else 0.0))
 
 
 ## 던지기 몸짓을 한 번 재생한다(GameView._show_throw 가 부른다).
@@ -200,7 +275,7 @@ func play_throw() -> void:
 
 ## 모션(춤)을 틀 수 있는가. 앉아 있어도 된다(2026-11-08 — 엉덩이·다리는 의자에 두고 윗몸만 춘다, CharacterMotion).
 func can_emote() -> bool:
-	return _rig != null and not crouched and not aiming and drink_pose <= 0.0 \
+	return _rig != null and not fallen and not crouched and not aiming and drink_pose <= 0.0 \
 		and (seated or position.y <= 0.05)
 
 
@@ -217,11 +292,39 @@ func _dress(seat: int) -> void:
 	if _model != null:
 		remove_child(_model)
 		_model.queue_free()
+	# 래그돌은 모델의 뼈대 아래에 붙어 있어 모델과 함께 사라진다 → 다음에 쓰러질 때 새 모델에 다시 붙인다.
+	_ragdoll = null
+	fallen = false
 	_model = PlayerLook.character(seat)
 	_model.name = "Model"
 	add_child(_model)
 	# 네 명이 같은 박자로 움직이지 않게 자리마다 시작 시각을 다르게 준다.
 	_rig = CharacterMotion.new(_model, seat * 0.9)
+	PlayerOutfit.dress(_model, look)
+
+
+## 차림을 바꾼다(꾸미기 방에서 나올 때 · 방장 "looks" 이벤트). 캐릭터는 그대로 두고 옷 부품만 갈아 끼운다
+## → 쓰러져 있어도·카드를 들고 있어도 바로 바뀐다. 같은 차림이면 아무것도 하지 않는다.
+func wear(new_look: Dictionary) -> void:
+	var clean: Dictionary = PlayerOutfit.sanitize(new_look)
+	if clean == look:
+		return
+	look = clean
+	if _model == null:
+		return
+	PlayerOutfit.undress(_model)
+	PlayerOutfit.dress(_model, look)
+	if identity != null:
+		_set_layers(_model, 1 << (identity.seat + 1))
+
+
+## 꾸미기 방에 들어갔는지(이름표에 "꾸미는 중"). 모든 화면이 방장 이벤트로 같이 바꾼다.
+func set_dressing(on: bool) -> void:
+	if dressing == on:
+		return
+	dressing = on
+	if identity != null:
+		_refresh_label()
 
 
 func _set_layers(node: Node, layer: int) -> void:
@@ -263,7 +366,12 @@ func simulate(delta: float, controls: Dictionary) -> void:
 	pitch = float(controls.get("pitch", pitch))
 	crouched = bool(controls.get("crouch", false)) and not seated
 	seat_lean = move_toward(seat_lean, float((controls.get("move", Vector2.ZERO) as Vector2).x) if seated else 0.0, delta * PEEK_SPEED)
-	if seated:
+	if fallen:
+		# 쓰러진 동안은 몸(캡슐)이 움직이지 않는다. 일어날 때 get_up 이 쓰러진 자리로 옮긴다.
+		velocity = Vector3.ZERO
+		knockback = Vector3.ZERO
+		seat_lean = 0.0
+	elif seated:
 		velocity = Vector3.ZERO
 		knockback = Vector3.ZERO
 		position = TableView.seat_spot(identity.seat)

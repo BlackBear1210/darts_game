@@ -27,6 +27,11 @@ var in_throw_zone: Callable
 var force_seat: Callable
 ## 몸으로 막혔을 때 맞은 사람을 못 움직이게 하는 GameView 함수. stun_player(peer_id, seconds). 없으면 보상만 준다.
 var stun_player: Callable
+## [라운드당 다트 — 2026-11-15] 차례가 아니거나 던지는 칸 밖에서 던진 "그냥 던진 다트"를 날리는 GameView 함수.
+## throw_stray(peer_id, charge) -> bool(던졌으면 true). 없으면(씬 없는 시험) 그냥 던지기를 받지 않는다.
+var throw_stray: Callable
+## 다트에 두 번 맞은 사람을 쓰러뜨리는 GameView 함수. knock_down(peer_id, push). 없으면 횟수만 센다.
+var knock_down: Callable
 var developer_enabled: bool = false
 var notice: String = ""
 var _turn_end: float = 0.0
@@ -54,6 +59,12 @@ const REDRAW_LIMIT: int = 12
 var _nullify_dealt: bool = false
 ## 몸으로 막은 사람이 못 움직이는 시간(초). F6 카드 라운드 시연(Disruption.STUN_SECONDS)과 같은 시연값이다.
 const BODY_STUN_SECONDS: float = 3.0
+## 다트에 이만큼 맞으면 쓰러진다(줄 끊긴 인형). 횟수는 라운드마다 0 으로 돌아간다(2026-11-15 사용자 요청 "2번 맞으면").
+const DART_HITS_TO_FALL: int = 2
+## 그냥 던진 다트에 맞았을 때 잠깐 움찔하는 시간(초). 몸으로 막기(BODY_STUN_SECONDS)보다 짧다.
+const STRAY_HIT_STUN: float = 1.0
+## 다트를 던질 수 있는 단계(조준·비행·정산). 카드 충전·테이블 집합·대기 중에는 다트를 꺼내지 않는다.
+const DART_PHASES: Array[MatchState.Phase] = [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]
 
 
 func configure(room: RoomState, peer_id: int, connection: NetworkSession = null) -> void:
@@ -98,7 +109,18 @@ func submit_throw(aim: Vector2, charge: float) -> void:
 		session.request_game_action.rpc_id(1, "throw", [state.match_id, state.turn_id, _request_number, aim, charge])
 
 
+## 그냥 던지기 요청(자기 차례가 아니거나, 던지는 칸 밖이거나, 과녁을 안 보고 던졌다). 점수는 없고 다트만 준다.
+func submit_stray(charge: float) -> void:
+	_request_number += 1
+	if multiplayer.is_server():
+		_accept_stray(local_peer_id, state.match_id, _request_number, charge)
+	else:
+		session.request_game_action.rpc_id(1, "stray", [state.match_id, _request_number, charge])
+
+
 func _receive_action(sender: int, action: String, payload: Array) -> void:
+	if action == "stray" and payload.size() == 3 and payload[0] is int and payload[1] is int and (payload[2] is float or payload[2] is int):
+		_accept_stray(sender, payload[0], payload[1], payload[2])
 	if action == "card" and payload.size() == 3 and payload[0] == state.match_id and payload[1] is String and payload[2] is int:
 		if cards != null: cards.action(sender, payload[1], payload[2])
 	if action == "restart" and payload.is_empty() and sender == session.room.host_peer_id:
@@ -135,6 +157,68 @@ func _accept_throw(sender: int, match_id: int, turn_id: int, request_id: int, ai
 	_launch(sender, aim, charge, request_id)
 
 
+## 그냥 던진 다트를 방장이 확정한다. 다트 단계에 다트가 남은 사람이면 누구나(자기 차례가 아니어도) 던질 수 있다.
+## 날아가는 계산·사람 맞히기는 GameView.throw_stray 가 한다(컨트롤러는 씬을 모른다). 쓴 다트는 이번 라운드에 돌려받지 못한다.
+func _accept_stray(sender: int, match_id: int, request_id: int, charge: float) -> void:
+	var player: MatchPlayer = state.find_player(sender)
+	if player == null or player.is_bot or match_id != state.match_id:
+		return
+	if state.phase not in DART_PHASES or player.darts <= 0:
+		return
+	if not is_finite(charge) or charge < 0 or charge > 1 or request_id <= int(_last_requests.get(sender, 0)):
+		return
+	# 지금 던지는 사람이 자기 다트가 날아가는 동안(비행·정산) 한 번 더 누른 것은 실수로 보고 받지 않는다.
+	var active := state.active_player()
+	var mine: bool = active != null and active.peer_id == sender
+	if mine and state.phase != MatchState.Phase.AIMING:
+		return
+	if not throw_stray.is_valid() or not bool(throw_stray.call(sender, charge)):
+		return
+	_last_requests[sender] = request_id
+	player.darts -= 1
+	add_feed(feed_entry("dart", player, "다트를 그냥 던짐 · 남은 다트 %d" % player.darts))
+	if mine:
+		state.darts_left = player.darts
+		if state.darts_left <= 0:
+			state.last_hit = {"peer_id": sender, "points": 0, "reason": "다트를 다 써 버림 · 0점", "request_id": -state.turn_id}
+			_set_phase(MatchState.Phase.SETTLING, config.settle_seconds)
+			return
+	_publish()
+
+
+## 사람이 다트에 맞았다(몸으로 막기 · 그냥 던진 다트 공통). 횟수를 세고 DART_HITS_TO_FALL 번째면 쓰러뜨린다.
+## push = 밀려나는 방향과 세기(0 이면 GameView 가 던진 사람 반대쪽으로 정한다). 쓰러졌으면 true.
+func dart_hit_player(victim_id: int, push: Vector3 = Vector3.ZERO) -> bool:
+	var victim: MatchPlayer = state.find_player(victim_id)
+	if victim == null:
+		return false
+	victim.dart_hits += 1
+	if victim.dart_hits < DART_HITS_TO_FALL:
+		add_feed(feed_entry("dizzy", null, "다트에 맞음 %d/%d" % [victim.dart_hits, DART_HITS_TO_FALL], victim))
+		return false
+	victim.dart_hits = 0
+	add_feed(feed_entry("dizzy", null, "다트 %d번 맞고 쓰러짐!" % DART_HITS_TO_FALL, victim))
+	if knock_down.is_valid():
+		knock_down.call(victim_id, push)
+	return true
+
+
+## 그냥 던진 다트가 사람에게 꽂혔다(GameView 가 꽂히는 시각에 부른다). 잠깐 움찔 + 맞은 횟수.
+func stray_hit(victim_id: int, push: Vector3) -> void:
+	if not multiplayer.is_server() or state.find_player(victim_id) == null:
+		return
+	if not dart_hit_player(victim_id, push) and stun_player.is_valid():
+		stun_player.call(victim_id, STRAY_HIT_STUN)
+	_publish()
+
+
+## 라운드가 시작될 때 모두에게 다트를 다시 채운다(카드 나눠 주기와 같은 때). 맞은 횟수도 0 으로.
+func _refill_darts() -> void:
+	for player in state.players:
+		player.darts = config.darts_per_turn
+		player.dart_hits = 0
+
+
 ## 봇의 투척. 방장이 봇을 투척선까지 몰고 간 뒤 부른다(GameView._drive_bot).
 ## 네트워크 발신자가 없으므로 차례·발수·시간·값 범위만 확인하고 사람과 같은 비행 경로로 보낸다.
 func bot_throw(aim: Vector2, charge: float) -> void:
@@ -160,6 +244,10 @@ func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void
 	_pending_hit = data.duplicate()
 	_pending_hit.merge({"peer_id": peer_id, "request_id": request_id})
 	state.darts_left -= 1
+	# 손에 든 다트도 같이 준다(라운드당 다트 — 이번 차례의 남은 발수 = 던지는 사람의 남은 다트).
+	var thrower: MatchPlayer = state.find_player(peer_id)
+	if thrower != null:
+		thrower.darts = maxi(thrower.darts - 1, 0)
 	_set_phase(MatchState.Phase.FLIGHT, float(data.duration))
 	data.merge({"match_id": state.match_id, "turn_id": state.turn_id, "peer_id": peer_id})
 	if session != null:
@@ -252,6 +340,8 @@ func _process(_delta: float) -> void:
 ## 라운지 경기는 받은 카드를 MatchCards.VIEW_SECONDS 동안 확인만 하고 바로 다트로 간다(카드는 다트 턴에 쓴다).
 ## before 는 이 단계로 넘어오며 알릴 말(집합 지각 같은 것). 카드 알림이 그것을 덮지 않게 앞에 붙인다.
 func _begin_cards(before: String = "") -> void:
+	# 라운드 시작 = 모두가 다트를 받는 때(2026-11-15). 카드를 끈 방도 여기를 지나므로 맨 먼저 채운다.
+	_refill_darts()
 	if room_settings.social_lobby and not room_settings.cards_enabled:
 		_begin_turn()
 		return
@@ -303,9 +393,17 @@ func _deal_single_nullify() -> void:
 func _begin_turn() -> void:
 	if cards != null: cards.begin_dart_turn()
 	state.turn_id += 1
-	state.darts_left = config.darts_per_turn
+	# 이번 차례의 발수 = 이 사람이 라운드 시작 때 받은 다트 중 아직 남은 것(차례 밖에서 던져 버렸으면 그만큼 적다).
+	var thrower: MatchPlayer = state.active_player()
+	state.darts_left = thrower.darts if thrower != null else 0
 	_pending_hit.clear()
 	_turn_end = _now() + config.turn_seconds
+	if thrower != null and state.darts_left <= 0:
+		# 차례가 오기 전에 다트를 다 던져 버렸다 → 던질 것이 없으니 바로 다음 사람에게 넘긴다.
+		state.last_hit = {"peer_id": thrower.peer_id, "points": 0, "reason": "다트 없음 · 차례 넘김", "request_id": -state.turn_id}
+		add_feed(feed_entry("dart", thrower, "다트가 없어 차례를 넘김"))
+		_set_phase(MatchState.Phase.SETTLING, config.settle_seconds)
+		return
 	_set_phase(MatchState.Phase.AIMING, config.turn_seconds)
 
 
@@ -364,11 +462,15 @@ func _body_blocked(victim_id: int) -> void:
 		stun_player.call(victim_id, BODY_STUN_SECONDS)
 	var reward: String = cards.disrupt(victim_id) if cards != null else ""
 	add_feed(feed_entry("dizzy", state.active_player(), "몸에 막힘%s" % reward, victim))
+	# 몸으로 막은 것도 "다트에 맞은 것"이다 → 두 번째면 쓰러진다(2026-11-15).
+	dart_hit_player(victim_id)
 
 
 func _advance_turn() -> void:
 	if cards != null: cards.end_dart_turn()
 	if cards != null and state.active_player() != null and cards.take_retry(state.active_player().peer_id):
+		# 재도전 카드: 바로 이어서 한 차례 더 → 그 차례에 던질 다트를 새로 준다.
+		state.active_player().darts = config.darts_per_turn
 		_begin_turn()
 		return
 	state.turn_index += 1

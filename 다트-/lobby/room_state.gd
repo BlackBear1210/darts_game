@@ -4,6 +4,8 @@ extends RefCounted
 
 enum Phase { LOBBY, LOADING, PLAYING }
 
+## 연습 봇 무작위 차림(꾸미기 방과 같은 목록).
+const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
 const MIN_PLAYERS: int = 2
 const MAX_PLAYERS: int = 4
 ## 인원수(capacity)별로 먼저 채우는 자리 순서(2026-11-07 사용자 요청 "정해진 인원수대로 테이블 카드·의자 세팅").
@@ -122,18 +124,46 @@ func can_start() -> bool:
 	return true
 
 
+## 혼자 하기(연습) 봇 닉네임 후보. 방장이 정해 방 상태로 모두에게 보낸다(사람 이름과 겹치지 않게 고른다).
+const PRACTICE_NAMES: Array[String] = ["다트요정", "불스아이킬러", "삼배수장인", "펍지킴이", "맥주한잔", "더블링", "소심한화살",
+	"벽치기달인", "트리플20", "칠판지우개", "바텐더친구", "주크박스", "럭키세븐", "빗나감주의", "과녁사냥꾼", "단골손님"]
+
+
 func add_bots(count: int = 3) -> void:
 	if phase != Phase.LOBBY:
 		return
+	var names: Array[String] = PRACTICE_NAMES.duplicate()
+	names.shuffle()
 	# 음수는 방 내부 참가자 식별자이며 RPC 수신 대상으로 사용하지 않는다.
 	for index in range(1, MAX_PLAYERS):
 		if players.size() >= settings.capacity or index > count:
 			break
-		if find_player(-index) == null and add_player(-index, "봇 %d" % index):
+		var bot_name: String = "봇 %d" % index
+		if settings.solo:
+			for candidate in names:
+				if _name_free(candidate):
+					bot_name = candidate
+					names.erase(candidate)
+					break
+		if find_player(-index) == null and add_player(-index, bot_name):
 			var bot := find_player(-index)
+			# 혼자 하기 연습 봇은 차림도 무작위(꾸미기 방 물건 — 2026-11-15). 여럿이 하기 봇은 기본 차림.
+			if settings.solo:
+				bot.look = PlayerOutfit.random_look(_look_dice)
 			bot.is_bot = true
 			bot.is_ready = true
 			bot.is_loaded = true
+
+
+## 연습 봇 차림을 고르는 주사위(방장만 쓴다).
+var _look_dice := RandomNumberGenerator.new()
+
+
+func _name_free(candidate: String) -> bool:
+	for player in players:
+		if player.display_name == candidate:
+			return false
+	return true
 
 
 func all_loaded() -> bool:

@@ -109,6 +109,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	# 바텐더가 화나서 보복하는 동안(NpcIdle.reacting)은 서빙을 멈춘다 — 끝나면 하던 일을 이어서 한다.
+	if _server != null and bool(_server.get("reacting")):
+		return
 	if _steps.is_empty():
 		_plan()
 	if not _steps.is_empty():

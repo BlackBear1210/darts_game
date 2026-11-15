@@ -1,3 +1,15 @@
+# 최신 인수인계 — 라운드당 다트 · 래그돌 · 꾸미기 방 · 맵 채우기 · 점수 팝업 (2026-11-15~16)
+
+- 다트 수: `MatchPlayer.darts`(라운드 시작에 채움). 차례 밖 투척 = `MatchController.submit_stray` → `GameView.throw_stray`(방장 궤적) → `stray_dart` 이벤트.
+- 쓰러짐: `player_fall` 이벤트 → `PlayerView` 가 애니메이터 끄고 `art/characters/ragdoll.gd`. NPC 보복은 `art/pub/npc_idle.gd` "화내기·보복" 묶음.
+- 꾸미기: 목록·입히기 = `art/characters/player_outfit.gd`(preload 전용, class_name 없음), 화면 = `game/lounge/wardrobe.gd`, 네트워크 = `GameView._send_look`/`_accept_look`/`_apply_looks`(`look`/`looks`). 새 칸을 더할 때는 `SLOTS` 끝에 붙인다(저장된 번호가 밀리지 않게).
+- 맵 장식: `game_room_builder.gd` `_indie_decor` → 반드시 `pub_builder.gd -- --game-room-only` 로 `pub_game.tscn` 다시 생성. 새 모델은 `rg_poly_catalog.gd` `used()` 에 키를 더하고 스크래치 원본 폴더(팩별 `Models/…` + `Textures/*atlas.png`, `.import` 없이)로 `rg_poly_baker.gd --bake --keys=…`.
+- 창밖 그림: `art/pub/window_street_baker.gd --source=<Cartoon City 폴더>` 로 PNG 를 다시 굽는다.
+- 점수 팝업: `art/fx/score_popup.gd`, 띄우는 곳 `GameView._show_score_popup`(스냅샷 `last_hit`). 크기·색 표는 파일 위 상수.
+- 상세: `작업기록/2026-11-15_래그돌_라운드다트_꾸미기방_맵채우기_점수팝업.md`.
+
+---
+
 # 커밋 정리 기록 2026년 11월 12일
 
 사용자가 카드 28종, 중앙 펜스 제거, 협동 시너지, 팔·졸림·NPC 수정과 테스트·공유용 PDF의 커밋 및 푸시를 승인했다. 아래의 미커밋·푸시 보류 표기는 각 작업을 기록하던 당시 상태다. 최종 커밋과 원격 반영 여부는 Git 이력을 기준으로 확인한다. 공유용 요약은 `output/pdf/DARTY_작업정리_2026-11-12.pdf`에 있다.

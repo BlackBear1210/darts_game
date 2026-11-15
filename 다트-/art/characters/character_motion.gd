@@ -162,6 +162,17 @@ func stop_emote() -> void:
 	emote_clip = ""
 
 
+## 애니메이터(온몸 모션 + 팔·머리 몸짓)를 끄거나 켠다(2026-11-15 래그돌: "맞는 순간 애니메이터를 끄고 래그돌을 켠다").
+## 끈 동안에는 animate() 를 부르지 않는다. 다시 켜면 다음 animate() 가 지금 자세에 맞는 모션을 처음부터 튼다.
+func set_animator_enabled(on: bool) -> void:
+	_player.active = on
+	_layer.active = on
+	if on:
+		clip = ""
+		stop_emote()
+		_throw_time = -1.0
+
+
 ## 매 프레임 호출. speed_ratio = 지금 이동 속도 / 최고 속도, look_pitch = 위아래 시선(라디안, 위 +).
 func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool, look_pitch: float, aiming: bool) -> void:
 	_time += delta

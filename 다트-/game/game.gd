@@ -58,6 +58,13 @@ const DeckShow = preload("res://game/table/deck_show.gd")
 const PlayerList = preload("res://ui/player_list.gd")
 const BotSocial = preload("res://game/player/bot_social.gd")
 const VoiceChat = preload("res://network/voice_chat.gd")
+## 꾸미기 방(2026-11-15): 당구대 옆 문에서 F → 따로 떨어진 3D 탈의실 화면(game/lounge/wardrobe.gd).
+## 고른 차림(art/characters/player_outfit.gd)은 방장이 검사해 "looks" 이벤트로 모두에게 보낸다(보이기만 — 판정 무관).
+const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
+const Wardrobe = preload("res://game/lounge/wardrobe.gd")
+var wardrobe: CanvasLayer
+## 방장: 꾸미기 방에 들어가 있는 사람(peer ID → true). 이름표 "꾸미는 중"으로 모두에게 보인다.
+var _dressing: Dictionary = {}
 
 @onready var controller: MatchController = $MatchController
 @onready var throw_input: DartThrowController = $ThrowController
@@ -74,6 +81,11 @@ var _controls: Dictionary = {}
 var _stun_until: Dictionary = {}
 ## 머리 위 별을 이미 띄운 한 발("차례:요청" 글자). 같은 스냅샷이 다시 와도 두 번 띄우지 않는다.
 var _shown_block: String = ""
+## 3D 점수 팝업(2026-11-15, art/fx/score_popup.gd): 이미 띄운 한 발("경기:요청:던진 사람"). 같은 스냅샷이 다시 와도 한 번만.
+const ScorePopup = preload("res://art/fx/score_popup.gd")
+var _shown_score: String = ""
+## 처음 받은 스냅샷(경기 중간에 들어온 사람)에 남아 있던 지난 한 발은 띄우지 않는다.
+var _score_popups_ready: bool = false
 var _sequence: int = 0
 var _motion_sequence: int = 0
 var _last_motion_sequence: int = -1
@@ -119,7 +131,8 @@ func _ready() -> void:
 	controller.changed.connect(_apply_state)
 	controller.dart_thrown.connect(_show_throw)
 	controller.dart_redirected.connect(_redirect_throw)
-	throw_input.throw_requested.connect(controller.submit_throw)
+	# 왼쪽 버튼을 놓으면: 내 차례 + 던지는 칸 + 과녁 조준이면 점수 투척, 아니면 "그냥 던지기"(_on_throw_requested).
+	throw_input.throw_requested.connect(_on_throw_requested)
 	throw_input.camera = camera
 	throw_input.board = table.board
 	$TrajectoryPreview.hide()
@@ -135,11 +148,14 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		session.movement_input.connect(_receive_controls)
 		session.movement_snapshot.connect(_receive_motion)
 		session.game_action.connect(_receive_action)
+		session.game_event.connect(_receive_game_event)
 	controller.solve_throw = solve_dart
 	controller.check_seated = is_seated
 	controller.force_seat = force_seat
 	controller.in_throw_zone = can_throw_from
 	controller.stun_player = stun_player
+	controller.throw_stray = throw_stray
+	controller.knock_down = knock_down
 	emotes = Emotes.new()
 	emotes.name = "Emotes"
 	add_child(emotes)
@@ -158,6 +174,11 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		var view := PLAYER_SCENE.instantiate() as PlayerView
 		view.name = "Player_%d" % player.peer_id
 		_players_root.add_child(view)
+		# 차림: 방 정보(봇 무작위 차림 · 방장이 받은 사람 차림). 나는 저장해 둔 내 차림을 바로 입는다(방장에게도 곧 보낸다).
+		var room_player: RoomPlayer = room.find_player(player.peer_id)
+		view.look = PlayerOutfit.sanitize(room_player.look if room_player != null else {})
+		if player.peer_id == local_peer_id and not player.is_bot:
+			view.look = PlayerOutfit.sanitize(Preferences.look)
 		view.configure(player)
 		actors[player.peer_id] = view
 		if player.peer_id == local_peer_id:
@@ -174,6 +195,10 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_state()
+	# 내 차림을 방장에게 알린다 → 방장이 모두의 차림을 다시 보낸다(늦게 들어온 사람도 남의 차림을 받는다).
+	var me := actors.get(local_peer_id) as PlayerView
+	if me != null and not me.identity.is_bot:
+		_send_look.call_deferred(me.look, false)
 
 
 ## 1인칭 왼손 카드 부채를 카메라에 붙인다. 화면이 없는 서버·검사에서는 만들지 않는다.
@@ -260,6 +285,9 @@ func _equip_hand(seat: int) -> void:
 	arm.name = "FirstPersonHand"
 	arm.seat = seat
 	arm.dart_grip = ($Camera/Hand/HeldDart as Node3D).transform
+	# 1인칭 소매도 꾸미기 옷 색으로(3인칭 내 몸과 같은 색).
+	var me := actors.get(controller.local_peer_id) as PlayerView
+	if me != null: arm.shirt = int(me.look.get("shirt", 0))
 	hand.add_child(arm)
 	($Camera/Hand/HeldDart as DartView).paint(PlayerLook.COLORS[seat])
 
@@ -282,6 +310,9 @@ func _notification(what: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 꾸미기 방이 열려 있으면 펍 조작(F·T·Tab·Enter·클릭)은 모두 쉰다 — 방 화면이 자기 입력을 받는다.
+	if wardrobe != null:
+		return
 	# T 감정표현 피자판이 먼저 받는다(열려 있으면 마우스 클릭·Esc 도 피자판 것).
 	if emotes != null and emotes.handle(event):
 		get_viewport().set_input_as_handled()
@@ -297,10 +328,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			# 들고 있으면 다트 투척 입력이 꺼져 있어 겹치지 않는다 → 다트를 던지려면 먼저 내려놓는다.
 			if event.button_index == MOUSE_BUTTON_LEFT and lounge.held(id) >= 0:
 				lounge.request("drink")
-				get_viewport().set_input_as_handled()
-				return
-			if event.button_index == MOUSE_BUTTON_LEFT and hit.get("kind") == "prop":
-				lounge.request("take")
 				get_viewport().set_input_as_handled()
 				return
 			if event.button_index == MOUSE_BUTTON_RIGHT and lounge.held(id) >= 0:
@@ -319,6 +346,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			if event.keycode == Preferences.interact_key and lounge_hud != null and lounge_hud.use_lifted_card():
 				get_viewport().set_input_as_handled()
 				return
+			# 2026-11-15: 소품 잡기도 F(상호작용 키). 좌클릭은 다트 던지기 전용이 됐다(라운드당 다트 — 아무 때나 던질 수 있다).
+			if event.keycode == Preferences.interact_key and hit.get("kind") == "prop" and lounge.held(id) < 0:
+				lounge.request("take")
+				get_viewport().set_input_as_handled()
+				return
 			if event.keycode == KEY_ENTER and session.room.phase == RoomState.Phase.LOBBY:
 				var player: RoomPlayer = session.room.find_player(id)
 				if player != null and is_seated(id): session.set_ready(not player.is_ready)
@@ -335,6 +367,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					"claw", "gacha", "hoop": lounge.request(str(hit.kind), int(hit.get("index", 0)))
 					# 도면 v3: 종·럼주통·생맥주 통·연습 과녁·축음기 건드리기(소리 + 흔들림).
 					"touch": lounge.request("touch", int(hit.get("index", 0)))
+					# 2026-11-15: 당구대 옆 문 = 꾸미기 방.
+					"wardrobe": open_wardrobe()
 				get_viewport().set_input_as_handled()
 				return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -494,11 +528,105 @@ func request_seat() -> void:
 func _receive_action(sender: int, action: String, payload: Array) -> void:
 	if action == "seat" and payload.size() == 1 and payload[0] == controller.state.match_id:
 		_accept_seat(sender)
+	elif action == "look":
+		_accept_look(sender, payload)
+
+
+# ─────────────────────────────── 꾸미기 방(2026-11-15) ───────────────────────────────
+
+## 꾸미기 방에 들어갈 수 없는(또는 있으면 바로 나와야 하는) 때: 쓰러짐 · 앉음 · 내 조준 차례 · 테이블 집합 · 경기 끝.
+## → 방에 있느라 차례·집합을 놓치는 일이 없다(게임에 지장 없게).
+func _wardrobe_blocked(local: PlayerView) -> bool:
+	var state := controller.state
+	var own_turn: bool = state.active_player() != null and state.active_player().peer_id == controller.local_peer_id
+	return local.fallen or local.seated or state.phase in [MatchState.Phase.TABLE, MatchState.Phase.FINISHED] \
+		or (own_turn and state.phase == MatchState.Phase.AIMING)
+
+
+## 문에서 F: 화면이 검게 바뀌며 탈의실로 들어간다. 몸은 문 앞에 남고(마우스가 풀려 이동 입력 0) 이름표에 "꾸미는 중".
+func open_wardrobe() -> void:
+	var local := actors.get(controller.local_peer_id) as PlayerView
+	if wardrobe != null or local == null or _wardrobe_blocked(local):
+		return
+	wardrobe = Wardrobe.new()
+	wardrobe.name = "Wardrobe"
+	wardrobe.seat = local.identity.seat
+	wardrobe.look = local.look.duplicate()
+	wardrobe.closed.connect(_on_wardrobe_closed)
+	add_child(wardrobe)
+	_prop_charge_from = -1.0
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_send_look(local.look, true)
+
+
+## 탈의실에서 나왔다: 내 화면에 바로 입히고 · 다음 판을 위해 저장하고 · 방장에게 보낸다.
+func _on_wardrobe_closed(look: Dictionary) -> void:
+	wardrobe = null
+	var clean: Dictionary = PlayerOutfit.sanitize(look)
+	Preferences.look = clean
+	Preferences.save()
+	var local := actors.get(controller.local_peer_id) as PlayerView
+	if local != null:
+		local.wear(clean)
+		_equip_hand(local.identity.seat)
+	_send_look(clean, false)
+	if is_inside_tree() and DisplayServer.get_name() != "headless" and controller.state.phase != MatchState.Phase.FINISHED:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _send_look(look: Dictionary, in_wardrobe: bool) -> void:
+	var payload: Array = [controller.state.match_id, PlayerOutfit.sanitize(look), in_wardrobe]
+	if multiplayer.is_server():
+		_accept_look(controller.local_peer_id, payload)
+	elif session != null:
+		session.request_game_action.rpc_id(1, "look", payload)
+
+
+## 방장: 차림 하나를 받아 검사(칸 번호를 목록 안으로)하고 모두의 차림 + 꾸미는 중 명단을 다시 보낸다.
+func _accept_look(sender: int, payload: Array) -> void:
+	if payload.size() != 3 or int(payload[0]) != controller.state.match_id or not (payload[1] is Dictionary):
+		return
+	var actor := actors.get(sender) as PlayerView
+	if actor == null or actor.identity.is_bot:
+		return
+	var clean: Dictionary = PlayerOutfit.sanitize(payload[1])
+	if bool(payload[2]): _dressing[sender] = true
+	else: _dressing.erase(sender)
+	var looks: Dictionary = {}
+	for id: int in actors:
+		looks[id] = clean if id == sender else (actors[id] as PlayerView).look
+	var data := {"match_id": controller.state.match_id, "looks": looks, "dressing": _dressing.keys()}
+	_apply_looks(data)
+	if session != null:
+		session.receive_game_event.rpc("looks", data)
+
+
+## 모든 화면: 방장이 보낸 차림을 입히고(바뀐 사람만 부품을 갈아 끼운다) "꾸미는 중" 표시를 맞춘다.
+func _apply_looks(data: Dictionary) -> void:
+	var looks: Variant = data.get("looks", {})
+	var dressing: Variant = data.get("dressing", [])
+	if not (looks is Dictionary) or not (dressing is Array):
+		return
+	for key: Variant in looks:
+		var id: int = int(key)
+		var actor := actors.get(id) as PlayerView
+		if actor == null:
+			continue
+		var clean: Dictionary = PlayerOutfit.sanitize(looks[key])
+		var shirt_changed: bool = id == controller.local_peer_id and int(clean.shirt) != int(actor.look.get("shirt", 0))
+		actor.wear(clean)
+		if shirt_changed:
+			_equip_hand(actor.identity.seat)
+		var room_player: RoomPlayer = session.room.find_player(id) if session != null else null
+		if room_player != null:
+			room_player.look = clean
+	for id: int in actors:
+		(actors[id] as PlayerView).set_dressing((dressing as Array).has(id))
 
 
 func _accept_seat(sender: int) -> void:
 	var actor := actors.get(sender) as PlayerView
-	if actor == null or actor.identity.is_bot:
+	if actor == null or actor.identity.is_bot or actor.fallen:
 		return
 	var now: float = controller._now()
 	if now - float(_last_seat_request.get(sender, -1.0)) < 0.2:
@@ -586,11 +714,26 @@ func _process(delta: float) -> void:
 		return
 	var state := controller.state
 	var own_turn: bool = state.active_player() != null and state.active_player().peer_id == controller.local_peer_id
+	# 꾸미기 방에 있는데 내 차례·테이블 집합·쓰러짐이 오면 바로 나온다(고른 것은 입고 나온다).
+	if wardrobe != null and _wardrobe_blocked(local):
+		wardrobe.close()
 	_face_table_on_sit(local)
 	camera.position = local.eye_position()
 	# 엿보기(앉아서 A·D): 몸이 기운 쪽으로 화면도 기운다(레식 기울이기). 마시는 중이면 고개가 뒤로 젖혀진다.
 	camera.h_offset = 0.0
 	camera.rotation = Vector3(_pitch + local.drink_pose_tilt() * PlayerView.DRINK_LOOK_UP, _yaw, local.peek_roll())
+	# 쓰러진 동안: 1인칭을 잠깐 3인칭으로 — 쓰러진 내 몸을 뒤에서 내려다본다(내 몸 레이어도 보이게).
+	camera.cull_mask = 0xfffff if local.fallen else 0xfffff & ~(1 << (local.identity.seat + 1))
+	if local.fallen:
+		var center: Vector3 = local.fallen_center()
+		var want: Vector3 = center + Basis(Vector3.UP, _yaw) * Vector3.BACK * FALL_CAMERA_BACK + Vector3.UP * FALL_CAMERA_UP
+		# 벽·바 카운터에 막히면 그 앞까지만 물러난다(카메라가 벽 속에 들어가 화면이 한 색으로 덮이지 않게).
+		var from: Vector3 = center + Vector3.UP * 0.4
+		var wall := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, want, 1))
+		if not wall.is_empty():
+			want = wall.position + (from - (wall.position as Vector3)).normalized() * 0.25
+		camera.position = want
+		camera.look_at(center, Vector3.UP)
 	var dizzy: float = float(local.identity.card_effects.get("dizzy", 0.0))
 	if Preferences.visual_effects and dizzy > 0:
 		var strength: float = dizzy * (0.15 if Preferences.reduced_motion else 1.0)
@@ -625,12 +768,22 @@ func _process(delta: float) -> void:
 	table.board.show_choice(marked_sector)
 	# 다트 홀 밖(라운지)에서는 조준·충전 자체를 잠근다 — 방장도 같은 조건으로 거부한다.
 	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
-	throw_input.enabled = can_aim and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and (lounge == null or (lounge.held(controller.local_peer_id) < 0 and lounge.focus(controller.local_peer_id).is_empty()))
+	# 라운드당 다트(2026-11-15): 다트 단계에 다트가 남아 있으면 차례가 아니어도 아무 데나 던질 수 있다(점수 없음 · 사람이 맞으면 2번에 쓰러짐).
+	# 내 다트가 날아가는 중(비행·정산)에는 막는다 — 방장도 같은 조건으로 거부한다(MatchController._accept_stray).
+	var dart_phase: bool = state.phase in MatchController.DART_PHASES and not (own_turn and state.phase != MatchState.Phase.AIMING)
+	var can_stray: bool = dart_phase and local.identity.darts > 0
+	var hands_free: bool = lounge == null or (lounge.held(controller.local_peer_id) < 0 and not lounge.is_stunned(controller.local_peer_id))
+	throw_input.enabled = (can_aim or can_stray) and not local.fallen and hands_free and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	throw_input.free_aim = true
 	_animate_hand(delta)
-	# 음성 채팅으로 말하는 사람 머리 옆에 스피커(보이기만, 화면마다 따로).
+	# 머리 위 이름표 왼쪽 마이크(보이기만, 화면마다 따로): 조용 · 말하는 중 · 내가 음소거한 사람. 봇은 목소리가 없어 숨긴다.
 	var voice: VoiceChat = session.voice if session != null else null
 	for id: int in actors:
-		(actors[id] as PlayerView).set_speaking(voice.level(id) if voice != null and voice.is_speaking(id) else -1.0)
+		var actor := actors[id] as PlayerView
+		var mic: int = -1
+		if not actor.identity.is_bot:
+			mic = 2 if Preferences.person_muted(actor.identity.display_name) else (1 if voice != null and voice.is_speaking(id) else 0)
+		actor.set_mic(mic, voice.level(id) if mic == 1 else 0.0)
 		if voice != null: voice.set_warped(id, int((actors[id] as PlayerView).identity.card_effects.get("hit_penalty", 0)) > 0)
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
@@ -676,6 +829,29 @@ func _apply_state() -> void:
 	if victim_id != 0 and key != _shown_block:
 		_shown_block = key
 		_show_body_hit(victim_id, hit.get("target", Vector3.ZERO))
+	_show_score_popup(hit)
+
+
+## 과녁(또는 벽)에 꽂힌 한 발의 점수를 그 자리에 3D 글자로 띄운다. 판정은 방장이 이미 끝냈다(MatchState.last_hit = 결과).
+## 몸에 막힌 발(별이 뜬다)·다트 없음/시간 초과 기록(request_id ≤ 0, 꽂힌 자리 없음)은 띄우지 않는다.
+func _show_score_popup(hit: Dictionary) -> void:
+	var key := "%s:%s:%s" % [controller.state.match_id, hit.get("request_id", 0), hit.get("peer_id", 0)]
+	if not _score_popups_ready:
+		_score_popups_ready = true
+		_shown_score = key
+		return
+	if key == _shown_score:
+		return
+	_shown_score = key
+	if hit.is_empty() or int(hit.get("request_id", 0)) <= 0 or not (hit.get("target") is Vector3):
+		return
+	for flight: Dictionary in hit.get("flights", [hit]):
+		if int(flight.get("victim", 0)) != 0:
+			return
+	if DisplayServer.get_name() == "headless" or table == null or table.board == null:
+		return
+	var bust: bool = str(hit.get("reason", "")).begins_with("버스트")
+	ScorePopup.spawn(self, hit.target, roundi(float(hit.get("points", 0))), table.board.global_basis.z, bust)
 
 
 ## 못 움직이는 상태인가: 소품에 맞은 스턴(LoungeWorld)과 몸으로 막은 스턴을 함께 본다.
@@ -697,6 +873,140 @@ func stun_player(peer_id: int, seconds: float) -> void:
 	# 다음 발을 연속으로 막지 않도록 궤적 옆으로 튕긴다.
 	var away: float = signf(actor.global_position.x)
 	actor.knockback = Vector3(away if away != 0.0 else 1.0, 0, 0) * BODY_KNOCKBACK
+
+
+## 쓰러진 동안 3인칭 카메라: 쓰러진 몸에서 뒤로 · 위로 떨어진 거리(m).
+const FALL_CAMERA_BACK: float = 1.9
+const FALL_CAMERA_UP: float = 1.5
+## 따로 세기를 안 받으면(다트 두 번) 쓰러지는 세기: 뒤로 FALL_PUSH m/s + 위로 조금.
+const FALL_PUSH: float = 2.6
+## 그냥 던진 다트: 힘(0~1)에 따른 빠르기(m/s)와 떨어지는 정도. 과녁 투척(DartConfig)보다 단순한 직선 + 가벼운 중력.
+const STRAY_MIN_SPEED: float = 7.0
+const STRAY_MAX_SPEED: float = 17.0
+const STRAY_GRAVITY: float = 4.5
+const STRAY_MAX_TIME: float = 1.6
+## 그냥 던진 다트에 맞은 사람이 밀려나는 세기(m/s).
+const STRAY_PUSH: float = 2.4
+
+
+## 왼쪽 버튼을 놓았다: 내 차례에 던지는 칸에서 과녁을 겨눴으면 점수 투척, 아니면 그냥 던지기(다트만 쓴다).
+func _on_throw_requested(aim: Vector2, timing: float) -> void:
+	var id: int = controller.local_peer_id
+	var state := controller.state
+	var active := state.active_player()
+	var own: bool = active != null and active.peer_id == id and state.phase == MatchState.Phase.AIMING
+	if own and aim.is_finite() and can_throw_from(id):
+		controller.submit_throw(aim, timing)
+	else:
+		controller.submit_stray(timing)
+
+
+## [방장] 그냥 던진 다트를 날린다: 던진 사람 눈에서 보는 방향으로 날아가 처음 닿는 곳(벽·바닥·사람)에 꽂힌다.
+## 모든 화면에 "stray_dart" 로 보이고, 사람이 맞았으면 꽂히는 시각에 MatchController.stray_hit 가 횟수를 센다.
+func throw_stray(peer_id: int, charge: float) -> bool:
+	var actor := actors.get(peer_id) as PlayerView
+	if actor == null or actor.fallen or _frozen(peer_id):
+		return false
+	var aim_basis := Basis(Vector3.UP, actor.rotation.y) * Basis(Vector3.RIGHT, actor.pitch)
+	var direction: Vector3 = aim_basis * Vector3.FORWARD
+	var start: Vector3 = actor.eye_position() + direction * 0.35 + aim_basis * Vector3(0.12, -0.1, 0.0)
+	var velocity: Vector3 = direction * lerpf(STRAY_MIN_SPEED, STRAY_MAX_SPEED, clampf(charge, 0.0, 1.0))
+	var space := get_world_3d().direct_space_state
+	var exclude: Array[RID] = [actor.get_rid()]
+	var at: Vector3 = start
+	var time: float = 0.0
+	var victim_id: int = 0
+	var step: float = 1.0 / 60.0
+	while time < STRAY_MAX_TIME:
+		var next: Vector3 = at + velocity * step
+		velocity.y -= STRAY_GRAVITY * step
+		time += step
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(at, next, 1 | 2, exclude))
+		if not hit.is_empty():
+			at = hit.position
+			if hit.collider is PlayerView:
+				victim_id = (hit.collider as PlayerView).identity.peer_id
+			break
+		at = next
+		if at.y <= 0.0:
+			at.y = 0.0
+			break
+	var data := {"match_id": controller.state.match_id, "peer_id": peer_id, "start": start, "target": at,
+		"duration": maxf(time, 0.08), "victim": victim_id}
+	_show_stray(data)
+	if session != null:
+		session.receive_game_event.rpc("stray_dart", data)
+	if victim_id != 0:
+		var push: Vector3 = Vector3(direction.x, 0.0, direction.z).normalized() * STRAY_PUSH + Vector3.UP * 0.6
+		get_tree().create_timer(float(data.duration)).timeout.connect(controller.stray_hit.bind(victim_id, push))
+	return true
+
+
+## 그냥 던진 다트를 보인다(모든 화면). 던진 사람은 던지기 몸짓, 다트는 꽂힌 곳에 남는다(차례가 바뀌면 치운다).
+## 사람에게 꽂힌 다트는 "툭" 소리와 함께 사라진다(움직이는 몸에 붙여 두지 않는다).
+func _show_stray(data: Dictionary) -> void:
+	var thrower := actors.get(int(data.get("peer_id", 0))) as PlayerView
+	if thrower != null:
+		thrower.play_throw()
+		if thrower.identity.peer_id == controller.local_peer_id:
+			_throw_kick = 1.0
+	if DisplayServer.get_name() == "headless":
+		return
+	var dart := DART_SCENE.instantiate() as DartView
+	_darts.add_child(dart)
+	dart.fly(data.start, data.target, float(data.duration))
+	if thrower != null:
+		dart.paint(thrower.color)
+	dart.landed.connect(_on_stray_landed.bind(dart, int(data.get("victim", 0))))
+	Sfx.play_at(self, "whoosh", data.start, -8.0)
+
+
+func _on_stray_landed(at: Vector3, _hit_board: bool, dart: Node3D, victim_id: int) -> void:
+	if victim_id != 0:
+		Sfx.play_at(self, "thunk", at, -1.0, 1.15)
+		BurstFx.spawn(self, "sparks", at, Vector3.UP, Color.WHITE)
+		if is_instance_valid(dart): dart.queue_free()
+	else:
+		Sfx.play_at(self, "bounce", at, -6.0)
+
+
+## [방장] 쓰러뜨린다(다트 두 번 · NPC 반격 · 싸대기). 그동안 조작을 막고, 모든 화면에 "player_fall" 을 보낸다.
+## push = 날아가는 방향과 세기. 0 이면 바라보는 반대쪽(뒤)으로 넘어진다.
+func knock_down(peer_id: int, push: Vector3 = Vector3.ZERO) -> void:
+	if not multiplayer.is_server():
+		return
+	var actor := actors.get(peer_id) as PlayerView
+	if actor == null or actor.fallen:
+		return
+	if push == Vector3.ZERO:
+		push = Basis(Vector3.UP, actor.rotation.y) * Vector3.BACK * FALL_PUSH + Vector3.UP * 0.8
+	_stun_until[peer_id] = maxf(float(_stun_until.get(peer_id, 0.0)), controller._now() + PlayerView.FALL_SECONDS)
+	# 들고 있던 소품은 손에서 떨어진다.
+	if lounge != null:
+		lounge._drop_held(peer_id)
+	var data := {"match_id": controller.state.match_id, "peer_id": peer_id, "push": push}
+	_play_fall(data)
+	if session != null:
+		session.receive_game_event.rpc("player_fall", data)
+
+
+func _play_fall(data: Dictionary) -> void:
+	var actor := actors.get(int(data.get("peer_id", 0))) as PlayerView
+	if actor == null:
+		return
+	actor.fall(data.get("push", Vector3.ZERO))
+	if DisplayServer.get_name() != "headless":
+		Sfx.play_at(self, "thunk", actor.global_position + Vector3.UP * 0.8, 0.0, 0.7)
+
+
+## 방장이 모두에게 보낸 GameView 이벤트(그냥 던진 다트 · 쓰러짐). 다른 판의 이벤트는 버린다.
+func _receive_game_event(kind: String, data: Dictionary) -> void:
+	if int(data.get("match_id", -1)) != controller.state.match_id:
+		return
+	match kind:
+		"stray_dart": _show_stray(data)
+		"player_fall": _play_fall(data)
+		"looks": _apply_looks(data)
 
 
 ## 몸에 맞은 사람 머리 위의 스턴 별과 소리. 판정은 방장이 했고 여기서는 보이기만 한다.

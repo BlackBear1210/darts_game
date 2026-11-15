@@ -41,6 +41,8 @@ extends RefCounted
 const MeshKit = preload("res://art/mesh_kit.gd")
 const PubParts = preload("res://art/pub/pub_parts.gd")
 const RoundKit = preload("res://art/pub/round_kit.gd")
+## 인디 펍 소품 선반이 물건 크기를 미리 잴 때 쓴다(_plank_shelf).
+const RgPoly = preload("res://art/vendor/rg_poly/rg_poly_catalog.gd")
 const NpcIdle = preload("res://art/pub/npc_idle.gd")
 ## NPC 옷(바텐더·손님 모자/안경) — Outfit 번호표만 쓴다(2026-11-08).
 const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
@@ -67,9 +69,18 @@ const BAR_STOOL_TOP := 0.8
 ## 앉는 면에서 앉은 발바닥까지 내려간 높이(m). 앉은 다리 자세(CharacterPoseLayer.SEAT_THIGH·SEAT_SHIN)로 잰 값
 ## (앉는 면 0.6m 의자 → 발바닥 0.222m). 의자·바 스툴 발 고리 윗면을 여기에 맞춘다(2026-11-08).
 const SEATED_SOLE_DROP := 0.378
+## 자리 깔개(SeatRug) 아랫면 높이·두께(m). 윗면 = 0.0325m — 펍 러그(0.012m)·오락실 러그(0.026m)보다 높다.
+const SEAT_RUG_BASE := 0.0125
+const SEAT_RUG_THICKNESS := 0.02
 ## 창(아치) 아래 끝·위 끝 높이.
 const WINDOW_BOTTOM := 1.45
 const WINDOW_TOP := 3.55
+## [겹침 깜빡임(z-파이팅) 규칙 — 2026-11-15 사용자 지적 "벽에 붙은 그림·바닥이 치지직 깜빡인다"]
+## 같은 쪽을 보는 두 면이 거의 같은 평면에 겹치면 깊이 버퍼(24비트)가 둘을 가르지 못해 멀리서 깜빡인다.
+## 방 끝에서 끝(약 25m)까지 보면 구분할 수 있는 틈이 1mm 가까이로 커진다 → 겹쳐 놓는 얇은 판은 아래 값만큼 띄운다.
+## 벽 그림·유리처럼 벽에 붙는 판 = WALL_LAYER_GAP, 러그 줄무늬처럼 바닥에 까는 판 = FLOOR_LAYER_GAP.
+const WALL_LAYER_GAP := 0.008
+const FLOOR_LAYER_GAP := 0.004
 
 static var _floor_shader_material: ShaderMaterial
 ## 창 밖 풍경 그림 셰이더(2026-11-08) — _window_view_material.
@@ -77,10 +88,13 @@ const WINDOW_VIEW_SHADER := "res://art/pub/window_view.gdshader"
 static var _window_view_shader_material: ShaderMaterial
 ## 2026-11-08 저녁 "그림이 너무 아쉽다 — 캐주얼한데 재밌게": 손으로 그린 만화 그림(SVG). 디자이너가 벡터 도구로 바로 고친다.
 ## 창 밖 층 = 셰이더 uniform 이름 → 그림. 층 깊이·실제 크기(m)는 window_view.gdshader 의 *_size 와 맞춘다.
+## 2026-11-15 "창문 밖 이미지를 고른 에셋들로 다시 재구성": 길 건너 층·앞 층은 고른 Cartoon City 모델로 꾸며 정면에서
+##   찍은 PNG(art/pub/window_street_baker.gd 가 굽는다)로 바꿨다. 그림이라 방 안 면과 겹쳐 깨질(z-파이팅) 일이 없다.
+##   먼 스카이라인·달은 SVG 그대로.
 const WINDOW_PICTURES := {
 	"far_layer": "res://art/pub/pictures/window_far.svg",
-	"street_layer": "res://art/pub/pictures/window_street.svg",
-	"front_layer": "res://art/pub/pictures/window_front.svg",
+	"street_layer": "res://art/pub/pictures/window_street.png",
+	"front_layer": "res://art/pub/pictures/window_front.png",
 	"moon_picture": "res://art/pub/pictures/window_moon.svg",
 }
 ## 벽 액자 포스터 3장(_art_spots 의 그림 번호 순서): 놀란 과녁 친구 180! · 건배 맥주잔 CHEERS! · 윙크 하트 에이스 LUCKY!
@@ -538,7 +552,10 @@ static func _board_wall(p: Node3D) -> void:
 	var ceiling: float = TableView.CEILING_HEIGHT
 	var center: Vector3 = TableView.BOARD_CENTER
 	var face: float = f.board_z
-	MeshKit.box(p, "FeaturePanel", Vector3(FEATURE_HALF * 2, ceiling, 0.05), Vector3(center.x, ceiling / 2, face + 0.025), _teal())
+	# 2026-11-15: 판넬 두께 0.05 → 0.042. 판넬 가장자리에 서는 벽 기둥(Pilaster, 앞면이 벽에서 0.05m)과
+	# 앞면이 똑같은 평면이라 청록·월넛이 겹쳐 깜빡였다(z-파이팅) → 판넬 앞면을 기둥보다 8mm 뒤로 물렸다.
+	var panel_depth: float = 0.05 - WALL_LAYER_GAP
+	MeshKit.box(p, "FeaturePanel", Vector3(FEATURE_HALF * 2, ceiling, panel_depth), Vector3(center.x, ceiling / 2, face + panel_depth / 2.0), _teal())
 	# 머신 뒤 큰 아치(요청서 콘셉트의 둥근 벽감): 판넬 가장자리(x ±FEATURE_HALF)를 따라 서는 굵은 월넛 틀.
 	# 틀 다리가 판넬 옆 징두리·허리 난간·걸레받이의 잘린 끝을 덮는다. 칠판(바깥 끝 x ±2.61)과는 닿지 않는다.
 	var top: float = ceiling - COVE_R - 0.4
@@ -697,8 +714,10 @@ static func _table_and_seats(p: Node3D) -> void:
 	# 큰 원형 러그(청록 + 놋쇠빛 줄 두 겹). 의자가 다 올라가는 크기.
 	var rug := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, 0.002), Vector2(2.5, 0.002), Vector2(2.55, 0.008), Vector2(2.5, 0.012), Vector2(0, 0.012)]), 0.01, 2)
 	RoundKit.lathe(table, "TableRug", rug, Vector3.ZERO, RoundKit.clay("RugTeal", "1f3d36", 0.98), 64)
+	# 2026-11-15: 줄무늬가 러그 윗면(0.012m)보다 0.5mm 만 높아 멀리서 보면 깜빡였다 → FLOOR_LAYER_GAP(4mm) 위에 깐다.
+	var stripe_y: float = 0.012 + FLOOR_LAYER_GAP
 	for ring: Vector2 in [Vector2(2.36, 2.3), Vector2(2.2, 2.17)]:
-		RoundKit.lathe(table, "RugStripe", PackedVector2Array([Vector2(ring.x, 0.0125), Vector2(ring.y, 0.0125)]), Vector3.ZERO, RoundKit.clay("RugStripe", "a98552", 0.9), 64)
+		RoundKit.lathe(table, "RugStripe", PackedVector2Array([Vector2(ring.x, stripe_y), Vector2(ring.y, stripe_y)]), Vector3.ZERO, RoundKit.clay("RugStripe", "a98552", 0.9), 64)
 	# 받침: 바닥 원판 → 오목하게 좁아지는 목 → 상판 아래 받침판.
 	var pedestal := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, 0), Vector2(0.62, 0), Vector2(0.62, 0.04), Vector2(0.42, 0.1), Vector2(0.2, 0.24),
 		Vector2(0.14, 0.42), Vector2(0.13, height - 0.3), Vector2(0.2, height - 0.2), Vector2(0.45, height - 0.165), Vector2(0, height - 0.16)]), 0.05, 5)
@@ -742,8 +761,10 @@ static func _table_and_seats(p: Node3D) -> void:
 		symbol.rotation.x = -PI / 2
 		# 바닥: 자리 표시 깔개(색 + 모양: 원·세모·네모·마름모 — 요청서 "색과 함께 서로 다른 기호") · 자리 의자 · "● 1번 자리" 글자.
 		var sides: int = PlayerLook.MAT_SIDES[i]
-		var rug_mesh := RoundKit.slab_mesh("seat_rug_%d" % sides, RoundKit.regular_outline(sides, 0.55, 0.08), 0.012)
-		var seat_rug := MeshKit.mesh_node(p, "SeatRug_%d" % (i + 1), rug_mesh, seat + Vector3(0, 0.0125, 0), color)
+		# 2026-11-15: 두께 0.012 → 0.02(윗면 0.0325m). 오락실에서는 이 아래에 둥근 러그(윗면 0.026m)가 깔리는데
+		# 예전 윗면(0.0245m)은 그 러그와 2.5mm 차이라 깜빡였다 → 6mm 넘게 벌린다(arcade_room.gd _table_rug 와 약속된 높이).
+		var rug_mesh := RoundKit.slab_mesh("seat_rug_%d" % sides, RoundKit.regular_outline(sides, 0.55, 0.08), SEAT_RUG_THICKNESS)
+		var seat_rug := MeshKit.mesh_node(p, "SeatRug_%d" % (i + 1), rug_mesh, seat + Vector3(0, SEAT_RUG_BASE, 0), color)
 		seat_rug.rotation.y = angle + (PI / 4 if i == 3 else 0.0)
 		_club_chair(p, seat, angle, "SeatStool_%d" % (i + 1), color)
 		var label := MeshKit.label(p, "SeatLabel_%d" % (i + 1), "%s %d번 자리" % [PlayerLook.SYMBOLS[i], i + 1], seat + direction * 0.85 + Vector3(0, 0.03, 0), 40, Color("f0e6cf"), 0.003)
@@ -1119,7 +1140,10 @@ static func _wall_art(parent: Node3D, at: Vector2, inward: Vector2, kind: int, y
 	root.rotation.y = _yaw(inward)
 	parent.add_child(root)
 	MeshKit.rounded_box(root, "ArtFrame", Vector3(0.78, 0.98, 0.05), Vector3(0, 0, 0.03), _walnut(), 0.02)
-	MeshKit.rounded_box(root, "ArtCanvas", Vector3(0.64, 0.84, 0.02), Vector3(0, 0, 0.05), RoundKit.clay("ArtCanvas", "e9dcc4", 0.95), 0.006)
+	# 2026-11-15 겹침 깜빡임 수정: 틀 앞면 = 0.055m. 받침(ArtCanvas) 앞면을 0.064m 로(틀보다 9mm 앞),
+	# 포스터는 받침보다 WALL_LAYER_GAP(8mm) 앞에 띄운다 — 예전에는 포스터가 받침에서 1.5mm 라 방 건너편에서 보면 깨졌다.
+	var canvas_front: float = 0.064
+	MeshKit.rounded_box(root, "ArtCanvas", Vector3(0.64, 0.84, 0.02), Vector3(0, 0, canvas_front - 0.01), RoundKit.clay("ArtCanvas", "e9dcc4", 0.95), 0.006)
 	var print_sheet := QuadMesh.new()
 	print_sheet.size = Vector2(0.62, 0.814)
 	var paper := StandardMaterial3D.new()
@@ -1127,7 +1151,7 @@ static func _wall_art(parent: Node3D, at: Vector2, inward: Vector2, kind: int, y
 	paper.albedo_texture = load(POSTER_PICTURES[kind % POSTER_PICTURES.size()])
 	paper.roughness = 0.82
 	paper.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	MeshKit.mesh_node(root, "WallPoster", print_sheet, Vector3(0, 0, 0.0615), paper)
+	MeshKit.mesh_node(root, "WallPoster", print_sheet, Vector3(0, 0, canvas_front + WALL_LAYER_GAP), paper)
 
 
 ## 라운드하우스 GLB 하나를 장면 그대로 세운다 — 여러 재질·텍스처·부품 노드(커튼 좌우·화분 잎 …)를 그대로 둔다.
@@ -1187,12 +1211,14 @@ static func _decor(p: Node3D, windows: Node3D, pub_only: Node3D) -> void:
 	for s in range(13):
 		var angle := PI * s / 12.0
 		glass.append(Vector2(cos(angle) * 0.32, 1.92 + sin(angle) * 0.32))
-	MeshKit.mesh_node(door, "DoorGlass", RoundKit.flat_shape_mesh("door_glass", glass), Vector3(0, 0, 0.047), MeshKit.material("DoorGlass", "f2d4a0", 0.0, 0.45))
+	# 2026-11-15: 유리가 문짝 앞면(0.045m)에서 2mm 라 멀리서 깜빡였다 → WALL_LAYER_GAP(8mm) 앞.
+	MeshKit.mesh_node(door, "DoorGlass", RoundKit.flat_shape_mesh("door_glass", glass), Vector3(0, 0, 0.045 + WALL_LAYER_GAP), MeshKit.material("DoorGlass", "f2d4a0", 0.0, 0.45))
 	MeshKit.mesh_node(door, "DoorKnob", RoundKit.sphere_mesh(0.04, 14), Vector3(-0.44, 1.05, 0.09), _brass())
 	MeshKit.rounded_box(door, "DoorKick", Vector3(1.0, 0.16, 0.012), Vector3(0, 0.1, 0.05), _brass(), 0.005)
 	var mat := MeshKit.mesh_node(p, "DoorMat", RoundKit.rounded_slab_mesh(Vector2(1.4, 0.7), 0.012, 0.12), Vector3(DOOR_X, 0.002, f.back_z - 0.55), RoundKit.clay("DoorMat", "6b3f33", 1.0))
 	mat.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var entrance := MeshKit.label(p, "EntranceSign", "입 구", Vector3(DOOR_X, 2.75, f.back_z - 0.05), 48, Color("e0c58d"), 0.003)
+	# 2026-11-15: 이 문이 꾸미기 방 입구가 됐다(F 로 들어간다 — game/lounge/wardrobe.gd).
+	var entrance := MeshKit.label(p, "EntranceSign", "꾸미기 방", Vector3(DOOR_X, 2.75, f.back_z - 0.05), 48, Color("e0c58d"), 0.003)
 	entrance.rotation.y = PI
 	# 문 옆 조명 스위치(기획 M11).
 	MeshKit.rounded_box(p, "LightSwitchPlate", Vector3(0.13, 0.2, 0.03), Vector3(DOOR_X - 0.95, 1.35, f.back_z - 0.015), _plaster(), 0.015)
@@ -1252,6 +1278,134 @@ static func _furnish(p: Node3D, pub_only: Node3D) -> void:
 	# (고리 4개 + 걸린 코트·모자가 한 모델). 원점 = 벽에 닿는 판 뒷면이라 뒷벽 면(back_z)에 바로 붙이고, 정면 -Z 가 방 안을 본다.
 	# 폭 0.83m 가 문틀(x ~9.2)과 뒤 창 커튼(x 10.02~) 사이에 들어간다.
 	_model(pub_only, "coat_rack", Vector3(COAT_RACK_X, COAT_RACK_Y, f.back_z), 0.0, "CoatRack")
+	_indie_decor(pub_only)
+
+
+# ─────────────────────────────── 인디 펍 소품(2026-11-15) ───────────────────────────────
+
+## 사용자 "맵이 너무 휑하니까 인디 펍 느낌 나게 채워줘": 비어 있던 크림 벽 칸(다트 홀 양옆 · 과녁 벽 양 끝 · 라운지 뒷벽)과
+## 창턱을 구경판에서 고른 RG Poly 소품(물약병·병조림·빵·마늘 다발·꽃·허브 화분·오리·뿔·화살)으로 채운다.
+## 전부 펍 전용(PubOnly) — 오락실은 그 벽에 제 간판·기계가 있다.
+## 바닥에는 아무것도 두지 않는다: 충돌 상자가 없는 물건은 사람이 뚫고 지나가고, 다트 홀 바닥은 던지는 길이다.
+## 겹침 깜빡임(z-fighting) 방지: 벽에 붙는 판은 벽면에서 WALL_LAYER_GAP(8mm) 띄우고, 선반 위 물건은 판 윗면에 세우며
+## 물건끼리는 모델 상자 가운데를 맞춰 칸마다 떨어뜨린다. 선반 길이는 칸 안 아치 틀(칸 폭 − 0.34m) 안쪽에 들어가게 정했다.
+static func _indie_decor(pub_only: Node3D) -> void:
+	var f := _faces()
+	var group := _group(pub_only, "IndieDecor")
+	for side: float in [-1.0, 1.0]:
+		var x: float = f.hall_x1 if side > 0 else f.hall_x0
+		var inward := Vector2(-side, 0)
+		# 과녁 쪽 끝 칸(z −11.2, 폭 2.35 · 벽등 아래): 왼쪽 = 엇갈린 화살 두 자루, 오른쪽 = 뿔 벽걸이.
+		if side < 0:
+			_crossed_arrows(_wall_mount(group, Vector2(x, -11.175), inward, 1.75, "ArrowTrophy"))
+		else:
+			_horn_trophy(_wall_mount(group, Vector2(x, -11.175), inward, 1.72, "HornTrophy"))
+		# 창 둘 사이 좁은 칸(z −6.9, 폭 1.0 → 틀 안 0.6m): 작은 물약병 선반.
+		var potions: Array = ["potion_a", "potion_e", "potion_c"] if side < 0 else ["potion_d", "potion_f", "potion_b"]
+		_plank_shelf(_wall_mount(group, Vector2(x, -6.9), inward, 1.72, "PotionShelf"), 0.5, potions)
+		# 입구 쪽 칸(z −3.05, 폭 1.5 → 틀 안 1.1m): 왼쪽 = 식료품(병조림·빵·마늘), 오른쪽 = 잡동사니(밀가루·허브·오리·물약).
+		var goods: Array = ["pickle_jar_a", "bread_loaf", "garlic_braid", "pickle_jar_b"] if side < 0 \
+			else ["flour_sack", "herb_pot_a", "duck_small", "potion_e"]
+		_plank_shelf(_wall_mount(group, Vector2(x, -3.05), inward, 1.72, "PantryShelf" if side < 0 else "TrinketShelf"), 0.92, goods)
+	# 과녁 벽 양 끝 칸(x ±5.5, 폭 1.87 → 틀 안 1.5m): 꽃 선반(구석 럼주통 위).
+	_plank_shelf(_wall_mount(group, Vector2(-5.5125, f.board_z), Vector2(0, 1), 1.78, "FlowerShelf"), 1.15, ["flowers_a", "herb_pot_b", "flowers_c"])
+	_plank_shelf(_wall_mount(group, Vector2(5.5125, f.board_z), Vector2(0, 1), 1.78, "FlowerShelf"), 1.15, ["flowers_b", "potion_b", "rolling_pin"])
+	# 라운지 뒷벽 뒤 창 둘 사이(x −0.3, 폭 1.6, 비스트로 탁자 위): 꽃·물약·치즈 선반.
+	_plank_shelf(_wall_mount(group, Vector2(-0.3, f.back_z), Vector2(0, -1), 1.85, "BackWallShelf"), 1.0, ["flowers_b", "potion_c", "cheese_wedge", "potion_d"])
+	# 창턱(윗면 = WINDOW_BOTTOM − 0.025): 창마다 긴 꽃 상자 하나(0.8배 → 길이 0.72m · 깊이 0.26m).
+	# 길이를 벽을 따라 눕히고(90도), 뒷면을 창틀 띠(벽에서 6cm)보다 1cm 앞에 둔다 → 창살·틀·유리와 겹치지 않는다.
+	# 양쪽 커튼 자락(창 가운데에서 ±0.6m 바깥)과도 닿지 않는다. 앞쪽은 창턱(깊이 0.24m)보다 9cm 나온다.
+	for spot: Array in _window_spots():
+		var sill := _wall_mount(group, spot[0], spot[1], WINDOW_BOTTOM - 0.025, "SillFlowers")
+		_on_shelf(sill, "flower_box", Vector3(0, 0, 0.07 + 0.13), PI / 2.0, 0.8)
+		# 상자에 꽂힌 풀·꽃: 밑동을 상자 안(테두리 높이 0.245m 아래)에 묻어 화분 부분은 가려지고 잎·꽃만 보인다.
+		# 창마다 꽃 색을 돌려 쓴다(상자끼리 똑같아 보이지 않게).
+		var bloom: String = ["flowers_a", "flowers_b", "flowers_c"][_window_spots().find(spot) % 3]
+		for planted: Array in [["herb_pot_a", -0.22, 1.0], [bloom, 0.0, 0.6], ["herb_pot_b", 0.22, 1.0]]:
+			_on_shelf(sill, str(planted[0]), Vector3(planted[1], 0.13, 0.2), 0.5 * float(planted[1]), planted[2])
+
+
+## 벽 위 한 점(바닥 x, z)·높이 y 에 붙는 묶음 노드. 로컬 +Z = 방 안쪽, 로컬 z = 0 이 벽면이다.
+static func _wall_mount(parent: Node3D, at: Vector2, inward: Vector2, y: float, node_name: String) -> Node3D:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = Vector3(at.x, y, at.y)
+	root.rotation.y = _yaw(inward)
+	parent.add_child(root)
+	return root
+
+
+## 소품 하나를 (로컬) 자리 at 에 세운다: 바닥면 = at.y, 모델 상자의 가로·깊이 가운데 = at.x·at.z (모델마다 원점이 달라서).
+static func _on_shelf(root: Node3D, key: String, at: Vector3, yaw := 0.0, size := 1.0) -> MeshInstance3D:
+	var node := PubParts.asset(root, key, at, yaw, Vector3.ONE * size, key.to_pascal_case())
+	if node == null:
+		return null
+	var box: AABB = node.mesh.get_aabb()
+	var center := node.basis * (box.get_center() * Vector3(1, 0, 1))
+	node.position -= Vector3(center.x, 0, center.z)
+	return node
+
+
+## 벽 선반: 월넛 판(깊이 0.2m) + 놋쇠 받침 둘 + 판 위 소품을 같은 간격으로. root = _wall_mount 묶음(판 윗면 = 묶음 높이).
+static func _plank_shelf(root: Node3D, length: float, keys: Array) -> void:
+	var depth := 0.2
+	var front: float = WALL_LAYER_GAP + depth / 2.0
+	MeshKit.rounded_box(root, "ShelfBoard", Vector3(length, 0.04, depth), Vector3(0, -0.02, front), _walnut(), 0.012)
+	for u: float in [-length / 2.0 + 0.09, length / 2.0 - 0.09]:
+		# 받침은 판 아래에 1cm 겹쳐 묻는다(면이 맞닿아 깜빡이지 않게) · 벽에서도 WALL_LAYER_GAP 띄운다.
+		MeshKit.rounded_box(root, "ShelfBracket", Vector3(0.03, 0.15, 0.15), Vector3(u, -0.105, WALL_LAYER_GAP + 0.075), _brass(), 0.008)
+	# 물건마다 돌림각과 (돌린 뒤) 폭·깊이를 먼저 잰다. 깊이가 판보다 긴 것(빵·밀대·오리)은 90도 돌려 벽을 따라 눕힌다.
+	# 살짝씩 다른 각도(±0.2)로 손으로 놓은 느낌을 낸다.
+	var yaws: Array[float] = []
+	var widths: Array[float] = []
+	var depths: Array[float] = []
+	var total := 0.0
+	for i in range(keys.size()):
+		var mesh: Mesh = RgPoly.mesh(str(keys[i]))
+		var size: Vector3 = mesh.get_aabb().size if mesh != null else Vector3.ZERO
+		var yaw: float = 0.2 if i % 2 == 0 else -0.2
+		if size.z > depth + 0.04:
+			yaw += PI / 2.0
+		var turned := Basis(Vector3.UP, yaw)
+		var extent := Vector2(absf(turned.x.x) * size.x + absf(turned.z.x) * size.z, absf(turned.x.z) * size.x + absf(turned.z.z) * size.z)
+		yaws.append(yaw)
+		widths.append(extent.x)
+		depths.append(extent.y)
+		total += extent.x
+	# 남는 길이를 물건 사이·양 끝에 고르게 나눈다(물건이 서로 닿지 않는다). 모자라면 맞닿게 붙인다.
+	var gap: float = maxf(0.0, (length - total) / (keys.size() + 1))
+	var cursor: float = -length / 2.0 + gap
+	for i in range(keys.size()):
+		var u: float = cursor + widths[i] / 2.0
+		cursor += widths[i] + gap
+		# 깊은 물건은 뒤쪽이 벽을 뚫지 않게 앞으로 뺀다(뒷면 ≥ 벽에서 2 × WALL_LAYER_GAP).
+		var z: float = maxf(front, WALL_LAYER_GAP * 2.0 + depths[i] / 2.0)
+		_on_shelf(root, str(keys[i]), Vector3(u, 0, z), yaws[i])
+
+
+## 뿔 벽걸이: 월넛 방패 판 + 그 위 가로로 누운 뿔(모델 길이 = 로컬 z 1.17m → 반 바퀴의 반 돌려 벽을 따라 눕힌다).
+static func _horn_trophy(root: Node3D) -> void:
+	MeshKit.rounded_box(root, "TrophyBoard", Vector3(1.0, 0.5, 0.04), Vector3(0, 0.0, WALL_LAYER_GAP + 0.02), _walnut_dark(), 0.06)
+	MeshKit.rounded_box(root, "TrophyPlate", Vector3(0.26, 0.07, 0.012), Vector3(0, -0.21,WALL_LAYER_GAP + 0.04 + 0.006 + WALL_LAYER_GAP), _brass(), 0.004)
+	# 뿔 몸통 두께(모델 x 0.23m)의 절반 + 판 앞면 + 틈 → 판에 닿지 않고 붙어 보인다.
+	var horn := _on_shelf(root, "horn_trophy", Vector3(0, -0.15, WALL_LAYER_GAP + 0.04 + 0.125), PI / 2.0)
+	if horn != null:
+		horn.name = "Horn"
+
+
+## 엇갈린 화살 두 자루: 마름모 월넛 판 위에 X 자로. 두 화살은 앞뒤로 10cm 떨어뜨려 서로 뚫지 않는다.
+static func _crossed_arrows(root: Node3D) -> void:
+	var board := MeshKit.rounded_box(root, "TrophyBoard", Vector3(0.56, 0.56, 0.04), Vector3(0, 0.0, WALL_LAYER_GAP + 0.02), _walnut_dark(), 0.05)
+	board.rotation.z = PI / 4.0
+	var board_front: float = WALL_LAYER_GAP + 0.04
+	for i in range(2):
+		var arrow := PubParts.asset(root, "arrow_a" if i == 0 else "arrow_b", Vector3.ZERO, 0.0, Vector3.ONE, "Arrow", false)
+		if arrow == null:
+			continue
+		# 화살 원점 = 아래 끝 근처(모델 y −0.04 ~ 0.98) → 가운데(y 0.49)가 판 가운데에 오도록 돌린 뒤 옮긴다.
+		arrow.rotation = Vector3(0, 0, 0.62 if i == 0 else -0.62)
+		var mid: Vector3 = arrow.basis * arrow.mesh.get_aabb().get_center()
+		arrow.position = Vector3(-mid.x, -mid.y, board_front + 0.06 + i * 0.1 - mid.z)
 
 
 # ─────────────────────────────── 조명 ───────────────────────────────

@@ -115,6 +115,8 @@ func _run() -> void:
 	# 사람이 자리에 앉아 던지는 1인칭 화면.
 	local.position = TableView.SEATS[0] + Vector3(0, 0.01, 0.6)
 	_game.controller.state.turn_index = 0
+	# 라운드당 다트(2026-11-15): 시험이 차례를 직접 다시 시작할 때는 라운드 시작처럼 다트도 다시 채운다.
+	_game.controller._refill_darts()
 	_game.controller._begin_turn()
 	_game._accept_seat(1)
 	assert(local.seated)

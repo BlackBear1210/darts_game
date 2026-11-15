@@ -81,8 +81,8 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | 파일 | 그림 크기(px) | 게임 속 실제 크기 | 쓰는 곳 |
 |---|---|---|---|
 | `window_far.svg` | 1920 × 960 | 96m × 48m, 유리 뒤 60m | 스카이라인·대관람차·열기구 |
-| `window_street.svg` | 2100 × 800 | 42m × 16m, 유리 뒤 18m | 길 건너 건물 6채 |
-| `window_front.svg` | 1400 × 600 | 14m × 6m, 유리 뒤 6.5m | 알전구 줄·가로등 고양이 |
+| `window_street.png` | 2688 × 1024 | 42m × 16m, 유리 뒤 18m | 길 건너 건물 줄·차양·가로등·나무 (2026-11-15, Cartoon City 모델을 `art/pub/window_street_baker.gd` 로 구움) |
+| `window_front.png` | 1792 × 768 | 14m × 6m, 유리 뒤 6.5m | 창 앞 보도 가로등·나무·벤치·화분 (같은 도구) |
 | `window_moon.svg` | 512 × 512 | 하늘 방향(반지름 0.075 라디안) | 다트 꽂힌 달 |
 | `poster_bullseye/cheers/lucky.svg` | 640 × 840 | 0.62m × 0.81m 액자 그림 | 벽 액자 3개(`_art_spots` 순서) |
 

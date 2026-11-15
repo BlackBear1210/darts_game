@@ -32,6 +32,8 @@ const MONITOR := Vector3(-4.35, 1.35, 2.0)
 ## 충돌 상자는 TableView.decor_blocks() 의 JUKEBOX_AT·JUKEBOX_SIZE(2026-11-08 — 예전에는 충돌이 없어 사람이 통과했다).
 const JUKEBOX := TableView.JUKEBOX_AT
 const REACH: float = 2.2
+## 꾸미기 방 문(펍 뒷벽 문 — art/pub/game_room_builder.gd DOOR_X 8.4 · 뒷벽 z ≈ 8.9). 문 가운데 손잡이 높이.
+const WARDROBE_DOOR := Vector3(8.4, 1.15, 8.85)
 ## 주크박스 볼륨 버튼 한 번에 오르는 양(0 → 25 → 50 → 75 → 100 → 0%).
 const VOLUME_STEP: float = 0.25
 const GRAVITY: float = 9.8
@@ -81,6 +83,22 @@ const ARCADE_GLOW := {"CovePlaster": "5a4aa8", "CoveGlow": "3be5db"}
 ## 라운드하우스 GLB 폴더(2026-11-08). 이 아래 모델의 메시는 면마다 재질이 붙어 있어 _recolor_surfaces 로 따로 칠한다.
 const ROUNDHOUSE_DIR := "res://art/environments/roundhouse/"
 ## 소품 → 킬로그 아이콘.
+## ── NPC 보복(2026-11-15) ── 손님·바텐더·직원(NpcIdle)에게 던진 소품이 맞으면 화내고 되던지기 또는 싸대기.
+const NpcIdle = preload("res://art/pub/npc_idle.gd")
+## NPC 몸 판정 캡슐 반지름(m). NPC 는 물리 몸이 없어(art/pub/npc_idle.gd — 충돌 없음) 방장이 선분-캡슐 거리로 잰다.
+const NPC_RADIUS: float = 0.3
+## 이보다 느리게 닿은 물건(발밑에 툭 놓기 · 맞아서 떨어뜨림)에는 화내지 않는다.
+const NPC_ANGER_SPEED: float = 2.5
+## 싸대기는 이 거리(m) 안에 있는 사람에게만 — 더 멀면 되던진다(가게 끝까지 날아가 때리면 어색하다).
+const NPC_SLAP_REACH: float = 5.5
+## 되던지는 수평 빠르기(m/s) — 피할 수 있을 만큼. 맞은 사람(옆 사람이어도)을 넘어뜨리는 세기.
+const NPC_THROW_SPEED: float = 8.5
+const NPC_HIT_PUSH: float = 3.2
+const NPC_SLAP_PUSH: float = 3.6
+const NPC_TITLES := {"Bartender": "바텐더"}
+var _npc_cache: Array[Node3D] = []
+var _npc_cache_theme: int = -2
+
 const FEED_ICONS := {"bottle": "bottle", "mug": "bottle", "ball": "hoop", "cue": "cue", "hoop_ball": "hoop", "plush": "plush", "capsule": "capsule"}
 
 var game: GameView
@@ -341,6 +359,9 @@ func focus(peer_id: int) -> Dictionary:
 		{"kind": "link", "at": JUKEBOX + Vector3(0.48, 1.2, 0.42)}]
 	if _theme_id == 1:
 		candidates.append_array(Rules.focus_points())
+	else:
+		# 2026-11-15: 당구대 옆 문(펍 뒷벽) = 꾸미기 방. 문 손잡이 높이를 본다.
+		candidates.append({"kind": "wardrobe", "at": WARDROBE_DOOR})
 	var spots: Array[Dictionary] = touch_spots()
 	for index in range(spots.size()):
 		if int(spots[index].theme) == -1 or int(spots[index].theme) == _theme_id:
@@ -559,6 +580,12 @@ func _step_projectiles(delta: float) -> void:
 		var exclude: Array[RID] = projectile.exclude
 		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, 3, exclude))
 		var end: Vector3 = hit.position if not hit.is_empty() else to
+		# NPC 에 먼저 닿았는가(벽·사람보다 가까우면). NPC 가 되던진 물건은 NPC 를 맞히지 않는다.
+		if not bool(projectile.get("npc", false)) and velocity.length() > NPC_ANGER_SPEED:
+			var npc_hit: Array = _npc_on_path(from, end)
+			if not npc_hit.is_empty():
+				_hit_npc(projectile, npc_hit[0], npc_hit[1])
+				continue
 		# 림에 걸린 공은 규칙이 속도를 바꿔 튕겨 냈다 → 림 위에 두고 다음 걸음부터 새 속도로 난다(2026-11-07).
 		if object.kind == "hoop_ball" and _theme_id == 1 and _arcade.ball_moved(projectile, from, end):
 			object.position = projectile.rim_at
@@ -636,15 +663,21 @@ func _hit_player(projectile: Dictionary, victim: PlayerView, at: Vector3) -> voi
 	var exclude: Array[RID] = projectile.exclude
 	exclude.append(victim.get_rid())
 	var stun: float = session.room.settings.hit_stun
-	if kind == "plush":
-		# 인형은 아프지 않다 — 대신 얼굴을 푹 덮는다(앞이 안 보임).
-		stun = 0.35
-		_set_effect(victim_id, "blind", 1.6)
-	stun_until[victim_id] = maxf(float(stun_until.get(victim_id, 0.0)), time + stun)
-	if not victim.seated:
-		var push := Vector3(velocity.x, 0, velocity.z).normalized()
-		victim.knockback = push * clampf(1.2 + speed * 0.32, 1.2, 5.0)
-	_drop_held(victim_id)
+	if bool(projectile.get("npc", false)):
+		# NPC 가 되던진 물건: 던진 사람이든 옆에 있던 사람이든 맞으면 넘어진다(줄 끊긴 인형 — GameView.knock_down).
+		var shove: Vector3 = Vector3(velocity.x, 0, velocity.z).normalized() * NPC_HIT_PUSH + Vector3.UP * 1.0
+		game.knock_down(victim_id, shove)
+		feed(str(FEED_ICONS.get(kind, "bottle")), null, "%s의 반격! 쓰러짐" % str(projectile.get("npc_title", "NPC")), victim)
+	else:
+		if kind == "plush":
+			# 인형은 아프지 않다 — 대신 얼굴을 푹 덮는다(앞이 안 보임).
+			stun = 0.35
+			_set_effect(victim_id, "blind", 1.6)
+		stun_until[victim_id] = maxf(float(stun_until.get(victim_id, 0.0)), time + stun)
+		if not victim.seated:
+			var push := Vector3(velocity.x, 0, velocity.z).normalized()
+			victim.knockback = push * clampf(1.2 + speed * 0.32, 1.2, 5.0)
+		_drop_held(victim_id)
 	# 임시 밸런스: 맞히면 스턴 시간만큼 소품 회수도 더 늦어진다. 점수 벌점은 팀 확정 전이다.
 	object.available = time + session.room.settings.miss_cooldown + session.room.settings.hit_stun
 	fx("stars", victim.eye_position() + Vector3.UP * 0.25, Vector3.UP, Color.WHITE, "thunk")
@@ -656,7 +689,8 @@ func _hit_player(projectile: Dictionary, victim: PlayerView, at: Vector3) -> voi
 		_burst_capsule(index, at, owner, victim_id)
 		_projectiles.erase(projectile)
 		return
-	feed(str(FEED_ICONS.get(kind, "bottle")), game.actors.get(owner), "얼굴 덮기!" if kind == "plush" else "명중 · 스턴", victim)
+	if not bool(projectile.get("npc", false)):
+		feed(str(FEED_ICONS.get(kind, "bottle")), game.actors.get(owner), "얼굴 덮기!" if kind == "plush" else "명중 · 스턴", victim)
 	# 맞고 튕겨 나와 아래로 떨어진다.
 	projectile.velocity = Vector3(-velocity.x * 0.2, minf(velocity.y, 0.0), -velocity.z * 0.2)
 	object.position = at
@@ -668,6 +702,130 @@ func _drop_held(peer_id: int) -> void:
 	if index < 0 or actor == null: return
 	var forward: Vector3 = Basis(Vector3.UP, actor.rotation.y) * Vector3.FORWARD
 	_launch(index, actor.eye_position() + forward * 0.35 + Vector3.DOWN * 0.3, forward * 0.8 + Vector3.UP * 1.2, peer_id, false)
+
+# ─────────────────────────────── NPC 보복(방장) ───────────────────────────────
+
+## 지금 테마에 보이는 NPC 들(펍 손님·바텐더, 오락실 직원). 테마가 바뀔 때만 다시 찾는다.
+func _npcs() -> Array[Node3D]:
+	if _npc_cache_theme != _theme_id:
+		_npc_cache_theme = _theme_id
+		_npc_cache.clear()
+		for node in game.find_children("*", "Node3D", true, false):
+			if node.get_script() == NpcIdle:
+				_npc_cache.append(node as Node3D)
+	var shown: Array[Node3D] = []
+	for npc in _npc_cache:
+		if is_instance_valid(npc) and npc.is_visible_in_tree():
+			shown.append(npc)
+	return shown
+
+
+## from → to 사이에서 처음 닿는 NPC 와 닿은 자리. 없으면 빈 배열.
+## NPC 몸 = 바닥(앉았으면 의자)에서 머리까지 세운 캡슐(반지름 NPC_RADIUS).
+func _npc_on_path(from: Vector3, to: Vector3) -> Array:
+	var best: Array = []
+	var best_distance: float = INF
+	for npc in _npcs():
+		if bool(npc.get("reacting")):
+			continue
+		var base: Vector3 = npc.global_position
+		var sitting: bool = bool(npc.get("seated"))
+		var bottom: Vector3 = base + Vector3.UP * (0.55 if sitting else 0.25)
+		var top: Vector3 = base + Vector3.UP * (1.35 if sitting else 1.6)
+		var points := Geometry3D.get_closest_points_between_segments(from, to, bottom, top)
+		if points[0].distance_to(points[1]) > NPC_RADIUS:
+			continue
+		var distance: float = from.distance_to(points[0])
+		if distance < best_distance:
+			best_distance = distance
+			best = [npc, points[0]]
+	return best
+
+
+static func _npc_title(npc: Node3D) -> String:
+	return str(NPC_TITLES.get(String(npc.name), "손님"))
+
+
+## 소품이 NPC 를 맞혔다: NPC 가 물건을 받아 들고 화낸다 → 던진 사람에게 되던지기 또는 싸대기(반반).
+## 싸대기는 반드시 맞는다(NPC 가 달려가서 때린다). 되던진 물건은 피할 수 있고, 옆 사람이 대신 맞으면 그 사람이 쓰러진다.
+func _hit_npc(projectile: Dictionary, npc: Node3D, at: Vector3) -> void:
+	var index: int = projectile.index
+	var object: Dictionary = objects[index]
+	var owner: int = projectile.owner
+	_projectiles.erase(projectile)
+	fx("stars", npc.global_position + Vector3.UP * 1.95, Vector3.UP, Color.WHITE, "thunk")
+	var offender: PlayerView = game.actors.get(owner)
+	var title: String = _npc_title(npc)
+	# 물건은 깨지지 않고 NPC 손에 잡힌다(되던질 수 있게). 그동안 아무도 못 집는다.
+	object.holder = 0
+	object.lying = false
+	object.position = npc.call("hand_point")
+	object.rest_at = now()
+	if offender == null or offender.fallen:
+		object.available = now() + 1.0
+		_settle({"index": index}, Vector3(at.x, 0.0, at.z), Vector3.UP)
+		return
+	var mode: String = "slap" if randf() < 0.5 else "throw"
+	if npc.global_position.distance_to(offender.global_position) > NPC_SLAP_REACH:
+		mode = "throw"
+	object.available = now() + NpcIdle.reaction_seconds(mode) + 0.5
+	if mode == "slap":
+		# 싸대기를 치러 달려갈 때는 물건을 제자리(원래 놓인 곳)에 내려놓는다 — 손에 둔 채 허공에 남지 않게.
+		object.position = object.home
+	# 킬로그 글자에는 이모지를 넣지 않는다(글꼴에 없으면 네모로 보인다) — 화난 표시는 NPC 머리 위 그림으로.
+	feed(str(FEED_ICONS.get(str(object.kind), "bottle")), offender, "%s 명중! 화났다" % title)
+	var data := {"match_id": game.controller.state.match_id, "npc": String(game.get_path_to(npc)), "mode": mode, "target": owner}
+	_play_npc_react(data)
+	session.receive_game_event.rpc("npc_react", data)
+	if mode == "throw":
+		get_tree().create_timer(NpcIdle.ANGER_SECONDS + NpcIdle.THROW_RELEASE).timeout.connect(_npc_throw_back.bind(npc, index, owner, title))
+	else:
+		get_tree().create_timer(NpcIdle.ANGER_SECONDS + NpcIdle.SLAP_DASH).timeout.connect(_npc_slap.bind(npc, owner, title))
+
+
+## 모든 화면: NPC 보복 몸짓을 튼다(판정은 방장).
+func _play_npc_react(data: Dictionary) -> void:
+	var npc := game.get_node_or_null(NodePath(str(data.get("npc", "")))) as Node3D
+	if npc == null or not npc.has_method("react"):
+		return
+	npc.call("react", str(data.get("mode", "throw")), game.actors.get(int(data.get("target", 0))))
+
+
+## [방장] 받아 든 물건을 던진 사람 가슴 쪽으로 포물선으로 되던진다(빠르기 일정 → 피할 수 있다).
+func _npc_throw_back(npc: Node3D, index: int, target_id: int, title: String) -> void:
+	if not is_instance_valid(npc) or index >= objects.size():
+		return
+	var object: Dictionary = objects[index]
+	var target: PlayerView = game.actors.get(target_id)
+	if int(object.holder) != 0 or is_flying(index) or float(object.get("broken", 0.0)) > 0.0:
+		return
+	var from: Vector3 = npc.call("hand_point")
+	if target == null:
+		_settle({"index": index}, Vector3(from.x, 0.0, from.z), Vector3.UP)
+		return
+	var aim: Vector3 = target.eye_position() + Vector3.DOWN * 0.4
+	var flat := Vector3(aim.x - from.x, 0.0, aim.z - from.z)
+	var flight: float = clampf(flat.length() / NPC_THROW_SPEED, 0.25, 1.2)
+	var velocity: Vector3 = flat / flight
+	velocity.y = (aim.y - from.y + 0.5 * GRAVITY * flight * flight) / flight
+	_launch(index, from, velocity, 0, false)
+	_projectiles[-1]["npc"] = true
+	_projectiles[-1]["npc_title"] = title
+	object.available = now() + session.room.settings.miss_cooldown
+	fx("sound", from, Vector3.ZERO, Color.WHITE, "whoosh")
+
+
+## [방장] 싸대기: 반드시 맞는다. 맞은 사람은 NPC 반대쪽으로 날아가 쓰러진다.
+func _npc_slap(npc: Node3D, target_id: int, title: String) -> void:
+	var target: PlayerView = game.actors.get(target_id)
+	if target == null or not is_instance_valid(npc):
+		return
+	var away := Vector3(target.global_position.x - npc.global_position.x, 0.0, target.global_position.z - npc.global_position.z)
+	if away.length() < 0.01: away = Basis(Vector3.UP, target.rotation.y) * Vector3.BACK
+	fx("stars", target.eye_position() + Vector3.UP * 0.25, Vector3.UP, Color.WHITE, "thunk")
+	game.knock_down(target_id, away.normalized() * NPC_SLAP_PUSH + Vector3.UP * 1.2)
+	feed("dizzy", null, "%s의 싸대기! 쓰러짐" % title, target)
+
 
 func _break(index: int, at: Vector3, velocity: Vector3, owner: int, victim: PlayerView, reason: String) -> void:
 	var object: Dictionary = objects[index]
@@ -798,6 +956,9 @@ func _receive_event(kind: String, data: Dictionary) -> void:
 		return
 	if kind == "lounge_fx":
 		_play_fx(data)
+		return
+	if kind == "npc_react":
+		_play_npc_react(data)
 		return
 	if kind != "lounge": return
 	var time: float = now()

@@ -31,6 +31,29 @@ static func make(icon_id: String, side: float = 44.0, color: Color = Style.INK) 
 	return icon
 
 
+## 머리 위 마이크 표시(2026-11-15 "플레이어 머리 위에 작게 닉네임과 마이크 표시").
+## 0 = 조용(회색 마이크) · 1 = 말하는 중(청록 마이크) · 2 = 내가 음소거한 사람(빨간 사선).
+static var _mics: Array[Texture2D] = []
+const MIC_SVG := """<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="29" fill="{back}" stroke="#120c12" stroke-width="4"/>
+<rect x="24" y="12" width="16" height="26" rx="8" fill="{ink}"/>
+<path d="M18 30 Q18 45 32 45 Q46 45 46 30" fill="none" stroke="{ink}" stroke-width="4.5" stroke-linecap="round"/>
+<path d="M32 45 V52 M24 52 H40" fill="none" stroke="{ink}" stroke-width="4.5" stroke-linecap="round"/>
+{slash}
+</svg>"""
+
+
+static func mic_texture(state: int) -> Texture2D:
+	if _mics.is_empty():
+		var looks: Array = [["#e9e1d2", "#5d5560", ""], ["#fff3dc", "#1f9d88", ""],
+			["#fff3dc", "#5d5560", "<path d=\"M14 14 L50 50\" stroke=\"#fff3dc\" stroke-width=\"10\" stroke-linecap=\"round\"/><path d=\"M14 14 L50 50\" stroke=\"#e0473f\" stroke-width=\"5.5\" stroke-linecap=\"round\"/>"]]
+		for look: Array in looks:
+			var image := Image.new()
+			image.load_svg_from_string(MIC_SVG.format({"back": look[0], "ink": look[1], "slash": look[2]}), 2.0)
+			_mics.append(ImageTexture.create_from_image(image))
+	return _mics[clampi(state, 0, _mics.size() - 1)]
+
+
 ## 말하는 중 스피커 그림(128px). 음성 채팅 2026-11-01.
 static func speaker_texture() -> Texture2D:
 	if _speaker == null:

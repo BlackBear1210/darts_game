@@ -403,7 +403,9 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 		_phase_detail.text = "%d발 남음 · 누구나 카드 사용\n효과는 지금 던지는 사람에게" % state.darts_left
 		limit = game.controller.config.turn_seconds
 		stage = RoundBanner.Stage.DARTS
-		sub = "%s 차례 · %d발 남음" % [active.display_name if active != null else "대기", state.darts_left]
+		# 라운드당 다트(2026-11-15): 내 손에 남은 다트도 같이(차례 밖에서 던지면 줄고 다음 라운드에 다시 찬다).
+		var mine: MatchPlayer = state.find_player(game.controller.local_peer_id)
+		sub = "%s 차례 · %d발 남음 · 내 다트 %d" % [active.display_name if active != null else "대기", state.darts_left, mine.darts if mine != null else 0]
 	_banner.visible = not waiting and not finished
 	if _banner.visible:
 		_banner.show_state(state.round_number, game.controller.config.rounds, stage, sub, seconds, limit, delta)
@@ -707,7 +709,8 @@ func _prompt_for(focus: Dictionary) -> Array:
 		"power": return [[key, "주크박스 전원 켜기 / 끄기"]]
 		"volume": return [[key, "주크박스 볼륨 %d%% · 누를 때마다 한 단계" % roundi(float(lounge.music.volume) * 100)]]
 		"link": return [[key, "YouTube 링크 넣기"], ["B", "음악 플레이어 열기"]]
-		"prop": return [["좌클릭", "%s 잡기" % lounge.prop_name(int(focus.get("index", 0)))]]
+		"prop": return [[key, "%s 잡기" % lounge.prop_name(int(focus.get("index", 0)))]]
+		"wardrobe": return [[key, "꾸미기 방 들어가기 · 모자·안경·옷 색"]]
 		"claw", "gacha", "hoop": return [[key, lounge.machine_prompt(game.controller.local_peer_id, str(focus.kind))]]
 		# 도면 v3 건드리기(종·통·과녁·축음기): 소리 + 흔들림.
 		"touch": return [[key, str(lounge.touch_spots()[int(focus.get("index", 0))].text)]]
@@ -729,7 +732,9 @@ func _prompt_for(focus: Dictionary) -> Array:
 		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
 	# 카드를 들고 있으면 F 는 카드 쓰기라 "착석 · 기계" 칩은 뺀다(한 키에 두 안내가 겹치지 않게).
 	var interact: Array = [] if me != null and me.pending_card >= 0 and _card_phase(state) else [[key, "착석 · 기계"]]
-	return card_keys + [["WASD", "이동"]] + interact + [["좌클릭 꾹", "다트"], ["T", "감정표현"]] + _voice_keys()
+	# 라운드당 다트(2026-11-15): 손에 든 다트 수를 함께 보여 준다(차례 밖에서 던지면 그만큼 줄고 다음 라운드에 다시 찬다).
+	var darts: Array = [["좌클릭 꾹", "다트 %d개" % me.darts]] if me != null and me.darts > 0 else []
+	return card_keys + [["WASD", "이동"]] + interact + darts + [["T", "감정표현"]] + _voice_keys()
 
 
 ## 음성 채팅 칩(2026-11-01): 눌러서 말하기면 그 키, 말하는 중이면 "말하는 중". 함께하는 사람이 없으면(싱글) 뺀다.

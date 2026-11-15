@@ -62,20 +62,31 @@ void fragment() {
 			}
 		}
 	}
+	// [자글거림 없애기 — 2026-11-15 사용자 지적 "바닥의 타일이 치지직 거린다"]
+	// 화면 한 칸(픽셀)이 바닥에서 덮는 넓이(footprint, 판자 폭 단위). 멀리·비스듬히 볼수록 커진다.
+	// 무늬(나뭇결 1.3cm · 이음매 4mm · 판자 12cm)가 한 칸보다 가늘어지면 칸마다 색이 제멋대로 튀어
+	// 걸을 때 바닥이 자글자글 깜빡인다(텍스처라면 밉맵이 해 주는 일을 셰이더가 직접 해야 한다).
+	// → 한 칸보다 가는 무늬는 그 크기에 맞춰 평균 색으로 서서히 녹인다.
+	float footprint = max(length(dFdx(p)), length(dFdy(p)));
 	// local.x = 판 길이 방향 0~1, local.y = 폭 방향 0~1.
 	float tone = hash(id);
+	// 판자마다 다른 밝기: 한 칸이 판자 폭의 절반을 넘기 시작하면 가운데 색(oak)으로 모인다.
+	float tone_keep = 1.0 - smoothstep(0.35, 1.3, footprint);
 	vec3 base = mix(oak_dark, oak_light, smoothstep(0.1, 0.9, tone));
-	base = mix(oak, base, 0.55);
-	// 나뭇결: 길이 방향으로 늘어진 가는 줄(판마다 위상이 다름). 아주 약하게.
+	base = mix(oak, base, 0.55 * tone_keep);
+	// 나뭇결: 길이 방향으로 늘어진 가는 줄(판마다 위상이 다름). 아주 약하게. 줄 간격(폭의 약 1/5)보다 칸이 커지면 지운다.
+	float grain_keep = 1.0 - smoothstep(0.04, 0.14, footprint);
 	float lines = sin((local.y * 9.0 + sin(local.x * 6.2831 * 1.3 + tone * 20.0) * 0.6) * 3.14159 + tone * 40.0);
-	base *= 1.0 + lines * grain;
+	base *= 1.0 + lines * grain * grain_keep;
 	// 이음매: 판 가장자리(폭 방향은 가늘게, 끝 이음은 조금 더 가늘게).
 	float edge_w = min(local.y, 1.0 - local.y);
 	float edge_l = min(local.x, 1.0 - local.x) * k;
 	float edge = min(edge_w, edge_l);
-	float line = 1.0 - smoothstep(seam * 0.5, seam, edge);
+	// 이음매 가장자리를 한 칸 크기만큼 부드럽게 넓히고, 넓어진 만큼 옅게 한다(멀리서도 전체 어두운 양은 같다).
+	float soft = footprint * 0.75;
+	float line = (1.0 - smoothstep(seam * 0.5 - soft, seam + soft, edge)) * (seam / (seam + soft * 2.0));
 	vec3 color = mix(base, seam_color, line * 0.85);
 	ALBEDO = color;
-	ROUGHNESS = roughness_base + tone * 0.08 + line * 0.3;
+	ROUGHNESS = roughness_base + tone * 0.08 * tone_keep + line * 0.3;
 	SPECULAR = 0.35;
 }

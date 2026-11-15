@@ -16,6 +16,9 @@ var enabled: bool = false:
 		if not enabled:
 			_cancel_charge()
 			aim = Vector2.INF
+## 과녁을 보고 있지 않아도 던질 수 있는가(2026-11-15 라운드당 다트: 손에 든 다트는 어디로든 던질 수 있다).
+## 켜면 조준점이 없을 때(aim = Vector2.INF)도 throw_requested 를 보낸다 — 받는 쪽(GameView)이 "그냥 던지기"로 처리한다.
+var free_aim: bool = false
 var charging: bool = false
 var timing: float = 0.0
 var aim: Vector2 = Vector2.INF
@@ -67,7 +70,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		timing = 0.0
 	elif charging:
 		charging = false
-		if aim.is_finite():
+		if aim.is_finite() or free_aim:
 			throw_requested.emit(aim, timing)
 
 
