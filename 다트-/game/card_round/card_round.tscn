@@ -22,7 +22,7 @@ visible = false
 position = Vector3(0.2, -0.14, -0.55)
 
 [node name="HeldDart" parent="Camera/Hand" instance=ExtResource("3_dart")]
-rotation_degrees = Vector3(6, 32, 0)
+rotation_degrees = Vector3(8, 20, 0)
 
 [node name="Fan" type="Node3D" parent="Camera"]
 transform = Transform3D(0.995, -0.0998, 0, 0.0998, 0.995, 0, 0, 0, 1, -0.22, -0.4, -0.42)

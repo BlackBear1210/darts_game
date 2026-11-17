@@ -20,7 +20,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, -0.14, -0.55)
 visible = false
 
 [node name="HeldDart" parent="Camera/Hand" unique_id=660269510 instance=ExtResource("5_dart")]
-transform = Transform3D(0.8480481, 0.055391647, 0.52701634, 0, 0.9945219, -0.104528464, -0.52991927, 0.08864517, 0.8434024, 0, 0, 0)
+transform = Transform3D(0.93969262, 0.047600004, 0.33869163, 0, 0.99026807, -0.1391731, -0.34202014, 0.13077994, 0.9305476, 0, 0, 0)
 
 [node name="Table" parent="." unique_id=329066793 instance=ExtResource("1_table")]
 

@@ -1,3 +1,30 @@
+# 최신 인수인계 — 다트 그립 · 크기 카드 · 힘 카드 바람 (2026-11-17 밤)
+
+- **손 모양을 바꾸면** `tests/render_fp_arm.gd` 로 찍고 **`tests/test_fp_grip.gd` 를 꼭 돌린다**(손이 다트를 뚫는지 mm 로 잰다). 엄지 1~2° 차이로 뚫린다.
+  - 값: `first_person_arm.gd` `GRIP_BEND` · `PINCH_NUDGE`(집는 자리 보정) · `LARGE_NUDGE`(큰 다트 비켜 두기) · `GRIP_ROLL` · `ELBOW_OPEN`. `GRIP_BEND` 를 바꾸면 두 NUDGE 도 다시 재야 한다.
+  - 아래 오후 칸의 펜 쥐기 값(검지 30/50/20 · 엄지 20/15/10 · 45°)은 옛 값이다.
+- **손에 든 다트 크기**: `HeldDart` 에 직접 배율을 걸지 않는다. `FirstPersonArm.held_dart(_held_dart_base, 배율)` 로 만든다. 팔에는 늘 `_held_dart_base`(배율 없는 자세)를 준다.
+- **크기 배율**은 `DartView.LARGE_SIZE` 한 곳(손에 든 다트·날아가는 다트 F5·F6).
+- **힘 카드 바람**: `dart.gd` `WIND_LAYERS`(길이·반지름·줄기 수·빠르기) · `WIND_SHADER_CODE` · `WIND_FADE_SECONDS`. 켜는 곳 = 비행 정보 `power`(`match_controller.gd _solve`) → `game.gd _show_throw`·`_redirect_throw`, F6 은 `dart_actions.gd _spawn_dart`.
+- 상세: `작업기록/2026-11-17_밤_다트그립_크기힘카드.md`.
+
+---
+
+# 최신 인수인계 — 1인칭 다트 그립 · 던지기 몸짓 · 소품 얼굴 방향 (2026-11-17 오후)
+
+- **1인칭 손 모양**: `art/characters/first_person_arm.gd`.
+  - `GRIP_BEND`(손가락별 굽힘 각) · `GRIP_ROLL`(손을 다트 축 둘레로 돌림) · `_pinch_frame`(엄지·검지 끝마디 가운데 = 집는 자리).
+  - 손에 든 다트 방향은 장면 `HeldDart`(game.tscn · card_round.tscn 둘 다)에 있다.
+- **던지기 몸짓**: `art/characters/first_person_throw.gd`.
+  - 위쪽 상수가 길이·구간·각이다.
+  - 게임 `game.gd _animate_hand` 와 미리보기 `tests/render_fp_arm.gd`(→ `.godot/fp_arm/`)가 같은 함수를 쓴다.
+  - 뼈 돌리기 = `FirstPersonArm.swing(아래팔, 손목)`. 다트를 쥔 동안엔 0 이어야 한다.
+- **소품 방향**: 앞이 있는 RG Poly 소품은 `room_kit.gd` `FACE_YAW` 에 얼굴 돌림각을 적는다(로컬 +Z = 방 안쪽). 4면 렌더로 앞을 확인하고 적는다.
+  - 고친 뒤 `pub_builder.gd -- --game-room-only` 로 다시 만든다.
+- 상세: `작업기록/2026-11-17_1인칭다트그립_던지기몸짓_소품방향.md`.
+
+---
+
 # 최신 인수인계 — 경기 방 모듈 · 창밖 3D · 차례 아님 알림 (2026-11-16~17)
 
 - **경기 방 고치기**: `art/pub/room/README.md`(모듈 지도)부터 본다. `game_room_builder.gd` 는 조립표(어느 구역을 어떤 순서로)만 있다.

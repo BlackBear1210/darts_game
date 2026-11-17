@@ -187,7 +187,7 @@ func _run() -> void:
 	input_blocker.queue_free()
 	await create_timer(0.06).timeout
 	assert(_game.controller.state.phase == MatchState.Phase.FLIGHT)
-	# 2026-10-30: 놓은 직후 빈손이 앞으로 휘두르는 동작(팔로스루)을 0.3초 보인다. 손에 든 다트는 바로 사라져야 한다.
+	# 2026-10-30: 놓은 직후 빈손이 앞으로 휘두르는 동작(팔로스루)을 보인다(2026-11-17 곡선 = art/characters/first_person_throw.gd). 손에 든 다트는 바로 사라져야 한다.
 	assert(not (_game.get_node("Camera/Hand/HeldDart") as Node3D).is_visible_in_tree())
 	var dart: DartView = _game.get_node("Darts").get_child(0) as DartView
 	dart.set_physics_process(false)

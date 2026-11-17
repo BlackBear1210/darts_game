@@ -7,9 +7,9 @@ extends SceneTree
 ## game/game.tscn의 실제 Camera/Hand/HeldDart를 꺼내 몇 초 만에 찍는다.
 
 const FirstPersonArm = preload("res://art/characters/first_person_arm.gd")
+## 게임(GameView._animate_hand)과 같은 던지기 몸짓 곡선 — 여기서는 몇 장면만 멈춰 찍는다.
+const FirstPersonThrow = preload("res://art/characters/first_person_throw.gd")
 const GAME_SCENE: PackedScene = preload("res://game/game.tscn")
-## game/game.gd _animate_hand 가 완전 충전(pull = 1)에 손을 옮기는 양.
-const CHARGED_PULL := GameView.HAND_CHARGE_OFFSET
 
 var _output: String = ""
 var _hand_at: Vector3
@@ -59,22 +59,58 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	await _shot(camera, "01_from_camera")
-	# 완전 충전 자세: GameView._animate_hand 가 손을 카메라 쪽으로 당긴다(pull = 1).
+	# 완전 충전 자세: 얼굴 쪽으로 당기고 손목을 젖힌다(pull = 1).
 	# 이때 어깨·몸통이 화면에 들어오면 안 된다 — 가장 들키기 쉬운 자세라 꼭 같이 찍는다.
-	hand.transform = Transform3D(Basis.IDENTITY, _hand_at).translated_local(CHARGED_PULL)
-	hand.rotate_object_local(Vector3.RIGHT, -0.06)
+	var base := Transform3D(Basis.IDENTITY, _hand_at)
+	hand.transform = FirstPersonThrow.pose(base, arm.elbow, 1.0)
 	await _shot(camera, "01c_charged")
-	hand.transform = Transform3D(Basis.IDENTITY, _hand_at)
-	arm.animate_grip(true, 0.12)
-	dart.hide()
-	await _shot(camera, "01d_release")
-	arm.animate_grip(false, 0.12)
+	# 놓은 뒤 몸짓: 팔을 다 뻗고 손목을 꺾은 순간 → 팔로 스루(떨어지는 중) → 다음 다트를 쥐고 올라오는 중.
+	for frame: Array in [["01d_release", 0.8], ["01e_follow_through", 0.55], ["01f_reload", 0.2]]:
+		var kick: float = frame[1]
+		hand.transform = FirstPersonThrow.pose(base, arm.elbow, 0.0, kick, 1.0)
+		arm.animate_grip(FirstPersonThrow.fingers_open(kick), 1.0)
+		arm.swing(FirstPersonThrow.forearm(kick), FirstPersonThrow.wrist(kick))
+		dart.visible = FirstPersonThrow.dart_in_hand(kick, true)
+		await _shot(camera, frame[0])
+	hand.transform = base
+	arm.animate_grip(false, 1.0)
+	arm.swing(0.0, 0.0)
 	dart.show()
 	# 쥔 모양 확대: 눈과 거의 같은 자리에서 손을 바라본다(손가락이 다트를 감쌌는지 본다).
 	await _aside(world, camera, Vector3(0.02, 0.02, 0.0), "01b_grip_closeup", 24.0)
 	# 옆·위에서도 찍어 몸통이 카메라 뒤에 있는지, 팔이 어디로 뻗는지 본다.
 	await _aside(world, camera, Vector3(1.6, 0.3, 0.6), "02_from_right")
 	await _aside(world, camera, Vector3(0.0, 1.8, 0.4), "03_from_above")
+	# 참고 그림(다트를 손가락 위에 얹고 엄지로 누름)과 같은 쪽 — 몸 안쪽에서 손 옆모습을 본다.
+	await _aside(world, camera, _hand_at + Vector3(-0.3, 0.02, -0.04), "03b_inner_side", 30.0)
+	# 크기 카드: 다트만 자루 가운데를 축으로 커지고 손은 그대로(굵은 자루 바깥으로 살짝 비킴).
+	var dart_base: Transform3D = dart.transform
+	dart.transform = FirstPersonArm.held_dart(dart_base, DartView.LARGE_SIZE)
+	arm.hold_large(true)
+	await _shot(camera, "05_large_dart")
+	await _aside(world, camera, Vector3(0.02, 0.02, 0.0), "05b_large_closeup", 24.0)
+	dart.transform = dart_base
+	arm.hold_large(false)
+	# 힘 카드: 손을 떠난 다트 뒤 바람 줄기(비행 중간에 멈춰 내 화면·옆에서 찍는다).
+	hand.hide()
+	var flying := (load("res://game/dart/dart.tscn") as PackedScene).instantiate() as DartView
+	world.add_child(flying)
+	flying.paint(PlayerLook.COLORS[0])
+	flying.powered = true
+	flying.fly(camera.global_transform * _hand_at, camera.global_transform * Vector3(0.0, 0.05, -2.4), 0.4)
+	await create_timer(0.12).timeout
+	flying.set_physics_process(false)
+	await _shot(camera, "06_power_wind")
+	var side := Camera3D.new()
+	world.add_child(side)
+	side.global_position = flying.global_position + Vector3(1.2, 0.25, 0.3)
+	side.look_at(flying.global_position + Vector3(0, 0, 0.4))
+	side.current = true
+	await _shot(side, "06b_power_wind_side")
+	side.queue_free()
+	camera.current = true
+	flying.queue_free()
+	hand.show()
 	# 가리키는 손은 투척 손과 별도로 남아 있던 옛 도형 모델의 교체 경로다.
 	hand.hide()
 	var gestures := preload("res://game/card_round/flow/gestures.gd").new()

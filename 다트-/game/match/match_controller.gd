@@ -273,6 +273,8 @@ func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 	for offset in offsets:
 		var one: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id, CardCatalog.POWER_SPEED_MULTIPLIER if mods.get("power", false) else 1.0)
 		one["large"] = bool(mods.get("large", false))
+		# 힘 증가: 날아가는 다트 뒤 바람 줄기 연출용(GameView._show_throw → DartView.powered). 빠르기는 위 배율.
+		one["power"] = bool(mods.get("power", false))
 		var shape: Dictionary = cards.shape_now() if cards != null else BoardChaos.rest()
 		if BoardChaos.covered(Vector2(float(one.x), float(one.y)), shape) and absf(float(one.x)) < 50:
 			one.target = (one.target as Vector3) + Vector3(0, 0, BoardChaos.SHUTTER_FRONT)

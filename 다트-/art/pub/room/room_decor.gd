@@ -128,7 +128,9 @@ static func build_decor(p: Node3D, windows: Node3D, pub_only: Node3D) -> void:
 static func build_furnish(p: Node3D, pub_only: Node3D) -> void:
 	var f := _faces()
 	# 바 뒤: 받침대에 누운 생맥주 통(꼭지가 방 쪽) · 뒤 조리대 + 커피 머신 · 병조림 · 구석 화분(오락실에서는 경품 진열대 자리).
-	PubParts.asset(pub_only, "keg", TableView.KEG_AT, PI / 2, Vector3.ONE * 0.95, "Keg")
+	# 생맥주 통: 꼭지 = 모델 +X(4면 렌더). 돌리지 않아야 꼭지가 바텐더 통로(+X)를 본다 — 충돌 상자(1.0 × 1.2)와
+	# "통 두드리기" 자리(KEG_AT + x 0.5)도 이 방향 기준이다. 2026-11-17 전까지는 90도 돌아가 꼭지가 앞벽(−Z)을 봤다.
+	PubParts.asset(pub_only, "keg", TableView.KEG_AT, 0.0, Vector3.ONE * 0.95, "Keg")
 	PubParts.asset(pub_only, "back_counter", TableView.BACK_COUNTER_AT, PI / 2, Vector3.ONE, "BackCounter")
 	# 바 뒤 구석 화분: 라운드하우스 중간 화분(놋쇠 화분 — 예전 도형 화분과 같은 놋쇠, 2026-11-08).
 	_model(pub_only, "plant_medium", Vector3(f.lounge_x0 + 0.6, 0, f.back_z - 0.6), 0.0, "Plant")

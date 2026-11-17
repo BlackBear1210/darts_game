@@ -1,8 +1,6 @@
 class_name GameView
 extends Node3D
 
-## 1인칭 손을 당기는 거리. 미리보기 도구도 같은 값을 사용한다.
-const HAND_CHARGE_OFFSET := Vector3(0.005, 0.005, 0.065)
 ## 공간, 로컬 시점, 방장 이동 시뮬레이션과 경기 기능을 조립한다.
 ## 조명·배경색은 Table/Pub(art/pub/pub_game.tscn)이 가진다. 여기서는 카메라·손·다트·칠판 점수만 연결한다.
 
@@ -28,6 +26,8 @@ const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
 ## 1인칭 오른팔(선수 몸과 같은 리깅 캐릭터의 팔). class_name 이 없는 도구라 preload 로 부른다.
 const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
 const FirstPersonArm = preload("res://art/characters/first_person_arm.gd")
+## 1인칭 당기기·던지기·팔로 스루 곡선(미리보기 tests/render_fp_arm.gd 도 같은 함수를 쓴다).
+const FirstPersonThrow = preload("res://art/characters/first_person_throw.gd")
 ## 봇의 차례 행동 계산(방장 전용). class_name 이 없는 도구라 preload 로 부른다.
 const BotDriver = preload("res://game/player/bot_driver.gd")
 ## 카드 그림과 1인칭 손 부채는 카드 라운드 시연 것을 그대로 쓴다 — 카드 모양은 한 곳만 유지한다.
@@ -111,7 +111,15 @@ const PROP_CHARGE_TIME: float = 1.0
 var _shown_hand: Array[int] = []
 ## 손맛 연출(보이기만): 1인칭 손 기본 자세, 내가 던진 직후 1→0 으로 줄어드는 반동, 과녁 흔들림.
 var _hand_base: Transform3D
+## 손에 든 다트(Camera/Hand/HeldDart)의 장면 자세. 크기 카드는 이 자세에서 자루 가운데를 축으로 키운다
+## (FirstPersonArm.held_dart). 팔도 이 자세(크기 없음)에 맞춘다 — 커진 다트를 따라 손이 커지지 않는다.
+var _held_dart_base: Transform3D
 var _throw_kick: float = 0.0
+## 손에 보이는 당긴 정도. 충전 중엔 충전값, 그 밖엔 천천히 0 으로 돌아간다
+## — 놓은 뒤 서버 응답(_throw_kick 시작)을 기다리는 사이 손이 겨누기 자세로 툭 튀지 않는다.
+var _held_pull: float = 0.0
+## 놓을 때 당겨 있던 정도. 던지기 몸짓이 이 자세에서 출발한다.
+var _released_pull: float = 0.0
 var _board_shake: float = 0.0
 ## 지금 날아가는 다트(궤적 카드로 꽂히는 자리가 바뀌면 이 다트를 휘게 한다).
 var _flying_dart: DartView
@@ -143,6 +151,7 @@ func _ready() -> void:
 	$TrajectoryPreview.hide()
 	$Camera/Hand.hide()
 	_hand_base = ($Camera/Hand as Node3D).transform
+	_held_dart_base = ($Camera/Hand/HeldDart as Node3D).transform
 	_prepare_hand_fan()
 
 
@@ -289,7 +298,7 @@ func _equip_hand(seat: int) -> void:
 	var arm := FirstPersonArm.new()
 	arm.name = "FirstPersonHand"
 	arm.seat = seat
-	arm.dart_grip = ($Camera/Hand/HeldDart as Node3D).transform
+	arm.dart_grip = _held_dart_base
 	# 1인칭 소매도 꾸미기 옷 색으로(3인칭 내 몸과 같은 색).
 	var me := actors.get(controller.local_peer_id) as PlayerView
 	if me != null: arm.shirt = int(me.look.get("shirt", 0))
@@ -691,26 +700,49 @@ func can_throw_from(id: int) -> bool:
 	return actor != null and TableView.in_throw_zone(actor.position) and (lounge == null or not lounge.is_stunned(id))
 
 
-## 1인칭 손: 충전할수록 뒤로 빠지고(최대 충전이면 살짝 떨림), 놓으면 앞으로 튕겼다 사라진다.
+## 1인칭 손: 충전하면 팔꿈치를 축으로 얼굴 쪽으로 당겨 촉이 들리고(최대 충전이면 살짝 떨림),
+## 놓으면 아래팔을 뻗으며 손목을 꺾고 손가락을 편 뒤 아래로 떨어진다(곡선 = art/characters/first_person_throw.gd).
+## 다음 다트가 있으면 그 다트를 쥐고 다시 올라온다.
 ## 과녁도 다트가 꽂히면 잠깐 움찔한다. 둘 다 내 화면 연출이고 판정 좌표는 그대로다.
 func _animate_hand(delta: float) -> void:
-	_throw_kick = maxf(0.0, _throw_kick - delta * 3.2)
+	_throw_kick = maxf(0.0, _throw_kick - delta / FirstPersonThrow.KICK_SECONDS)
 	_board_shake = maxf(0.0, _board_shake - delta * 4.0)
 	var hand := $Camera/Hand as Node3D
+	var reload: bool = throw_input.enabled
+	if throw_input.charging:
+		_held_pull = throw_input.timing
+		# 팔로 스루 중에 다음 다트를 당기기 시작하면 바로 다시 쥐고 올라오는 구간으로 넘긴다.
+		_throw_kick = minf(_throw_kick, 1.0 - FirstPersonThrow.RISE_START)
+	elif _throw_kick <= 0.0:
+		_held_pull = move_toward(_held_pull, 0.0, delta * 4.0)
 	var pull: float = throw_input.timing if throw_input.charging else 0.0
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var tremble := Vector3(sin(now * 47.0), cos(now * 39.0), 0.0) * 0.0025 * pull * pull
-	var snap: float = sin(_throw_kick * PI)
 	var motion: float = 0.3 if Preferences.reduced_motion else 1.0
-	hand.transform = _hand_base.translated_local((HAND_CHARGE_OFFSET * pull + Vector3(-0.01, 0.035, -0.17) * snap) * motion + (Vector3.ZERO if Preferences.reduced_motion else tremble))
-	hand.rotate_object_local(Vector3.RIGHT, (-0.06 * pull + 0.1 * snap) * motion)
 	var arm := hand.get_node_or_null("FirstPersonHand") as FirstPersonArm
-	if arm != null: arm.animate_grip(_throw_kick > 0.0, delta)
+	var elbow: Vector3 = arm.elbow if arm != null else Vector3.ZERO
+	var shown_pull: float = _held_pull if _throw_kick <= 0.0 else pull
+	hand.transform = FirstPersonThrow.pose(_hand_base, elbow, shown_pull, _throw_kick, _released_pull, reload, motion, Vector3.ZERO if Preferences.reduced_motion else tremble)
+	if arm != null:
+		arm.animate_grip(FirstPersonThrow.fingers_open(_throw_kick), delta)
+		arm.swing(FirstPersonThrow.forearm(_throw_kick, reload, motion), FirstPersonThrow.wrist(_throw_kick, reload, motion))
 	hand.visible = throw_input.enabled or _throw_kick > 0.0
-	($Camera/Hand/HeldDart as Node3D).visible = _throw_kick <= 0.0
-	($Camera/Hand/HeldDart as Node3D).scale = Vector3.ONE * (1.8 if bool(controller.state.find_player(controller.local_peer_id).card_effects.get("large", false)) else 1.0)
-	camera.rotation.x += snap * 0.02 * motion
+	var held := $Camera/Hand/HeldDart as Node3D
+	held.visible = FirstPersonThrow.dart_in_hand(_throw_kick, reload)
+	# 크기 카드: 다트만 자루 가운데를 축으로 커지고, 손은 크기 그대로 굵어진 자루 바깥으로 살짝 비킨다.
+	var me: MatchPlayer = controller.state.find_player(controller.local_peer_id)
+	var large: bool = me != null and bool(me.card_effects.get("large", false))
+	held.transform = FirstPersonArm.held_dart(_held_dart_base, DartView.LARGE_SIZE if large else 1.0)
+	if arm != null:
+		arm.hold_large(large)
+	camera.rotation.x += FirstPersonThrow.recoil(_throw_kick) * 0.02 * motion
 	table.board.position = TableView.BOARD_CENTER + Vector3(sin(now * 70.0) * 0.006, 0.0, -0.012) * _board_shake
+
+
+## 내가 던졌다는 응답이 오면 1인칭 던지기 몸짓을 시작한다(놓을 때 당긴 자세에서 출발).
+func _start_throw_kick() -> void:
+	_released_pull = _held_pull
+	_throw_kick = 1.0
 
 
 func _process(delta: float) -> void:
@@ -967,7 +999,7 @@ func _show_stray(data: Dictionary) -> void:
 	if thrower != null:
 		thrower.play_throw()
 		if thrower.identity.peer_id == controller.local_peer_id:
-			_throw_kick = 1.0
+			_start_throw_kick()
 	if DisplayServer.get_name() == "headless":
 		return
 	var dart := DART_SCENE.instantiate() as DartView
@@ -1046,7 +1078,9 @@ func _show_throw(data: Dictionary) -> void:
 	for flight: Dictionary in data.get("flights", [data]):
 		var dart := DART_SCENE.instantiate() as DartView
 		_darts.add_child(dart)
-		dart.size_multiplier = 1.8 if bool(flight.get("large", false)) else 1.0
+		dart.size_multiplier = DartView.LARGE_SIZE if bool(flight.get("large", false)) else 1.0
+		# 힘 증가 카드: 다트 뒤로 바람 줄기가 빨려 들어가듯 흐른다(겉모습 — 빠르기는 방장 계산 그대로).
+		dart.powered = bool(flight.get("power", false))
 		dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
 		dart.paint(color)
 		dart.landed.connect(_on_dart_landed.bind(dart))
@@ -1058,8 +1092,12 @@ func _show_throw(data: Dictionary) -> void:
 	if thrower != null:
 		thrower.play_throw()
 		if thrower.identity.peer_id == controller.local_peer_id:
-			_throw_kick = 1.0
-	Sfx.play_at(self, "whoosh", data.start, -8.0)
+			_start_throw_kick()
+	# 힘 증가면 바람 소리도 더 크고 높게(빠르게 가르는 느낌).
+	if bool(data.get("power", false)):
+		Sfx.play_at(self, "whoosh", data.start, -2.0, 1.35)
+	else:
+		Sfx.play_at(self, "whoosh", data.start, -8.0)
 
 
 func _redirect_throw(data: Dictionary) -> void:
@@ -1073,6 +1111,7 @@ func _redirect_throw(data: Dictionary) -> void:
 			var dart := DART_SCENE.instantiate() as DartView
 			_darts.add_child(dart)
 			var from: Vector3 = _flying_dart.global_position if is_instance_valid(_flying_dart) else flight.start
+			dart.powered = bool(flight.get("power", false))
 			dart.fly(from, flight.target, float(data.remaining))
 			var actor := actors.get(int(data.get("peer_id", 0))) as PlayerView
 			if actor != null: dart.paint(actor.color)
@@ -1080,7 +1119,7 @@ func _redirect_throw(data: Dictionary) -> void:
 			_flying_darts.append(dart)
 		var dart: DartView = _flying_darts[index]
 		if is_instance_valid(dart):
-			dart.size_multiplier = 1.8 if bool(flight.get("large", false)) else 1.0
+			dart.size_multiplier = DartView.LARGE_SIZE if bool(flight.get("large", false)) else 1.0
 			dart.redirect(flight.target, float(data.remaining))
 
 

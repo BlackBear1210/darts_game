@@ -18,8 +18,10 @@
 | 플레이어·봇 몸짓(서기·걷기·숙이기·점프·앉기·조준·던지기·카드 들기·가리키기·만세·마시기·엿보기·왕머리·깜빡임) | `characters/character_motion.gd` + `characters/character_pose_layer.gd` | PlayerView `_process`, 로비 `lobby_backdrop.gd` |
 | 펍 NPC 몸짓 | `characters/character_rig.gd` | `pub/npc_idle.gd` |
 | 자리 색·모양(●▲■◆)·캐릭터 이름 | `player_look.gd`(PlayerLook) | 이름표·발밑 매트·스툴·HUD·칠판·다트 깃이 모두 이 표 하나를 봄 |
-| 1인칭 오른팔 | `characters/first_person_arm.gd` (리깅 캐릭터 오른팔) | `game/game.gd` `_equip_hand()` |
-| 다트(은 촉·금 몸통·자리 색 깃) | `game/dart/dart.tscn` + `paint()` | 꽂힐 때 2.2배로 커짐(과녁이 실제의 2.5배라서) |
+| 1인칭 오른팔(다트 쥔 손·크기 카드 큰 다트) | `characters/first_person_arm.gd` (리깅 캐릭터 오른팔) | `game/game.gd` `_equip_hand()` · `_animate_hand()`(`held_dart`·`hold_large`) · 시험 `tests/test_fp_grip.gd` |
+| 1인칭 던지기 몸짓(당기기·던지기·팔로 스루·다시 쥐기) | `characters/first_person_throw.gd` (곡선 상수) | `game/game.gd` `_animate_hand()` · 미리보기 `tests/render_fp_arm.gd` |
+| 다트(은 촉·금 몸통·자리 색 깃) | `game/dart/dart.tscn` + `paint()` | 꽂힐 때 2.2배로 커짐(과녁이 실제의 2.5배라서). 크기 카드 배율 `LARGE_SIZE` |
+| 힘 카드 바람 줄기(날아가는 다트 뒤) | `game/dart/dart.gd` `WIND_LAYERS` · `WIND_SHADER_CODE` | `powered = true` 인 다트가 `fly()` 때 붙임(`game.gd _show_throw` · F6 `dart_actions.gd`) |
 | 칠판 점수판(과녁 왼쪽 문) | `pub/room/room_board.gd`의 `ChalkScores` 글자 | `game/game.gd` `_chalk_text()` → `TableView.set_chalk_scores()` |
 | HUD·대기실 색 | `../ui/pub_theme.gd`(PubTheme) | `ui/game_hud.gd`, `lobby/lobby.gd` 첫 줄 |
 
@@ -161,9 +163,13 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 ```
 
 `render_fp_arm.gd`는 1인칭 팔 각도·크기를 맞출 때 쓴다. 경기 전체를 띄우지 않고 game.tscn의 실제 카메라·손·다트를 꺼내 사용한다.
-`first_person_arm.gd`의 `GRIP_ALONG_SHAFT`·`GRIP_ROLL`·`HAND_SCALE`을 고치고 바로 확인할 수 있다. 가리키는 손도 함께 촬영한다.
+`first_person_arm.gd`의 `GRIP_BEND`(손가락 굽힘)·`GRIP_ROLL`·`ELBOW_OPEN`·`PINCH_NUDGE`·`LARGE_NUDGE`·`HAND_SCALE`, 손에 든 다트 방향(`game.tscn`·`card_round.tscn` 의 `HeldDart`)을 고치고 바로 확인할 수 있다. 가리키는 손·큰 다트·힘 카드 바람도 함께 촬영한다.
+손 값을 바꾼 뒤에는 `tests/test_fp_grip.gd` 를 꼭 돌린다 — 손 살이 다트 안으로 들어간 깊이를 mm 로 잰다(엄지 1~2° 차이로 뚫린다).
 
-1인칭 투척 손은 엄지·검지 끝 사이에 자루를 맞추고, 놓을 때 손가락이 펴진다. `game.gd`의 `HAND_CHARGE_OFFSET`을 실제 경기와 미리보기에서 함께 사용한다. 움직임 줄이기 설정은 충전 떨림을 없애고 손 이동·반동을 줄인다.
+1인칭 투척 손은 사용자 참고 그림처럼 다트가 말린 손가락 위에 얹히고 엄지 끝마디·검지 끝마디가 자루를 집는다(2026-11-17 밤 — 오후의 펜 쥐기는 자루가 손가락에 2.9mm 묻혀 있었다).
+크기 카드는 다트만 자루 가운데를 축으로 커진다(`FirstPersonArm.held_dart`). `HeldDart` 에 배율을 직접 걸면 팔이 그 자세를 받아 손도 커지므로, 팔에는 배율 없는 처음 자세(`game.gd _held_dart_base`)만 준다.
+던지기 몸짓 곡선은 `characters/first_person_throw.gd` 하나를 실제 경기와 미리보기가 함께 쓴다(겨누기 · 충전 · 놓음 · 팔로 스루 · 다시 쥐기를 찍는다).
+다트를 쥔 동안은 팔·다트를 통째로, 놓은 뒤에는 아래팔·손목 뼈만 돌린다(`FirstPersonArm.swing`). 움직임 줄이기 설정은 충전 떨림을 없애고 손 이동·반동을 0.3배로 줄인다.
 충전 자세(깃이 손을 가리는지)와 옆·위 시점(몸통이 카메라 뒤에 있는지)도 같이 찍는다.
 
 `render_game_look.gd`는 약 20초 동안 전체 화면이 되고 마우스를 잡는다.

@@ -426,9 +426,18 @@ static func _wall_mount(parent: Node3D, at: Vector2, inward: Vector2, y: float, 
 	return root
 
 
+## 앞이 있는 RG Poly 소품의 "얼굴 돌림각": 이만큼 더 돌리면 얼굴이 로컬 +Z(벽 묶음에서는 방 안쪽)를 본다.
+## [2026-11-17 사용자 지적 "창문 화분의 꽃들이 전부 밖의 풍경을 보고 있다"]
+## 꽃(flowers_a~c)은 꽃송이가 모델 −Z 쪽으로 기울어 있다(4면 렌더로 확인). 그래서 창턱 꽃 상자에서는 꽃이 창 밖을 봤고,
+## 벽 선반에서는 깊이(0.26m)가 판(0.2m)보다 길다고 90도 눕혀져 옆을 봤다.
+## 표에 없는 소품은 둥글거나(물약·병조림·허브 화분) 앞뒤 구분이 없다. 새 소품을 놓을 때 4면 렌더로 앞을 보고 여기에 적는다.
+const FACE_YAW := {"flowers_a": PI, "flowers_b": PI, "flowers_c": PI}
+
+
 ## 소품 하나를 (로컬) 자리 at 에 세운다: 바닥면 = at.y, 모델 상자의 가로·깊이 가운데 = at.x·at.z (모델마다 원점이 달라서).
+## yaw 0 = 얼굴이 로컬 +Z 를 본다(FACE_YAW 를 여기서 더한다).
 static func _on_shelf(root: Node3D, key: String, at: Vector3, yaw := 0.0, size := 1.0) -> MeshInstance3D:
-	var node := PubParts.asset(root, key, at, yaw, Vector3.ONE * size, key.to_pascal_case())
+	var node := PubParts.asset(root, key, at, yaw + float(FACE_YAW.get(key, 0.0)), Vector3.ONE * size, key.to_pascal_case())
 	if node == null:
 		return null
 	var box: AABB = node.mesh.get_aabb()
@@ -446,6 +455,7 @@ static func _plank_shelf(root: Node3D, length: float, keys: Array) -> void:
 		# 받침은 판 아래에 1cm 겹쳐 묻는다(면이 맞닿아 깜빡이지 않게) · 벽에서도 WALL_LAYER_GAP 띄운다.
 		MeshKit.rounded_box(root, "ShelfBracket", Vector3(0.03, 0.15, 0.15), Vector3(u, -0.105, WALL_LAYER_GAP + 0.075), _brass(), 0.008)
 	# 물건마다 돌림각과 (돌린 뒤) 폭·깊이를 먼저 잰다. 깊이가 판보다 긴 것(빵·밀대·오리)은 90도 돌려 벽을 따라 눕힌다.
+	# 단 얼굴이 있는 것(FACE_YAW — 꽃)은 눕히지 않고 방을 보게 둔다(꽃송이가 판 앞으로 조금 나온다).
 	# 살짝씩 다른 각도(±0.2)로 손으로 놓은 느낌을 낸다.
 	var yaws: Array[float] = []
 	var widths: Array[float] = []
@@ -455,7 +465,7 @@ static func _plank_shelf(root: Node3D, length: float, keys: Array) -> void:
 		var mesh: Mesh = RgPoly.mesh(str(keys[i]))
 		var size: Vector3 = mesh.get_aabb().size if mesh != null else Vector3.ZERO
 		var yaw: float = 0.2 if i % 2 == 0 else -0.2
-		if size.z > depth + 0.04:
+		if size.z > depth + 0.04 and not FACE_YAW.has(str(keys[i])):
 			yaw += PI / 2.0
 		var turned := Basis(Vector3.UP, yaw)
 		var extent := Vector2(absf(turned.x.x) * size.x + absf(turned.z.x) * size.z, absf(turned.x.z) * size.x + absf(turned.z.z) * size.z)

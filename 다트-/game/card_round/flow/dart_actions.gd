@@ -183,7 +183,10 @@ func _spawn_dart(seat: int, flight: Dictionary) -> DartView:
 	var dart := DART_SCENE.instantiate() as DartView
 	_ctx.darts_root.add_child(dart)
 	dart.paint(PlayerLook.COLORS[seat])
-	dart.size_multiplier = 1.8 if bool(_ctx.rules.dart_modifiers(seat).get("large", false)) else 1.0
+	var mods: Dictionary = _ctx.rules.dart_modifiers(seat)
+	dart.size_multiplier = DartView.LARGE_SIZE if bool(mods.get("large", false)) else 1.0
+	# 힘 증가: 날아가는 다트 뒤 바람 줄기(게임 F5 와 같은 연출).
+	dart.powered = bool(mods.get("power", false))
 	var release: Vector3 = LOCAL_RELEASE if seat == Context.LOCAL_SEAT and not _ctx.autoplay else Vector3.ZERO
 	var kind: String = str(flight.kind)
 	dart.fly(flight.start, flight.point, float(flight.time), kind != "none", release)
