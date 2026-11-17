@@ -9,11 +9,14 @@ const CELL_SIZE := Vector3(3.0, 2.0, 3.0)
 ## 표정·깜빡임용 얼굴 부품은 묶지 않는다.
 const FACE_PREFIXES: Array[String] = ["Eye", "Pupil", "Brow", "Mouth"]
 ## 실행 중 움직이는 방 소품(2026-10-31 밤 "건드리기": 바 종이 흔들린다)은 묶지 않는다 — 묶이면 원본이 숨어 흔들림이 안 보인다.
-## "WindowView"(2026-11-08) = 펍 창 밖 밤거리 그림(art/pub/window_view.gdshader). 셰이더가 메시 로컬 좌표·노드 위치로
-## 그림을 그려서, 묶어 좌표가 방 기준으로 바뀌면 그림이 깨진다.
 ## "WallPoster"(2026-11-08 저녁) = 벽 액자 만화 포스터. 묶음은 UV 를 옮기지 않아 그림이 사라진다.
 ## "Service"·"TableFood"·"SmokeFx"(2026-11-08) = 바텐더·직원이 나르는 잔·접시, 손님 앞 랜덤 음식, 시가·연기 — 실행 중에 생기고 움직인다.
-const NO_BATCH_NAMES: Array[String] = ["Bell", "WindowView", "WallPoster", "Service", "TableFood", "SmokeFx"]
+## 2026-11-16 창 밖 3D(art/pub/street_outside.gd):
+##   "Outside"      = 창 밖 거리·하늘·달. 메시마다 다른 셰이더 값(instance_shader_parameters — 창 불빛·색)이 있고 차·관람차가 움직인다.
+##   "WindowGlass"  = 투명 유리(묶으면 투명도·반짝임이 사라진다).
+##   "WindowPlugs"  = 오락실에서만 켜는 창 구멍 메우개. 묶기는 숨김을 보지 않아 펍에서도 보이게 된다.
+##   (예전 "WindowView" = 유리판에 그린 창 밖 그림 — 2026-11-16 에 없앴다.)
+const NO_BATCH_NAMES: Array[String] = ["Bell", "WallPoster", "Service", "TableFood", "SmokeFx", "Outside", "WindowGlass", "WindowPlugs"]
 ## 이름이 이렇게 시작하는 묶음(아래 전부)은 묶지 않는다.
 ## "Seat" = 자리 매트·바닥 자리 표시·스툴·자리 글자(2026-11-07): 방 인원수에 따라 TableView.show_seats 가 숨기므로
 ## 묶여 버리면 원본을 숨겨도 묶음 메시에 그대로 남는다.

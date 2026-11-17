@@ -10,7 +10,7 @@ extends Node3D
 ## 2026-11-08(오후) 캐릭터가 Tripo 모델로 바뀌어 셔츠 색 바꾸기·안경 부품이 없어졌다 → 옷은 art/pub/npc_outfit.gd 가
 ##   뼈에 점토 부품을 붙여 입힌다(바텐더 = 중절모·콧수염·나비넥타이·조끼·소매 밴드·어깨 수건·앞치마, 손님 = 모자·안경).
 ## 걷지도, 부딪히지도, 경기에 끼어들지도 않는다(충돌 없음). 캐릭터 씬은 정적 메시 묶기(art/static_batch.gd)에서 빠진다.
-## 만드는 곳: art/pub/game_room_builder.gd(펍 손님·바텐더 → pub_game.tscn 에 저장), game/lounge/arcade/arcade_room.gd(주스 가게 직원).
+## 만드는 곳: art/pub/room/room_guests.gd·room_bar.gd(펍 손님·바텐더 → pub_game.tscn 에 저장), game/lounge/arcade/arcade_room.gd(주스 가게 직원).
 
 const CHARACTER_SCENE := "res://art/characters/rigged/player_character.tscn"
 const SCRIPT_PATH := "res://art/pub/npc_idle.gd"
@@ -315,7 +315,7 @@ func _smoke_lift(ratio: float) -> float:
 
 
 ## 시가·불씨·연기 두 가지를 만든다. 시가는 늘 오른손 손가락 사이에 끼워 두고(손을 내리면 허리께, 올리면 입),
-## 재떨이는 생성기가 손님 앞에 둔다(art/pub/game_room_builder.gd _ashtray).
+## 재떨이는 생성기가 손님 앞에 둔다(art/pub/room/room_guests.gd ashtray).
 ## 시가·연기는 안쪽(internal) 자식 "SmokeFx" 아래 → 정적 묶기에서 빠지고, 방 생성기가 장면을 저장할 때 같이 저장되지 않는다.
 func _setup_cigar(model: Node3D) -> void:
 	var found := model.find_children("*", "Skeleton3D", true, false)

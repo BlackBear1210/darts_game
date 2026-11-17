@@ -9,7 +9,7 @@ extends Node3D
 ##   손님 자리가 다 차 있으면 오래된 잔·접시 하나를 치운다(집어 들고 뒤돌아 내려놓으면 사라진다).
 ## 직원은 NPC(art/pub/npc_idle.gd, style 3)다: 걷는 빠르기(walk_ratio)·오른팔 뻗기(reaching)만 여기서 넣고 몸짓은 CharacterMotion 이 튼다.
 ## 좌표는 모두 이 노드의 부모(펍 방 / 오락실) 기준이다. 이 노드는 원점에 둔다. 충돌·규칙과는 상관없는 보이기만 하는 장식이다.
-## 만드는 곳: art/pub/game_room_builder.gd(펍 → pub_game.tscn 에 저장) · game/lounge/arcade/arcade_room.gd(오락실, 실행 때).
+## 만드는 곳: art/pub/room/room_bar.gd(펍 → pub_game.tscn 에 저장) · game/lounge/arcade/arcade_room.gd(오락실, 실행 때).
 
 const PubParts = preload("res://art/pub/pub_parts.gd")
 const SCRIPT_PATH := "res://art/pub/pub_service.gd"

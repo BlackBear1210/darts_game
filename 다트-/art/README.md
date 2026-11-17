@@ -10,16 +10,17 @@
 
 | 화면에 보이는 것 | 그리는 파일 | 경기 쪽 연결 지점 |
 |---|---|---|
-| 펍 방 전체(벽·바닥·바·창문·조명·로프·주크박스·바텐더) | `pub/game_room_builder.gd` → 생성물 `pub/pub_game.tscn` | `game/table/table.tscn`의 자식 `Pub` |
+| 펍 방 전체(벽·바닥·바·창문·조명·주크박스·바텐더·다트판 양옆 장식·옷방 상자) | `pub/game_room_builder.gd`(조립표) + `pub/room/*.gd`(구역별 모듈 — [모듈 지도](pub/room/README.md)) → 생성물 `pub/pub_game.tscn` | `game/table/table.tscn`의 자식 `Pub` |
+| 창 밖 3D 밤거리·하늘·달·관람차(2026-11-16) | `pub/street_outside.gd` + `street_night/sky/moon/halo.gdshader` + 움직임 `street_motion.gd` → 같은 생성물의 `Outside` | 오락실에서는 통째로 뺀다(`lounge_world.gd` `ARCADE_SKIP`) |
 | 다트판(칸·숫자·뒤판) | `board_art.gd` | `game/board/board.gd`(BoardView)가 실행 때 그림. 카드로 숫자 순서가 바뀌면 다시 그림 |
 | 플레이어·봇 캐릭터(리깅, 셔츠만 자리 색) | `characters/rigged/player_character.tscn` | `player_look.gd` `character()` → `game/player/player.gd`(PlayerView `_dress`) |
-| 펍 NPC(손님·바텐더) | `characters/character_factory.gd` → 생성물 `characters/chr_*.tscn` | `pub/game_room_builder.gd` |
+| 펍 NPC(손님·바텐더) | `characters/character_factory.gd` → 생성물 `characters/chr_*.tscn` | 손님 `pub/room/room_guests.gd` · 바텐더 `pub/room/room_bar.gd` |
 | 플레이어·봇 몸짓(서기·걷기·숙이기·점프·앉기·조준·던지기·카드 들기·가리키기·만세·마시기·엿보기·왕머리·깜빡임) | `characters/character_motion.gd` + `characters/character_pose_layer.gd` | PlayerView `_process`, 로비 `lobby_backdrop.gd` |
 | 펍 NPC 몸짓 | `characters/character_rig.gd` | `pub/npc_idle.gd` |
 | 자리 색·모양(●▲■◆)·캐릭터 이름 | `player_look.gd`(PlayerLook) | 이름표·발밑 매트·스툴·HUD·칠판·다트 깃이 모두 이 표 하나를 봄 |
 | 1인칭 오른팔 | `characters/first_person_arm.gd` (리깅 캐릭터 오른팔) | `game/game.gd` `_equip_hand()` |
 | 다트(은 촉·금 몸통·자리 색 깃) | `game/dart/dart.tscn` + `paint()` | 꽂힐 때 2.2배로 커짐(과녁이 실제의 2.5배라서) |
-| 칠판 점수판(과녁 왼쪽 문) | `pub/game_room_builder.gd`의 `ChalkScores` 글자 | `game/game.gd` `_chalk_text()` → `TableView.set_chalk_scores()` |
+| 칠판 점수판(과녁 왼쪽 문) | `pub/room/room_board.gd`의 `ChalkScores` 글자 | `game/game.gd` `_chalk_text()` → `TableView.set_chalk_scores()` |
 | HUD·대기실 색 | `../ui/pub_theme.gd`(PubTheme) | `ui/game_hud.gd`, `lobby/lobby.gd` 첫 줄 |
 
 **충돌(부딪힘)은 디자인 쪽에 없다.** 벽·테이블·바·주크박스·스툴 장애물의 충돌 상자는 `game/table/table.gd`(TableView)가 상수로 만든다.
@@ -65,32 +66,30 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | `characters/character_rig.gd` | 펍 NPC 몸짓. 마시기 박자 `drink_curve` 는 플레이어도 같이 쓴다 | 예 |
 | `characters/chr_*.tscn` | 위 스크립트가 만든 결과 | **아니오 — 생성물** |
 | `pub/pub_parts.gd` | 스툴·테이블·펜던트·벽등·로프·창문·화분·병 선반 부품 + 공용 재질 | 예 |
-| `pub/game_room_builder.gd` | F5 경기 방 조립(TableView 좌표를 읽는다) | 예 |
+| `pub/game_room_builder.gd` | F5 경기 방 **조립표**: 어느 구역을 어떤 순서로 짓는지 + 노드 설명(`GROUP_SOURCES`). 내용은 아래 모듈에 있다 | 예 |
+| `pub/room/*.gd` | 경기 방 구역별 모듈 10개(뼈대·다트판 벽·좌석·바·손님·장식·옷방·조명·다트판 양옆 + 공용 `room_kit.gd`). [모듈 지도](pub/room/README.md) | 예 |
+| `pub/street_outside.gd` | 창 밖 3D 밤거리(건물·차도·가로등·하늘·달·관람차·열기구) | 예 |
 | `pub/pub_builder.gd` | 생성기 본체: 캐릭터·쇼케이스 펍·경기 방을 전부 저장 | 예 |
 | `pub/pub.tscn`, `pub/pub_game.tscn` | 위 도구가 만든 결과 | **아니오 — 생성물** |
-| `pub/pictures/*.svg` | 펍 만화 그림: 창 밖 층 4장(`window_*`) + 벽 포스터 3장(`poster_*`) | 예 — 벡터 도구로 바로 고친다(아래) |
-| `pub/window_view.gdshader` | 창 밖 그림 층을 깊이별로 붙이고 하늘·별·길바닥을 그린다(시차) | 예 |
+| `pub/pictures/*.svg` | 벽 포스터 만화 그림 3장(`poster_*`) | 예 — 벡터 도구로 바로 고친다(아래) |
 | `environments/roundhouse/**/<이름>.glb` | 라운드하우스 모델 23종(Codex 묶음 1 v2·2·3, 2026-11-08). 펍 가구 9 · 오락실 7 · 손 소품 7 | **아니오 — 받은 원본.** 같은 이름 GLB 로 통째 교체만(아래) |
 | `props/<kind>.tscn` | 손 소품 7종 래퍼(위 GLB 를 감싼 씬). `game/lounge/prop_looks.gd` 가 먼저 찾는다 | 예(보통 손댈 일 없음) |
 | `showcase/*` | 쇼케이스 데모(카메라·투척·카드 예시·효과음) | 예 |
 
-## 펍 만화 그림(창 밖 · 벽 포스터) 고치기
+## 펍 벽 포스터 그림 고치기
 
-2026-11-08: 창 밖 풍경과 벽 액자를 손으로 그린 만화 그림(SVG)으로 바꿨다. 일러스트레이터·피그마·Inkscape 로 열어 고치고 같은 이름으로 저장하면 된다.
+2026-11-08: 벽 액자를 손으로 그린 만화 그림(SVG)으로 바꿨다. 일러스트레이터·피그마·Inkscape 로 열어 고치고 같은 이름으로 저장하면 된다.
+
+> 2026-11-16: 창 밖은 더 이상 그림이 아니다. 유리판 그림(`window_*` 4장 · `window_view.gdshader` · `window_street_baker.gd`)을 지우고
+> 진짜 3D 거리(`pub/street_outside.gd`)로 바꿨다. 편집기에서 `pub_game.tscn` 을 열면 창 너머 `Outside` 노드가 보인다.
 
 | 파일 | 그림 크기(px) | 게임 속 실제 크기 | 쓰는 곳 |
 |---|---|---|---|
-| `window_far.svg` | 1920 × 960 | 96m × 48m, 유리 뒤 60m | 스카이라인·대관람차·열기구 |
-| `window_street.png` | 2688 × 1024 | 42m × 16m, 유리 뒤 18m | 길 건너 건물 줄·차양·가로등·나무 (2026-11-15, Cartoon City 모델을 `art/pub/window_street_baker.gd` 로 구움) |
-| `window_front.png` | 1792 × 768 | 14m × 6m, 유리 뒤 6.5m | 창 앞 보도 가로등·나무·벤치·화분 (같은 도구) |
-| `window_moon.svg` | 512 × 512 | 하늘 방향(반지름 0.075 라디안) | 다트 꽂힌 달 |
 | `poster_bullseye/cheers/lucky.svg` | 640 × 840 | 0.62m × 0.81m 액자 그림 | 벽 액자 3개(`_art_spots` 순서) |
 
-- 창 밖 층: **아래 끝 = 땅**, 투명한 곳으로 뒤 층·하늘이 보인다. 그림 왼쪽 끝과 오른쪽 끝이 이어 붙으므로(창마다 다른 곳이 보임) 양 끝에 걸친 물체는 두지 않는다.
-- 그림 크기(px)나 실제 크기를 바꾸면 `window_view.gdshader` 의 `far_size`·`street_size`·`front_size`(깊이, 폭 m, 높이 m)도 같이 고친다. 가로등을 옮기면 `front_lamp_x`.
 - SVG 의 `<text>` 글자는 Godot 가 못 그린다 — 글자는 선(path)으로 그린다("180!", "CHEERS!", "LUCKY!" 가 그렇게 되어 있다). 흐림(blur) 필터도 안 된다. 빛무리는 투명해지는 방사형 그라데이션으로.
 - 같은 이름으로 저장하면 에디터가 다시 가져오므로 방을 다시 만들 필요가 없다(방 그림은 경로로 읽는다). `.import` 설정(밉맵 켬·3D 압축 감지 끔)은 그대로 둔다.
-- 새 그림 파일을 더할 때만 `game_room_builder.gd` 의 `WINDOW_PICTURES`·`POSTER_PICTURES` 를 고치고 `pub_game.tscn` 을 다시 만든다.
+- 새 그림 파일을 더할 때만 `pub/room/room_kit.gd` 의 `POSTER_PICTURES` 를 고치고 `pub_game.tscn` 을 다시 만든다.
 
 ## 라운드하우스 모델(GLB) — 2026-11-08 Codex 묶음
 
@@ -98,7 +97,7 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 
 | 묶음 | 폴더 | 쓰는 곳 |
 |---|---|---|
-| 1 v2 펍 가구 9 | `environments/roundhouse/pub/` | `pub/game_room_builder.gd` `_model()` |
+| 1 v2 펍 가구 9 | `environments/roundhouse/pub/` | `pub/room/room_kit.gd` `_model()` |
 | | | · 소파 `Sofa` · 안락의자 `Armchair` · 낮은 탁자 `SideTable` · 축음기 `Gramophone` |
 | | | · 창마다 커튼 `CurtainPair`(8쌍) · 옷걸이 `CoatRack`(옛 고리 3개 대신) |
 | | | · 화분 `Plant`(중·대) · 바 위 `BarPlant`(소) |
@@ -131,7 +130,7 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | 고칠 것 | 파일 · 이름 |
 |---|---|
 | 손님 앞에 랜덤으로 나오는 요리·음식·음료·양념과 크기 | `pub/npc_table_food.gd` 의 `DISHES` · `PLATE_FOODS` · `DRINKS` · `CONDIMENTS` (`["모델 이름", 배율]`) |
-| 바텐더가 꺼내는 것(맥주 꼭지 · 커피 머신 · 전자레인지)과 손님 자리 | `pub/game_room_builder.gd` `_bar` 의 `sources` · `customers` |
+| 바텐더가 꺼내는 것(맥주 꼭지 · 커피 머신 · 전자레인지)과 손님 자리 | `pub/room/room_bar.gd` `build_bar` 의 `sources` · `customers` |
 | 오락실 직원이 꺼내는 것(주스 · 캔 · 음식) | `game/lounge/arcade/arcade_room.gd` `_juice_service` |
 | 걷는 빠르기 · 다 먹고 치우기까지 초 · 내려놓는 초 | `pub/pub_service.gd` 의 `walk_speed` · `KEEP_SECONDS` · `PLACE_SECONDS` |
 | 시가 연기 양 · 퍼짐 · 진하기 | `pub/cigar_smoke.gd` 의 `wisp()`(시가 끝) · `puff()`("후") |
@@ -140,7 +139,7 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 - 모델 이름은 `vendor/rg_poly/rg_poly_catalog.gd` 에 있고, 구운 메시가 `vendor/rg_poly/meshes/<이름>.res` 에 있어야 한다.
 - 새 모델 굽기: `rg_poly_baker.gd -- --keys=이름1,이름2`. 이미 구운 것은 다시 쓰지 않는다.
 - 놓는 자리·서빙 동선(바 · 조리대 · 스툴 · 비스트로 테이블)을 바꾸면 방을 다시 만든다(아래 "바꾸고 다시 만들기").
-- 전등 규칙(높이 · 가구마다 하나 · 등간격)은 `pub/game_room_builder.gd` `_lighting` 머리 주석에 있다.
+- 전등 규칙(높이 · 가구마다 하나 · 등간격)은 `pub/room/room_lights.gd` `build_lighting` 머리 주석에 있다.
 
 ## 바꾸고 다시 만들기
 

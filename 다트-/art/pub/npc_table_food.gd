@@ -3,7 +3,7 @@ extends Node3D
 ## "음식들은 랜덤으로 AI 캐릭터들 앞에 접시랑 음식을 놔 줘").
 ## 자식 Marker3D("FoodSpot_*") 자리마다: 접시째 요리(dish_*) 또는 접시 + 음식 하나, 그 옆에 음료(맥주잔·캔·커피) 하나.
 ## 몇 자리에는 소금·후추·케첩 같은 양념을 곁들인다. 방이 만들어질 때(_ready) 한 번 차린다 — 실행할 때마다 다르다.
-## 정적 묶기(art/static_batch.gd)에서 빠진다(이름 "TableFood"). 만드는 곳: art/pub/game_room_builder.gd(_table_food).
+## 정적 묶기(art/static_batch.gd)에서 빠진다(이름 "TableFood"). 만드는 곳: art/pub/room/room_guests.gd(_table_food).
 ## 차림은 표시 아래 안쪽(internal) 자식 "Dinner" 에 만든다 — 방 생성기가 장면을 저장할 때 같이 저장되지 않아 매번 새로 차린다.
 
 const PubParts = preload("res://art/pub/pub_parts.gd")

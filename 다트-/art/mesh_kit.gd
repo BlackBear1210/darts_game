@@ -33,7 +33,9 @@ static func mesh_node(parent: Node, name_: String, mesh: Mesh, pos: Vector3, mat
 	node.mesh = mesh
 	node.material_override = mat
 	node.position = pos
-	parent.add_child(node)
+	# 2026-11-17: 같은 이름 형제가 있으면 "@MeshInstance3D@123" 대신 "Name2·Name3" 처럼 읽히는 이름을 붙인다
+	# (add_child 의 둘째 값 true). 생성된 장면(pub_game.tscn)을 편집기에서 찾기 쉽게 — 방 생성기 전체가 이 약속을 따른다.
+	parent.add_child(node, true)
 	return node
 
 
@@ -205,7 +207,7 @@ static func label(parent: Node, name_: String, text_: String, pos: Vector3, size
 	node.modulate = color
 	node.outline_size = 0
 	node.no_depth_test = false
-	parent.add_child(node)
+	parent.add_child(node, true)
 	return node
 
 

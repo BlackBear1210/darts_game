@@ -10,8 +10,14 @@ extends CanvasLayer
 ##   - 내 차례가 오거나·자리에 앉게 되거나·쓰러지면 GameView 가 이 방을 바로 닫는다(고른 것은 저장).
 ##   - 고른 값은 보이기만 하는 차림(art/characters/player_outfit.gd)이고, 방장이 검사해서 모두에게 보낸다.
 ##
-## [조작] 오른쪽 패널 ◀ ▶ 로 칸마다 고르기 · 캐릭터를 끌어서 돌려 보기 · "입고 나가기"/Esc = 저장하고 나가기 · "되돌리기" = 들어올 때 차림.
-## 다 끝나면 closed(look) 신호를 한 번 보내고 스스로 사라진다.
+## [조작] 오른쪽 패널의 그림 카드를 눌러 칸마다 고르기 · 캐릭터를 끌어서 돌려 보기 · "입고 나가기"/Esc = 저장하고 나가기
+##   · "되돌리기" = 들어올 때 차림. 다 끝나면 closed(look) 신호를 한 번 보내고 스스로 사라진다.
+##
+## [2026-11-16 사용자 요청 "캐릭터가 빙빙 돌지 않게 · 아이템이 어떤 건지 이름만이 아니라 이미지로도 보여 줘"]
+##   - 가만히 두면 저절로 돌던 것을 없앴다. 끌 때만 돌고, 손을 떼면 그 자리에 선다. 두 번 누르면 앞모습으로 돌아온다.
+##   - 칸마다 ◀ 이름 ▶ 대신 **그림 카드**(그림 + 이름)를 늘어놓는다. 그림은 미리 그려 둔 파일이 아니라
+##     방이 열릴 때 작은 촬영 화면(아이콘 스튜디오)에서 **실제 캐릭터에 그 물건을 입혀 찍는다**
+##     → 새 물건을 SLOTS 에 더하면 그림도 저절로 생긴다. 한 번 찍은 그림은 게임이 꺼질 때까지 다시 쓴다(_icon_cache).
 
 signal closed(look: Dictionary)
 
@@ -24,12 +30,34 @@ const PubParts = preload("res://art/pub/pub_parts.gd")
 
 ## 들어갈 때·나올 때 검은 화면으로 바뀌는 시간(초) — "문을 열고 들어가는" 느낌.
 const FADE_SECONDS: float = 0.35
-## 캐릭터를 끌어 돌리는 빠르기(라디안/픽셀)와 가만히 두면 천천히 도는 빠르기(라디안/초).
+## 캐릭터를 끌어 돌리는 빠르기(라디안/픽셀). 가만히 두면 돌지 않는다(2026-11-16 "빙빙 돌지 않게").
 const DRAG_TURN: float = 0.012
-const IDLE_TURN: float = 0.25
+## 처음·두 번 눌렀을 때 캐릭터가 보는 쪽(살짝 비스듬한 앞모습).
+const FRONT_TURN: float = PI - 0.35
 ## 카메라: 캐릭터(원점)를 화면 왼쪽 가운데쯤 두려고 오른쪽으로 비켜 선다(오른쪽엔 패널이 있다).
 const CAMERA_AT := Vector3(0.62, 1.22, 3.3)
 const CAMERA_LOOK := Vector3(0.62, 0.98, 0.0)
+## 오른쪽 패널 너비(px) · 그림 카드 크기 · 카드 사이 틈. 한 줄에 카드 5장이 들어가는 너비.
+const PANEL_WIDTH: float = 470.0
+const CARD_SIZE := Vector2(76, 94)
+const CARD_GAP: int = 6
+## 아이콘 스튜디오(그림 카드 사진 찍는 작은 화면) 한 변 픽셀 · 처음 몸짓이 자리 잡을 때까지 기다리는 화면 수.
+const ICON_PIXELS: int = 176
+const ICON_WARMUP_FRAMES: int = 8
+## 칸마다 사진 구도: [뼈 이름, 겨눌 점(뼈대 공간, 앞 = −Z), 카메라가 있는 쪽, 거리(m)].
+## 겨눌 점·쪽은 뼈를 따라 움직인다(숨 쉬는 몸짓이 있어도 얼굴·손목이 화면 가운데).
+## 치수 근거: 눈 높이 1.57 · 콧수염 1.37 · 시가 입꼬리(0.03, 1.343) · 모자 밑면 1.70(art/characters/player_outfit.gd 와 같은 측정값).
+const ICON_SHOTS: Dictionary = {
+	"hat": ["head", Vector3(-0.025, 1.76, -0.02), Vector3(0.35, 0.45, -1.0), 1.4],
+	"eyes": ["head", Vector3(-0.025, 1.56, -0.2), Vector3(0.3, 0.12, -1.0), 0.92],
+	"mustache": ["head", Vector3(-0.012, 1.4, -0.2), Vector3(0.35, 0.05, -1.0), 0.72],
+	"cigar": ["head", Vector3(0.05, 1.32, -0.26), Vector3(0.6, 0.15, -1.0), 0.55],
+	"watch": ["forearm.L", Vector3.ZERO, Vector3(-1.0, 0.2, -0.45), 0.42],
+	"shirt": ["", Vector3(-0.02, 1.0, 0.0), Vector3(0.3, 0.1, -1.0), 1.6],
+}
+
+## 찍은 카드 그림(칸:번호 → 그림). 게임이 꺼질 때까지 남아 다음에 방을 열면 바로 보인다.
+static var _icon_cache: Dictionary = {}
 
 var seat: int = 0
 ## 지금 고른 차림(칸 번호). 열기 전에 넣어 둔다.
@@ -41,12 +69,20 @@ var _model: Node3D
 var _rig: CharacterMotion
 var _turn: float = 0.0
 var _dragging: bool = false
-var _idle_after: float = 0.0
+## 칸마다 지금 고른 이름 글자(칸 제목 옆) · 카드 버튼들(칸 → [카드...], 번호 순서).
 var _values: Dictionary = {}
-var _swatch: ColorRect
+var _cards: Dictionary = {}
 var _fade: ColorRect
 var _fade_to: float = 0.0
 var _closing: bool = false
+## 아이콘 스튜디오 상태: 찍을 차례 [[칸, 번호], ...] · 한 장을 세 화면에 걸쳐 찍는 단계(입히기 → 겨누고 찍기 → 받아 오기).
+var _studio: SubViewport
+var _studio_model: Node3D
+var _studio_rig: CharacterMotion
+var _studio_camera: Camera3D
+var _shoot_queue: Array = []
+var _shoot_step: int = 0
+var _shoot_wait: int = 0
 
 
 func _ready() -> void:
@@ -62,6 +98,7 @@ func _ready() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_fade)
 	_dress_model()
+	_start_icons()
 
 
 ## 3D 탈의실을 그리는 화면(창 크기에 맞춰 늘어난다).
@@ -202,47 +239,52 @@ func _hat_shelf(at: Vector3) -> void:
 		PlayerOutfit.hat(stand, hats[i])
 
 
-## 오른쪽 패널: 칸마다 ◀ 이름 ▶ + 아래 버튼 둘.
+## 오른쪽 패널: 제목 · (스크롤) 칸마다 [칸 이름 · 고른 것] + 그림 카드 줄 · 아래 버튼 둘.
 func _build_panel() -> void:
 	var panel := PanelContainer.new()
 	panel.theme = Style.theme()
 	panel.anchor_left = 1.0
 	panel.anchor_right = 1.0
-	panel.anchor_top = 0.5
-	panel.anchor_bottom = 0.5
-	panel.offset_left = -470
-	panel.offset_right = -36
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.95), Style.INK, Style.SHADOW, 3, 18, 20))
+	panel.anchor_top = 0.0
+	panel.anchor_bottom = 1.0
+	panel.offset_left = -PANEL_WIDTH - 28
+	panel.offset_right = -28
+	panel.offset_top = 24
+	panel.offset_bottom = -24
+	panel.add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.95), Style.INK, Style.SHADOW, 3, 18, 18))
 	add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 8)
 	panel.add_child(column)
-	Style.heading(column, "꾸미기 방", 36)
+	Style.heading(column, "꾸미기 방", 34)
 	Style.label(column, "고른 차림은 모두에게 보여요 · 점수·판정은 그대로", 15, Style.MUTED)
+	# 칸이 많아 창이 낮으면 넘친다 → 카드 목록만 위아래로 굴린다(제목·버튼은 늘 보인다).
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 6)
+	scroll.add_child(list)
 	for slot: Array in PlayerOutfit.SLOTS:
 		var key: String = slot[0]
-		var line := HBoxContainer.new()
-		line.add_theme_constant_override("separation", 8)
-		column.add_child(line)
-		var caption := Style.label(line, str(slot[1]), 19)
-		caption.custom_minimum_size.x = 86
-		caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		var left := Style.secondary(line, "◀", _step.bind(key, -1))
-		left.custom_minimum_size = Vector2(52, 46)
-		var value := Style.label(line, "", 19, Style.GOLD)
-		value.custom_minimum_size.x = 150
-		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		var header := HBoxContainer.new()
+		list.add_child(header)
+		var caption := Style.label(header, str(slot[1]), 19)
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var value := Style.label(header, "", 17, Style.GOLD)
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_values[key] = value
-		var right := Style.secondary(line, "▶", _step.bind(key, 1))
-		right.custom_minimum_size = Vector2(52, 46)
-		if key == "shirt":
-			_swatch = ColorRect.new()
-			_swatch.custom_minimum_size = Vector2(26, 26)
-			_swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			_swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			line.add_child(_swatch)
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", CARD_GAP)
+		flow.add_theme_constant_override("v_separation", CARD_GAP)
+		list.add_child(flow)
+		var cards: Array = []
+		var names: Array = slot[2]
+		for index in range(names.size()):
+			cards.append(_card(flow, key, index, str(names[index])))
+		_cards[key] = cards
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 12)
 	column.add_child(buttons)
@@ -250,19 +292,66 @@ func _build_panel() -> void:
 	wear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var reset := Style.secondary(buttons, "되돌리기", _reset)
 	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	Style.label(column, "캐릭터를 끌어서 돌려 보기 · Esc = 입고 나가기", 15, Style.MUTED)
+	Style.label(column, "캐릭터를 끌어서 돌려 보기 · 두 번 누르면 앞모습 · Esc = 입고 나가기", 14, Style.MUTED)
 	_refresh_values()
 
 
-func _step(key: String, direction: int) -> void:
+## 그림 카드 하나: 위 = 물건 그림(찍기 전에는 옷 색·빈 칸), 아래 = 이름. 누르면 그 칸을 이것으로 고른다.
+func _card(parent: Control, key: String, index: int, title: String) -> Button:
+	var card := Button.new()
+	card.name = "Card_%s_%d" % [key, index]
+	card.custom_minimum_size = Vector2(CARD_SIZE.x, CARD_SIZE.y)
+	card.focus_mode = Control.FOCUS_NONE
+	card.tooltip_text = title
+	card.pressed.connect(_pick.bind(key, index))
+	parent.add_child(card)
+	var stack := VBoxContainer.new()
+	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stack.offset_left = 4
+	stack.offset_right = -4
+	stack.offset_top = 4
+	stack.offset_bottom = -3
+	stack.add_theme_constant_override("separation", 1)
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(stack)
+	# 그림 받침: 옷 색 칸은 찍기 전에도 그 색이 보이게 받침을 그 색으로 칠해 둔다.
+	var frame := PanelContainer.new()
+	frame.name = "IconFrame"
+	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var back := Color("1b141e")
+	if key == "shirt":
+		back = PlayerOutfit.SHIRT_COLORS[index].lerp(back, 0.35)
+	frame.add_theme_stylebox_override("panel", Style.flat(back, Color(Style.INK, 0.0), 0, 8, 0))
+	stack.add_child(frame)
+	var icon := TextureRect.new()
+	icon.name = "Icon"
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.texture = _icon_cache.get(_icon_key(key, index)) as Texture2D
+	frame.add_child(icon)
+	var label := Style.label(stack, title, 12)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.clip_text = true
+	return card
+
+
+func _pick(key: String, index: int) -> void:
 	if _closing:
 		return
-	for slot: Array in PlayerOutfit.SLOTS:
-		if slot[0] == key:
-			var count: int = (slot[2] as Array).size()
-			look[key] = posmod(int(look.get(key, 0)) + direction, count)
+	look[key] = index
+	look = PlayerOutfit.sanitize(look)
 	_refresh_values()
 	_dress_model()
+
+
+## 칸을 한 칸 앞뒤로 넘긴다(예전 ◀ ▶ 와 같은 동작 — 시험·키보드용으로 남겨 둔다).
+func _step(key: String, direction: int) -> void:
+	for slot: Array in PlayerOutfit.SLOTS:
+		if slot[0] == key:
+			_pick(key, posmod(int(look.get(key, 0)) + direction, (slot[2] as Array).size()))
 
 
 func _reset() -> void:
@@ -271,11 +360,25 @@ func _reset() -> void:
 	_dress_model()
 
 
+## 칸 제목 옆 이름 + 고른 카드만 금테로.
 func _refresh_values() -> void:
 	for key: String in _values:
-		(_values[key] as Label).text = PlayerOutfit.choice_name(key, int(look.get(key, 0)))
-	if _swatch != null:
-		_swatch.color = PlayerOutfit.SHIRT_COLORS[int(look.get("shirt", 0))]
+		var chosen: int = int(look.get(key, 0))
+		(_values[key] as Label).text = PlayerOutfit.choice_name(key, chosen)
+		var cards: Array = _cards.get(key, [])
+		for index in range(cards.size()):
+			_style_card(cards[index] as Button, index == chosen)
+
+
+func _style_card(card: Button, chosen: bool) -> void:
+	var edge: Color = Style.GOLD if chosen else Color(Style.MUTED, 0.35)
+	var fill: Color = Color(Style.GOLD, 0.16) if chosen else Color(Style.PANEL_HI, 0.9)
+	var normal := Style.flat(fill, edge, 3 if chosen else 2, 10, 0)
+	var hover := Style.flat(fill.lightened(0.08), Style.CREAM if not chosen else Style.GOLD, 3, 10, 0)
+	for state: String in ["normal", "pressed", "focus", "disabled"]:
+		card.add_theme_stylebox_override(state, normal)
+	card.add_theme_stylebox_override("hover", hover)
+	card.add_theme_stylebox_override("hover_pressed", hover)
 
 
 ## 미리보기 캐릭터: 처음 한 번 만들고, 고를 때마다 옷 부품만 갈아 끼운다.
@@ -285,7 +388,7 @@ func _dress_model() -> void:
 		_model.name = "Preview"
 		_world.add_child(_model)
 		_rig = CharacterMotion.new(_model, 0.0)
-		_model.rotation.y = PI - 0.35
+		_model.rotation.y = FRONT_TURN
 		_turn = _model.rotation.y
 	PlayerOutfit.undress(_model)
 	PlayerOutfit.dress(_model, look)
@@ -294,9 +397,11 @@ func _dress_model() -> void:
 func _on_drag(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		_dragging = event.pressed
+		if event.pressed and event.double_click and _model != null:
+			# 두 번 누르면 앞모습으로(가장 가까운 쪽으로 돌아온다).
+			_turn = _model.rotation.y + wrapf(FRONT_TURN - _model.rotation.y, -PI, PI)
 	elif event is InputEventMouseMotion and _dragging:
 		_turn += event.relative.x * DRAG_TURN
-		_idle_after = 2.5
 
 
 func _input(event: InputEvent) -> void:
@@ -315,11 +420,123 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	if _model != null:
-		_idle_after = maxf(_idle_after - delta, 0.0)
-		if not _dragging and _idle_after <= 0.0:
-			_turn += IDLE_TURN * delta
+		# 저절로 돌지 않는다: 끌어서 정한 각도(_turn)로만 부드럽게 따라간다.
 		_model.rotation.y = lerp_angle(_model.rotation.y, _turn, 1.0 - exp(-10.0 * delta))
 		_rig.animate(delta, 0.0, CharacterMotion.Posture.STAND, false, 0.0, false)
+	if _studio != null:
+		_shoot_icons(delta)
+
+
+# ─────────────────────────────── 아이콘 스튜디오(그림 카드 사진) ───────────────────────────────
+
+static func _icon_key(key: String, index: int) -> String:
+	return "%s:%d" % [key, index]
+
+
+## 아직 안 찍은 카드가 있으면 작은 촬영 화면을 만든다. 화면이 없는 실행(헤드리스 시험)은 찍지 않는다(카드는 이름·옷 색만).
+func _start_icons() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	for slot: Array in PlayerOutfit.SLOTS:
+		for index in range((slot[2] as Array).size()):
+			if not _icon_cache.has(_icon_key(slot[0], index)):
+				_shoot_queue.append([slot[0], index])
+	if _shoot_queue.is_empty():
+		return
+	_studio = SubViewport.new()
+	_studio.name = "IconStudio"
+	_studio.size = Vector2i(ICON_PIXELS, ICON_PIXELS)
+	_studio.own_world_3d = true
+	_studio.transparent_bg = true
+	_studio.msaa_3d = Viewport.MSAA_4X
+	_studio.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(_studio)
+	var stage := Node3D.new()
+	stage.name = "IconSet"
+	_studio.add_child(stage)
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_CLEAR_COLOR
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color("f2d2b0")
+	environment.ambient_light_energy = 0.45
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	var holder := WorldEnvironment.new()
+	holder.environment = environment
+	stage.add_child(holder)
+	# 조명: 앞 오른쪽 위 따뜻한 빛 · 앞 왼쪽 채움 · 뒤 차가운 테두리(탈의실과 같은 느낌).
+	for light: Array in [[Vector3(1.0, 1.6, 2.0), Color("ffd9a8"), 1.5], [Vector3(-1.6, 0.6, 1.4), Color("ffc78a"), 0.5],
+			[Vector3(0.3, 0.8, -2.0), Color("8fb4ff"), 0.9]]:
+		var sun := DirectionalLight3D.new()
+		sun.light_color = light[1]
+		sun.light_energy = light[2]
+		stage.add_child(sun)
+		sun.look_at_from_position(light[0], Vector3.ZERO)
+	_studio_camera = Camera3D.new()
+	_studio_camera.fov = 30.0
+	_studio_camera.current = true
+	stage.add_child(_studio_camera)
+	_studio_model = PlayerLook.character(seat)
+	_studio_model.name = "IconModel"
+	_studio_model.rotation.y = PI
+	stage.add_child(_studio_model)
+	_studio_rig = CharacterMotion.new(_studio_model, 0.0)
+	_shoot_wait = ICON_WARMUP_FRAMES
+	_shoot_step = 0
+
+
+## 한 화면에 한 단계씩: 0 = 그 물건만 입히기 → 1 = 카메라 겨누고 한 번 찍기 → 2 = 찍힌 그림 받아 카드에 넣기.
+## (입힌 부품이 뼈를 따라 자리 잡는 데 한 화면, 찍는 데 한 화면이 걸린다.)
+func _shoot_icons(delta: float) -> void:
+	_studio_rig.animate(delta, 0.0, CharacterMotion.Posture.STAND, false, 0.0, false)
+	if _shoot_wait > 0:
+		_shoot_wait -= 1
+		return
+	var item: Array = _shoot_queue[0]
+	var key: String = item[0]
+	var index: int = item[1]
+	match _shoot_step:
+		0:
+			var only: Dictionary = PlayerOutfit.sanitize({})
+			only[key] = index
+			PlayerOutfit.undress(_studio_model)
+			PlayerOutfit.dress(_studio_model, only)
+			_shoot_step = 1
+		1:
+			_aim_icon(key)
+			_studio.render_target_update_mode = SubViewport.UPDATE_ONCE
+			_shoot_step = 2
+		2:
+			var image := _studio.get_texture().get_image()
+			var texture := ImageTexture.create_from_image(image)
+			_icon_cache[_icon_key(key, index)] = texture
+			var cards: Array = _cards.get(key, [])
+			if index < cards.size():
+				((cards[index] as Node).find_child("Icon", true, false) as TextureRect).texture = texture
+			_shoot_queue.pop_front()
+			_shoot_step = 0
+			if _shoot_queue.is_empty():
+				_studio.queue_free()
+				_studio = null
+
+
+## 칸 구도(ICON_SHOTS)대로 카메라를 둔다. 겨눌 점과 카메라 쪽은 지금 몸짓의 뼈 자리로 옮겨 계산한다.
+func _aim_icon(key: String) -> void:
+	var shot: Array = ICON_SHOTS[key]
+	var skeleton := _studio_model.find_child("Skeleton3D", true, false) as Skeleton3D
+	var pose: Transform3D = skeleton.global_transform
+	var target: Vector3 = shot[1]
+	var bone: int = skeleton.find_bone(str(shot[0])) if str(shot[0]) != "" else -1
+	if bone >= 0:
+		pose = pose * skeleton.get_bone_global_pose(bone) * skeleton.get_bone_global_rest(bone).affine_inverse()
+	if key == "watch":
+		# 시계 자리 = 아래팔 → 손목 사이(PlayerOutfit.WATCH_ALONG). 쉬는 자세 좌표에서 구한다.
+		var hand: int = skeleton.find_bone("hand.L")
+		if bone >= 0 and hand >= 0:
+			target = skeleton.get_bone_global_rest(bone).origin.lerp(skeleton.get_bone_global_rest(hand).origin, PlayerOutfit.WATCH_ALONG)
+	var side: Vector3 = (shot[2] as Vector3).normalized()
+	var aim: Vector3 = pose * target
+	_studio_camera.global_position = pose * (target + side * float(shot[3]))
+	_studio_camera.look_at(aim, Vector3.UP)
 
 
 ## 방을 닫는다(save = 고른 것을 그대로 입고 나간다. 지금은 늘 저장 — 되돌리려면 "되돌리기" 뒤 나간다).

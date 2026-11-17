@@ -1,3 +1,19 @@
+# 최신 인수인계 — 경기 방 모듈 · 창밖 3D · 차례 아님 알림 (2026-11-16~17)
+
+- **경기 방 고치기**: `art/pub/room/README.md`(모듈 지도)부터 본다. `game_room_builder.gd` 는 조립표(어느 구역을 어떤 순서로)만 있다.
+  - 편집기에서 `pub_game.tscn` 묶음 노드에 마우스를 올리면 만든 파일·함수가 보인다(`GROUP_SOURCES`). 묶음을 새로 만들면 거기에 한 줄 더한다.
+  - 노드는 `add_child(node, true)` 로 붙인다(읽히는 이름). class_name 대신 preload, 모듈끼리 서로 부르지 않게 한 방향.
+  - 다시 만들기: `pub_builder.gd -- --game-room-only`. 생성기와 생성물을 같은 커밋에.
+- **창밖**: `art/pub/street_outside.gd`(배치) · `street_night.gdshader`(재질 하나, instance 파라미터) · `street_motion.gd`(움직임, 메타 `motion`). 새 거리 모델은 `rg_poly_catalog.gd` `street_models` 에 더하고 굽는다(`stand_up`·`mark_glass`). 옛 `window_*` 그림·셰이더는 지웠다 — 아래 11-08·11-15 칸의 창밖 설명은 옛 방식이다.
+- **오락실**: `Outside` 는 `ARCADE_SKIP`, 창 구멍은 `WindowPlugs`(펍에서는 숨김, `_trim_arcade` 가 켬). 셋 다 정적 묶기 제외.
+- **NPC 던지기**: `lounge_world.gd` `npc_release_point`·`npc_throw_velocity`·`_arc_clear`(`NPC_RELEASE_*`·`NPC_ARC_*` 상수).
+- **꾸미기 방 자리**: 그림 `room_fitting.gd` · 충돌 `TableView.FITTING_ROOM_BOX` · F 자리 `lounge_world.WARDROBE_DOOR` — 셋을 같이 옮긴다.
+- **옷장 사진**: `wardrobe.gd` `ICON_SHOTS`(칸별 카메라). 새 칸을 더하면 여기에도 거리·방향을 더한다. 헤드리스에서는 안 찍는다.
+- **차례 아님 알림**: `ui/turn_toast.gd`(모양·시간 상수), 띄우는 곳 `game.gd` `_warn_not_your_turn`(단계 = `TURN_TOAST_PHASES`).
+- 상세: `작업기록/2026-11-16~17_창밖3D_꾸미기방_다트판양옆_차례알림_모듈정리.md`.
+
+---
+
 # 최신 인수인계 — 라운드당 다트 · 래그돌 · 꾸미기 방 · 맵 채우기 · 점수 팝업 (2026-11-15~16)
 
 - 다트 수: `MatchPlayer.darts`(라운드 시작에 채움). 차례 밖 투척 = `MatchController.submit_stray` → `GameView.throw_stray`(방장 궤적) → `stray_dart` 이벤트.

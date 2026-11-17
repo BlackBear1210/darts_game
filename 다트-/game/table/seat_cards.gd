@@ -203,7 +203,7 @@ func _mat_center(seat: int) -> Vector3:
 	return TableView.TABLE_CENTER + _seat_basis(seat) * local + Vector3.UP * (TableView.TABLE_HEIGHT + TableCards.MAT_TOP)
 
 
-## 자리 쪽을 +Z 로 보는 방향(테이블 가운데 기준). 펍 생성기 game_room_builder.gd 의 자리 매트와 같은 각도다.
+## 자리 쪽을 +Z 로 보는 방향(테이블 가운데 기준). 펍 생성기 art/pub/room/room_seating.gd 의 자리 매트와 같은 각도다.
 func _seat_basis(seat: int) -> Basis:
 	# 2026-11-08: 인원수에 맞춰 나눈 자리(TableView.seat_spot) — 방 그림의 매트도 같은 각도로 돈다(TableView._apply_seats).
 	var seat_position: Vector3 = TableView.seat_spot(seat)

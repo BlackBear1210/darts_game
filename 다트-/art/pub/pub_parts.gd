@@ -19,7 +19,7 @@ static func asset(parent: Node3D, mesh_name: String, pos: Vector3, yaw := 0.0, s
 	var node := MeshInstance3D.new()
 	node.name = node_name if not node_name.is_empty() else mesh_name.to_pascal_case()
 	node.mesh = mesh
-	parent.add_child(node)
+	parent.add_child(node, true)
 	node.position = pos - Vector3(0, mesh.get_aabb().position.y * size.y, 0) if on_floor else pos
 	node.rotation.y = yaw
 	node.scale = size
@@ -68,7 +68,7 @@ static func chalk_board() -> StandardMaterial3D:
 static func stool(parent: Node3D, pos: Vector3, accent: Material, node_name := "Stool") -> Node3D:
 	var s := Node3D.new()
 	s.name = node_name
-	parent.add_child(s)
+	parent.add_child(s, true)
 	s.position = pos
 	MeshKit.cylinder(s, "Seat", 0.26, 0.10, Vector3(0, 0.52, 0), accent)
 	MeshKit.cylinder(s, "SeatTrim", 0.27, 0.045, Vector3(0, 0.455, 0), brass())
@@ -86,7 +86,7 @@ static func round_table(parent: Node3D, pos: Vector3, radius: float, height: flo
 	var t := Node3D.new()
 	t.name = node_name
 	t.position = pos
-	parent.add_child(t)
+	parent.add_child(t, true)
 	MeshKit.cylinder(t, "PedestalFoot", 0.58, 0.10, Vector3(0, 0.07, 0), trim())
 	MeshKit.cylinder(t, "Pedestal", 0.18, height - 0.175, Vector3(0, (height - 0.005) / 2.0, 0), wood(), 10)
 	MeshKit.cylinder(t, "TableEdge", radius, 0.13, Vector3(0, height - 0.065, 0), wood(), 48)
@@ -113,7 +113,7 @@ static func pendant(parent: Node3D, pos: Vector3, ceiling_y: float, energy := 0.
 	light.omni_range = light_range
 	light.omni_attenuation = 1.2
 	light.shadow_enabled = shadow
-	parent.add_child(light)
+	parent.add_child(light, true)
 	return light
 
 
@@ -128,7 +128,7 @@ static func sconce(parent: Node3D, pos: Vector3, facing: Vector3, energy := 0.35
 	light.light_color = Color("ffc98c")
 	light.light_energy = energy
 	light.omni_range = 3.2
-	parent.add_child(light)
+	parent.add_child(light, true)
 
 
 ## 놋쇠 기둥 하나(받침·기둥·꼭지). 높이 약 0.95m.
@@ -154,7 +154,7 @@ static func window(parent: Node3D, pos: Vector3, rot_y := 0.0) -> Node3D:
 	w.name = "Window"
 	w.position = pos
 	w.rotation.y = rot_y
-	parent.add_child(w)
+	parent.add_child(w, true)
 	MeshKit.box(w, "WindowFrame", Vector3(2.15, 1.9, 0.14), Vector3.ZERO, trim())
 	MeshKit.box(w, "NightGlass", Vector3(1.96, 1.7, 0.03), Vector3(0, 0, 0.10), MeshKit.material("BlueNightGlass", "344f5b", 0.15, 0.12))
 	for dx: float in [-0.65, 0.0, 0.65]:
@@ -178,7 +178,7 @@ static func plant(parent: Node3D, pos: Vector3) -> void:
 static func bottle_shelf(parent: Node3D, pos: Vector3, rot_y: float, width := 4.2) -> Node3D:
 	var shelf := Node3D.new()
 	shelf.name = "BottleLibrary"
-	parent.add_child(shelf)
+	parent.add_child(shelf, true)
 	shelf.position = pos
 	shelf.rotation.y = rot_y
 	MeshKit.box(shelf, "ShelfBack", Vector3(width, 2.2, 0.12), Vector3(0, 2.2, 0), trim())

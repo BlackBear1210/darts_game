@@ -174,7 +174,7 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 
 ## 실제 경기 외형 연결 (2026-10-26)
 
-- **방**: `TableView`(`game/table/table.gd`)는 충돌 상자만 만든다(바닥·벽·천장·제한 벽·테이블·바·주크박스·스툴 3개 = StaticBody3D 13개, 메시 없음). 보이는 펍은 `pub_builder.gd` → `art/pub/game_room_builder.gd`가 TableView 상수를 읽어 만든 `art/pub/pub_game.tscn`이고 `table.tscn`의 자식 `Pub`으로 붙는다. 방 루트의 `layout_signature` 메타가 `TableView.layout_signature()`와 다르면 시작 때 경고, `test_game_look` 실패. 화면이 있을 때만 `StaticBatch`로 정적 메시를 묶는다.
+- **방**: `TableView`(`game/table/table.gd`)는 충돌 상자만 만든다(바닥·벽·천장·제한 벽·테이블·바·주크박스·스툴 3개 = StaticBody3D 13개, 메시 없음). 보이는 펍은 `pub_builder.gd` → `art/pub/game_room_builder.gd`(조립표) → `art/pub/room/*.gd`(구역 모듈, 지도 `art/pub/room/README.md`)가 TableView 상수를 읽어 만든 `art/pub/pub_game.tscn`이고 `table.tscn`의 자식 `Pub`으로 붙는다. 방 루트의 `layout_signature` 메타가 `TableView.layout_signature()`와 다르면 시작 때 경고, `test_game_look` 실패. 화면이 있을 때만 `StaticBatch`로 정적 메시를 묶는다.
 - **과녁**: `BoardView`가 `BoardArt.build(Face, layout.numbers, BoardLayout.RADIUS, …)`로 그린다. 카드로 숫자 배치가 바뀌면 `show_layout()`이 다시 그린다. 채점은 그대로 `BoardScorer`.
 - **캐릭터**: `PlayerView._dress()`가 `PlayerLook.character(seat)`를 `Model`로 붙이고 180° 돌린다(캐릭터 +Z 정면). `CharacterRig`가 피벗(LegL/LegR/Body/ArmL/ArmR/Neck)을 돌려 서기·걷기·숙이기·앉기·점프·조준·던지기를 만든다. 몸짓은 각 화면에서 위치·자세·속도로 계산하며 네트워크로 보내지 않는다. 충돌 캡슐·눈높이·속도는 바뀌지 않았다.
 - **다트·손**: 비행 다트 깃은 던진 사람 색(`Dart.paint`), 꽂힌 뒤 `Visual`만 2.2배(과녁 2.5배와 맞춤, 채점 무관). 1인칭 오른팔은 선수 몸과 같은 리깅 캐릭터의 팔이다(`art/characters/first_person_arm.gd` — 2026-11-09, 예전 도형 손 `CharacterFactory.create_hand` 를 대체했다).

@@ -243,7 +243,7 @@ func _neon_sign(text: String, at: Vector3, yaw: float, size: int, color: Color, 
 	_static.add_child(root)
 	root.rotation.y = yaw
 	var extent: Vector2 = text_size(text, size, pixel) + Vector2(pad, pad) * 2.0
-	# 2026-11-08: 펍 벽에 월넛 기둥·아치 틀·코니스가 생겨(art/pub/game_room_builder.gd) 벽에 딱 붙이면 판이 기둥에 묻힌다 →
+	# 2026-11-08: 펍 벽에 월넛 기둥·아치 틀·코니스가 생겨(art/pub/room/room_shell.gd) 벽에 딱 붙이면 판이 기둥에 묻힌다 →
 	# 판을 벽에서 SIGN_STANDOFF 만큼 띄우고, 위 끝이 코니스 아래(천장 − SIGN_TOP_CLEAR)에 오도록 필요하면 내린다.
 	# 2026-11-15: 0.82 → 0.87. 예전 값은 간판 위 테두리 관(두께 0.03)이 벽 위 네온 레일(천장 − 0.8, 두께 0.05)과
 	# 앞면이 같은 평면에서 겹쳐 두 네온 색이 깜빡였다(z-파이팅) → 레일 아래로 2cm 띄운다.

@@ -22,6 +22,8 @@ const ROWS := 5
 var _source: String = ""
 ## 텍스처 → Image (같은 아틀라스를 여러 번 읽지 않게)
 var _images: Dictionary = {}
+## 지금 굽는 모델의 유리창 면에 표시를 남기는가(bake_mesh options "mark_glass").
+var _mark_glass: bool = false
 
 
 func _initialize() -> void:
@@ -59,7 +61,9 @@ func _search(dir: String, file_name: String) -> String:
 
 
 ## glb 를 읽어 면마다 한 색인 메시 하나로 합친다. pull·overrides 는 RgPolyCatalog.pub_color 와 같다.
-func bake_mesh(path: String, pull: float, overrides: Dictionary) -> ArrayMesh:
+## options(2026-11-16, 창 밖 3D 거리): "stand_up" = 누운 모델(위쪽 −Z)을 x 축 +90도로 세운다 ·
+## "mark_glass" = 재질 이름이 "Windows" 로 시작하는 면의 정점 색 알파를 0 으로(밤거리 셰이더가 창으로 칠한다).
+func bake_mesh(path: String, pull: float, overrides: Dictionary, options: Dictionary = {}) -> ArrayMesh:
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
 	if document.append_from_file(path, state) != OK:
@@ -68,7 +72,9 @@ func bake_mesh(path: String, pull: float, overrides: Dictionary) -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
-	_collect(scene, Transform3D.IDENTITY, pull, overrides, vertices, normals, colors)
+	var start := Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3.ZERO) if bool(options.get("stand_up", false)) else Transform3D.IDENTITY
+	_mark_glass = bool(options.get("mark_glass", false))
+	_collect(scene, start, pull, overrides, vertices, normals, colors)
 	scene.free()
 	if vertices.is_empty():
 		return null
@@ -113,6 +119,8 @@ func _collect(node: Node, parent_xform: Transform3D, pull: float, overrides: Dic
 					color = image.get_pixel(clampi(int(fposmod(uv.x, 1.0) * image.get_width()), 0, image.get_width() - 1),
 						clampi(int(fposmod(uv.y, 1.0) * image.get_height()), 0, image.get_height() - 1)) * flat
 				color = Catalog.pub_color(color, pull, overrides)
+				# 유리창 면 표시: 알파 0(나머지는 1). 펍 소품 재질은 알파를 쓰지 않으므로 보이는 색은 그대로다.
+				color.a = 0.0 if _mark_glass and material != null and material.resource_name.begins_with("Windows") else 1.0
 				for id: int in ids:
 					vertices.append(xform * points[id])
 					normals.append((normal_basis * surface_normals[id]).normalized() if not surface_normals.is_empty() else Vector3.UP)
@@ -163,7 +171,7 @@ func _bake_all() -> void:
 		if path.is_empty():
 			printerr("원본 없음: ", entry[0])
 			continue
-		var mesh := bake_mesh(path, float(entry[1]), entry[2] if entry.size() > 2 else {})
+		var mesh := bake_mesh(path, float(entry[1]), entry[2] if entry.size() > 2 else {}, entry[3] if entry.size() > 3 else {})
 		if mesh == null:
 			printerr("굽기 실패: ", entry[0])
 			continue

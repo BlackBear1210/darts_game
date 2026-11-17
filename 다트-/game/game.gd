@@ -83,6 +83,11 @@ var _stun_until: Dictionary = {}
 var _shown_block: String = ""
 ## 3D 점수 팝업(2026-11-15, art/fx/score_popup.gd): 이미 띄운 한 발("경기:요청:던진 사람"). 같은 스냅샷이 다시 와도 한 번만.
 const ScorePopup = preload("res://art/fx/score_popup.gd")
+## "내 차례가 아니에요!" 알림(2026-11-17, ui/turn_toast.gd): 경기 중 남의 차례에 던지면 던진 사람 화면에 뜬다. 처음 쓸 때 만든다.
+const TurnToast = preload("res://ui/turn_toast.gd")
+## 알림이 뜨는 단계(다트를 겨누고·날리고·점수를 세는 동안). 대기실·카드 라운드·준비 중에는 그냥 던지기가 놀이라 안 띄운다.
+const TURN_TOAST_PHASES: Array[MatchState.Phase] = [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]
+var turn_toast: CanvasLayer
 var _shown_score: String = ""
 ## 처음 받은 스냅샷(경기 중간에 들어온 사람)에 남아 있던 지난 한 발은 띄우지 않는다.
 var _score_popups_ready: bool = false
@@ -899,6 +904,19 @@ func _on_throw_requested(aim: Vector2, timing: float) -> void:
 		controller.submit_throw(aim, timing)
 	else:
 		controller.submit_stray(timing)
+		_warn_not_your_turn(state, active, id)
+
+
+## 경기 중(다트 단계)에 남의 차례인데 던졌으면 내 화면에 "내 차례가 아니에요!"를 띄운다(다트는 그냥 던진 다트로 날아간다 — 점수 없음).
+func _warn_not_your_turn(state: MatchState, active: MatchPlayer, id: int) -> void:
+	if active == null or active.peer_id == id or not state.phase in TURN_TOAST_PHASES:
+		return
+	if turn_toast == null:
+		turn_toast = TurnToast.new()
+		turn_toast.name = "TurnToast"
+		add_child(turn_toast)
+	var color: Color = PlayerLook.COLORS[active.seat % PlayerLook.COLORS.size()].lightened(0.3)
+	turn_toast.show_not_your_turn(PlayerLook.tag(active.seat, active.display_name), color)
 
 
 ## [방장] 그냥 던진 다트를 날린다: 던진 사람 눈에서 보는 방향으로 날아가 처음 닿는 곳(벽·바닥·사람)에 꽂힌다.

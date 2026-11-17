@@ -87,7 +87,7 @@ const STOOL_HEIGHT: float = 0.6
 const POOL_TABLE_BOX := AABB(Vector3(10.4, 0, 2.8), Vector3(1.5, 0.8, 2.55))
 
 ## [도면 v3 — 2026-10-31 밤 에셋 가구] 다른 작업자가 보낸 RG Poly 모델(art/vendor/rg_poly)로 빈 곳을 채웠다.
-## 놓는 자리(바닥 가운데)만 여기 두고, 모양·방향은 art/pub/game_room_builder.gd _furnish 가 정한다.
+## 놓는 자리(바닥 가운데)만 여기 두고, 모양·방향은 art/pub/room/room_decor.gd build_furnish 가 정한다.
 ## 플레이어가 지나는 길(자리 ↔ 투척선 가운데 복도, x -2~2)은 비워 둔다 — 봇도 그 길로 다닌다.
 ##   바 뒤: 받침대 위 생맥주 통(KEG) · 뒤 조리대(BACK_COUNTER, 커피 머신)
 ##   다트 홀: 연습 과녁(장식, 점수 없음) · 빗자루와 양동이
@@ -140,9 +140,14 @@ static func decor_blocks() -> Array[AABB]:
 		blocks.append(AABB(at - Vector3(size.x / 2.0, 0, size.z / 2.0), size))
 	return blocks
 
-## 펍에서만 막는 가구(비스트로 테이블 + 의자). 오락실에서는 그 자리에 오락기 앞 통로가 있어 끈다(rebuild_pub).
+## 꾸미기 방(2026-11-16 사용자 "옷방이 화장실처럼 방 느낌이어야 하는데 옆 창문과 건물 구조상 밖으로 나가는 문으로 느껴진다"):
+## 뒷벽 입구 문 자리에 방 안으로 튀어나온 작은 방 상자(낮은 지붕·벽지·간판·문)를 세운다. 문은 상자 앞면(−Z 쪽)에 있다.
+## 바닥 기준 상자(x 7.4~9.4 · z 7.55~뒷벽 · 높이 2.95m). 그림 = art/pub/room/room_fitting.gd, F 자리 = lounge_world.WARDROBE_DOOR.
+const FITTING_ROOM_BOX := AABB(Vector3(7.4, 0, 7.55), Vector3(2.0, 2.95, 1.45))
+
+## 펍에서만 막는 가구(비스트로 테이블 + 의자 · 꾸미기 방 상자). 오락실에서는 그 자리에 오락기 앞 통로가 있어 끈다(rebuild_pub).
 static func pub_only_blocks() -> Array[AABB]:
-	var blocks: Array[AABB] = []
+	var blocks: Array[AABB] = [FITTING_ROOM_BOX]
 	for at: Vector3 in BISTRO_TABLES:
 		var r: float = BISTRO_TABLE_RADIUS
 		blocks.append(AABB(at - Vector3(r, 0, r), Vector3(r * 2.0, BISTRO_TABLE_HEIGHT, r * 2.0)))
@@ -185,7 +190,9 @@ static func layout_signature() -> String:
 		# 방 넓히기 v4(2026-10-31 늦은 밤): 바 끝 냉장고
 		BAR_FRIDGE_AT, BAR_FRIDGE_SIZE,
 		# 2026-11-08: 비스트로 테이블 2개 · 바 스툴 자리
-		BISTRO_TABLES, BISTRO_TABLE_RADIUS, BISTRO_TABLE_HEIGHT, BISTRO_CHAIR_OFFSET, BAR_STOOLS_Z])
+		BISTRO_TABLES, BISTRO_TABLE_RADIUS, BISTRO_TABLE_HEIGHT, BISTRO_CHAIR_OFFSET, BAR_STOOLS_Z,
+		# 2026-11-16: 꾸미기 방 상자
+		FITTING_ROOM_BOX])
 
 
 ## 사람이 설 수 있는 바닥 두 칸(벽 안쪽에서 몸 반지름만큼 뺀 것).
@@ -383,7 +390,7 @@ func show_seats(seats: Array[int]) -> void:
 		_apply_seats(pub)
 
 
-## 자리 노드 이름은 1부터 센다(SeatMat_1 … — art/pub/game_room_builder.gd _table_and_seats).
+## 자리 노드 이름은 1부터 센다(SeatMat_1 … — art/pub/room/room_seating.gd build_table_and_seats).
 ## 2026-11-08: 보이는 자리는 인원수만큼 똑같이 나눈 자리(seat_layout)로 옮긴다. 방 생성기는 4인 자리(SEATS)에 만들어 두므로
 ## 그 자리에서 테이블 가운데를 축으로 (새 방향 − 만든 방향)만큼 돌린다 → 의자·깔개·글자·매트가 함께 돈다.
 ## 자리 노드는 정적 묶기에서 빠져 있어(StaticBatch "Seat") 실행 중에 옮길 수 있다.

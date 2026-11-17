@@ -63,7 +63,7 @@ const SODA_COLORS: Array[String] = ["e8473f", "ff5aa8", "2fc6b6", "ffd34d"]
 
 
 ## 실제로 쓰는 모델. 이름(meshes/<이름>.res) → [원본, 팔레트 당김(0 = 원래 색, 1 = 팔레트 색), 띠별 바꿀 색].
-## 측정표(2026-10-31, docs/MAP_PLAN_2026-10-31.md)로 크기를 확인한 뒤 골랐다. 놓는 자리·배율은 art/pub/game_room_builder.gd 가 정한다.
+## 측정표(2026-10-31, docs/MAP_PLAN_2026-10-31.md)로 크기를 확인한 뒤 골랐다. 놓는 자리·배율은 펍 방 모듈(art/pub/room/*.gd — 지도 art/pub/room/README.md)이 정한다.
 ## 자리 색 스툴처럼 색만 다른 것은 같은 원본을 띠 색만 바꿔 여러 번 굽는다(실행 중 재질을 바꾸지 않아도 된다).
 static func used() -> Dictionary:
 	var list := {
@@ -130,7 +130,7 @@ static func used() -> Dictionary:
 	# 2026-11-08 사용자가 에셋 구경판(바탕화면 DARTY_프로젝트\에셋구경, P = 고른_모델.txt)에서 고른 모델 —
 	# 축음기·시가·커피 머신·토스터·캔 음료 5종·접시·음식 + 바 뒤 주방 전자레인지(사용자 요청 "주방의 전자레인지 같은 가구").
 	# 원본 = Restaurant_Godot(= rest, KitchenRestaurant, RG Poly CC0). 구경판에서 본 색 그대로 보이게 팔레트 당김을 0~0.15 로 낮췄다.
-	# 쓰는 곳: art/pub/game_room_builder.gd(펍) · art/pub/pub_service.gd(서빙) · game/lounge/arcade/arcade_room.gd(오락실).
+	# 쓰는 곳: art/pub/room/*.gd(펍) · art/pub/pub_service.gd(서빙) · game/lounge/arcade/arcade_room.gd(오락실).
 	list.merge({
 		"gramophone_classic": ["rest:Gramophone", 0.1, {}],
 		"cigar": ["rest:Cigar", 0.0, {}],
@@ -180,7 +180,7 @@ static func used() -> Dictionary:
 	})
 	# 2026-11-15 사용자 "맵이 너무 휑하니까 인디 펍 느낌 나게 채워줘" — 구경판에서 고른 모델로 다트 홀 벽·창턱·바를 채운다.
 	# 물약병 6색(벽 선반 진열) · 뿔 벽걸이 · 화살 두 자루(엇갈린 벽 장식) · 마늘 다발(바 뒤에 건다) · 밀대 · 밀가루 · 빵 · 치즈 ·
-	# 병조림 2 · 허브 화분 2 · 꽃 3 · 작은 오리 · 창턱 긴 꽃 상자. 쓰는 곳 = art/pub/game_room_builder.gd _indie_decor.
+	# 병조림 2 · 허브 화분 2 · 꽃 3 · 작은 오리 · 창턱 긴 꽃 상자. 쓰는 곳 = art/pub/room/room_decor.gd _indie_decor.
 	# 원래 색을 거의 살린다(당김 0.1~0.2): 휑한 크림 벽에 색 점을 찍는 것이 목적이다.
 	list.merge({
 		"potion_a": ["med:Potion_1_2", 0.15, {}],
@@ -220,7 +220,75 @@ static func used() -> Dictionary:
 		list["shelf_bottle_%d" % i] = ["med:Potion_3_1" if i % 2 == 0 else "med:Potion_4_1", 0.6, {"purple": Color(SHELF_BOTTLE_COLORS[i])}]
 	for i in range(PROP_BOTTLE_COLORS.size()):
 		list["prop_bottle_%d" % i] = ["med:Potion_4_1", 0.6, {"purple": Color(PROP_BOTTLE_COLORS[i])}]
+	list.merge(street_models())
 	return list
+
+
+## 펍 창 밖 3D 거리(2026-11-16 사용자 "건물들이 전부 누워 있어 · 하늘이 2D 라 3D 처럼 느껴지게").
+## 쓰는 곳 = art/pub/street_outside.gd. 원래 색 그대로(당김 0) — 밤거리 색은 셰이더(art/pub/street_night.gdshader)가 낸다.
+## 네 번째 칸 = 굽기 옵션(rg_poly_baker.gd):
+##   "stand_up" — Cartoon City 팩의 Buildings/Building_2·3·19 폴더 모델은 위쪽이 −Z 로 누워 있다(문 쪽 = −X).
+##                x 축으로 +90도 돌려 세워서 굽는다. 2026-11-15 창 밖 그림의 "누운 건물"이 이것 때문이었다.
+##   "mark_glass" — 재질 이름이 "Windows" 로 시작하는 면(유리창)의 정점 색 알파를 0 으로 둔다
+##                → 밤거리 셰이더가 그 면만 불 켜진 창·어두운 유리로 칠한다.
+## 모든 모델의 정면(문·차 앞) = −X.
+static func street_models() -> Dictionary:
+	var glass := {"mark_glass": true}
+	var lying := {"mark_glass": true, "stand_up": true}
+	return {
+		# 길 건너 건물 줄(2~5층). 고른 Building_2_4_J 와 그 형제 4종 + 여러 모양.
+		"street_b2_4j": ["city:Building_2_4_J", 0.0, {}, lying],
+		"street_b2_1c": ["city:Building_2_1_C", 0.0, {}, lying],
+		"street_b2_3f": ["city:Building_2_3_F", 0.0, {}, lying],
+		"street_b2_5b": ["city:Building_2_5_B", 0.0, {}, lying],
+		"street_b2_6h": ["city:Building_2_6_H", 0.0, {}, lying],
+		"street_b3": ["city:Building_3_1_A", 0.0, {}, lying],
+		"street_b19": ["city:Building_19_1_A", 0.0, {}, lying],
+		"street_b1": ["city:Building_1_1_A", 0.0, {}, glass],
+		"street_b5": ["city:Building_5_1_B", 0.0, {}, glass],
+		"street_b8": ["city:Building_8_1_A", 0.0, {}, glass],
+		"street_b9": ["city:Building_9_1_A", 0.0, {}, glass],
+		"street_b11": ["city:Building_11_1_A", 0.0, {}, glass],
+		"street_b12": ["city:Building_12_A", 0.0, {}, glass],
+		"street_b14": ["city:Building_14_A", 0.0, {}, glass],
+		"street_b17": ["city:Building_17_1_A", 0.0, {}, glass],
+		"street_b20": ["city:Building_20_1_A", 0.0, {}, glass],
+		"street_b21": ["city:Building_21_1_A", 0.0, {}, glass],
+		"street_b24": ["city:Building_24_A", 0.0, {}, glass],
+		"street_b26": ["city:Building_26_A", 0.0, {}, glass],
+		# 먼 스카이라인(높은 건물 — 앞 줄 지붕 위로 보인다).
+		"street_b4": ["city:Building_4_A", 0.0, {}, glass],
+		"street_b7": ["city:Building_7_1_A", 0.0, {}, glass],
+		"street_b15": ["city:Building_15_A", 0.0, {}, glass],
+		"street_b18": ["city:Building_18_1_A", 0.0, {}, glass],
+		"street_b25": ["city:Building_25_10_A", 0.0, {}, glass],
+		"street_b27": ["city:Building_27_A", 0.0, {}, glass],
+		# 보도 소품. 가로등 유리는 늘 켜진 불(셰이더 glass_mode 1).
+		"street_lamp_c": ["city:StreetLamp_3_C", 0.0, {}, glass],
+		"street_lamp_d": ["city:StreetLamp_3_D", 0.0, {}, glass],
+		"street_tree_2": ["city:Tree_F_2_", 0.0, {}],
+		"street_tree_3": ["city:Tree_F_3_", 0.0, {}],
+		"street_tree_4": ["city:Tree_F_4_", 0.0, {}],
+		"street_tree_6": ["city:Tree_F_6_", 0.0, {}],
+		"street_tree_7": ["city:Tree_F_7_", 0.0, {}],
+		"street_bench": ["city:Bench_1_A", 0.0, {}],
+		"street_bush": ["city:Bush_1_B_1", 0.0, {}],
+		"street_pot_f": ["city:FlowerPot_5_2_F", 0.0, {}],
+		"street_pot_g": ["city:FlowerPot_5_2_G", 0.0, {}],
+		"street_hydrant": ["city:Hydrant", 0.0, {}],
+		"street_postbox": ["city:PostBox_1_A", 0.0, {}],
+		"street_kiosk": ["city:Kiosk_1_A", 0.0, {}, glass],
+		"street_trashbin": ["city:Trashbin_1_A", 0.0, {}],
+		"street_fountain": ["city:Fountain_1_A", 0.0, {}],
+		# 지나가는 차(차 유리는 어두운 유리 — 셰이더 glass_mode 2).
+		"street_car_1": ["city:Car_1_A", 0.0, {}, glass],
+		"street_car_3": ["city:Car_3_1_A", 0.0, {}, glass],
+		"street_car_10": ["city:Car_10_A", 0.0, {}, glass],
+		"street_car_12": ["city:Car_12_A", 0.0, {}, glass],
+		"street_car_14": ["city:Car_14_A", 0.0, {}, glass],
+		"street_car_16": ["city:Car_16_A", 0.0, {}, glass],
+		"street_truck": ["city:Truck_A", 0.0, {}, glass],
+	}
 
 
 ## 구운 메시. 없으면 null(굽기 전이거나 지운 경우) — 부르는 쪽이 도형 소품으로 대신한다.

@@ -28,12 +28,13 @@ const BurstFx = preload("res://art/fx/burst_fx.gd")
 const Sfx = preload("res://art/audio/sfx.gd")
 const MONITOR := Vector3(-4.35, 1.35, 2.0)
 ## 2026-11-08 사용자 지적 "주크박스랑 화분이랑 겹친다": 예전 (7.8, 0, 1.1)은 다트 홀 입구 모서리 화분과 몸통이 겹쳤다 →
-## 요청서 3.3 표 자리(8.5, 0, 0.6) 근처 오른쪽 앞벽에 붙였다. 펍 생성기(art/pub/game_room_builder.gd JUKEBOX_X)가 이 벽 칸을 비워 둔다.
+## 요청서 3.3 표 자리(8.5, 0, 0.6) 근처 오른쪽 앞벽에 붙였다. 펍 생성기(art/pub/room/room_kit.gd JUKEBOX_X)가 이 벽 칸을 비워 둔다.
 ## 충돌 상자는 TableView.decor_blocks() 의 JUKEBOX_AT·JUKEBOX_SIZE(2026-11-08 — 예전에는 충돌이 없어 사람이 통과했다).
 const JUKEBOX := TableView.JUKEBOX_AT
 const REACH: float = 2.2
-## 꾸미기 방 문(펍 뒷벽 문 — art/pub/game_room_builder.gd DOOR_X 8.4 · 뒷벽 z ≈ 8.9). 문 가운데 손잡이 높이.
-const WARDROBE_DOOR := Vector3(8.4, 1.15, 8.85)
+## 꾸미기 방 문 가운데 손잡이 높이. 2026-11-16: 문이 뒷벽(z 8.85)에서 방 안으로 튀어나온 꾸미기 방 상자 앞면으로 옮겨 왔다
+## (TableView.FITTING_ROOM_BOX 앞면 z 7.55 · 가운데 x 8.4 — 상자를 옮기면 이 값도 같이 옮긴다).
+const WARDROBE_DOOR := Vector3(8.4, 1.15, 7.52)
 ## 주크박스 볼륨 버튼 한 번에 오르는 양(0 → 25 → 50 → 75 → 100 → 0%).
 const VOLUME_STEP: float = 0.25
 const GRAVITY: float = 9.8
@@ -71,8 +72,9 @@ const WOBBLE_ANGLE: float = 0.12
 ## Windows(2026-10-31 늦은 밤): 오락실은 창 없는 방 — 창을 빼고 그 벽에 네온 간판을 단다(간판이 창에 겹쳐 잘리던 문제).
 ## BistroTables(2026-11-08): 펍 뒤쪽 비스트로 테이블 2개 — 오락실은 그 자리가 오락기 앞이라 빼고 충돌도 끈다(TableView.rebuild_pub).
 ## Guests(2026-11-08): 펍 손님은 NPC 테이블 의자·바 스툴에 앉아 있어서, 그 가구가 빠지는 오락실에서는 허공에 앉게 된다 → 같이 뺀다.
-const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests", "BistroTables"]
-## 오락실 테마에서 바꾸는 펍 재질 색(재질 이름 → 색). 2026-11-08 라운드하우스 펍 재질(art/pub/game_room_builder.gd)도 포함:
+## Outside(2026-11-16): 창 밖 3D 거리·밤하늘(art/pub/street_outside.gd) — 창 없는 오락실에서는 안 보이니 통째로 뺀다.
+const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests", "BistroTables", "Outside"]
+## 오락실 테마에서 바꾸는 펍 재질 색(재질 이름 → 색). 2026-11-08 라운드하우스 펍 재질(art/pub/room/room_kit.gd)도 포함:
 ## 누빔 가죽 → 자두색, 코브 → 어두운 보라, 숨은 빛 띠 → 시안(요청서 2장 "시안·마젠타는 얇은 테두리에만").
 ## 라운드하우스 GLB 가구(안락의자 LeatherTeal · 탁자 WoodWalnut/WoodPanel · 축음기 WoodDark …)도 같은 이름이라 같은 색을 받는다.
 const ARCADE_PALETTE := {"PlasterCream": "1d1838", "ForestPanel": "151233", "InsetGreen": "120f2a", "WoodWalnut": "2a2148", "WoodDark": "151126",
@@ -96,6 +98,20 @@ const NPC_THROW_SPEED: float = 8.5
 const NPC_HIT_PUSH: float = 3.2
 const NPC_SLAP_PUSH: float = 3.6
 const NPC_TITLES := {"Bartender": "바텐더"}
+## [2026-11-16 사용자 "NPC·바텐더가 던질 때 앞의 바 테이블에 막혀서 안 날아온다"]
+## 예전 되던지기 = 손 위치에서 낮은 포물선 하나 → 손이 바 윗면(1.2m)보다 낮거나 바로 앞에 있으면 첫 걸음에 바에 걸렸다.
+## 이제: ① 손을 머리 위 높이(NPC_RELEASE_*)까지 들어 올려 상대 쪽으로 조금 내민 곳에서 놓고
+##       ② 낮은 포물선부터 높은 포물선(체공 NPC_ARC_MAX_FLIGHT 초)까지 NPC_ARC_TRIES 개를 미리 그려 보아
+##          벽·바·테이블(충돌 층 1)에 안 걸리는 첫 포물선으로 던진다. 다 막히면 가장 높은 포물선.
+## 바텐더는 바 뒤에 있어 달려가 싸대기를 칠 수 없으니 늘 되던진다.
+const NPC_RELEASE_STAND: float = 1.85
+const NPC_RELEASE_SEATED: float = 1.6
+const NPC_RELEASE_REACH: float = 0.3
+const NPC_ARC_TRIES: int = 9
+const NPC_ARC_MAX_FLIGHT: float = 2.0
+## 포물선 미리 그리기 간격(초) · 상대 몸에 이만큼 가까워지면 그 뒤는 안 본다(맞을 자리).
+const NPC_ARC_STEP: float = 0.04
+const NPC_ARC_ARRIVE: float = 0.6
 var _npc_cache: Array[Node3D] = []
 var _npc_cache_theme: int = -2
 
@@ -307,7 +323,10 @@ func apply_theme() -> void:
 ## 오락실: 펍 놋쇠 펜던트를 모두 뺀다. 2026-11-08 사용자 "펍과 오락실 전부 전등이 안 어울리거나 무규칙적" —
 ## 예전엔 x 4m 밖(바·NPC 자리·당구대 위)만 빼서 홀·소파 위 놋쇠 등이 오락실 네온 사이에 띄엄띄엄 남았다.
 ## 카드 테이블 등("TablePendant…")만 남기고, 오락실 빛은 천장 네온 관 줄 아래에 규칙 간격으로 단다(arcade_room.gd _lights).
+## 2026-11-16: 펍 벽에는 창 구멍이 뚫려 있다(창 밖 3D 거리) → 창 없는 오락실은 구멍 메우개(WindowPlugs)를 켠다.
 static func _trim_arcade(pub: Node) -> void:
+	var plugs := pub.get_node_or_null("WindowPlugs") as Node3D
+	if plugs != null: plugs.visible = true
 	var lights := pub.get_node_or_null("Lights")
 	if lights == null: return
 	for node in lights.get_children():
@@ -766,7 +785,7 @@ func _hit_npc(projectile: Dictionary, npc: Node3D, at: Vector3) -> void:
 		_settle({"index": index}, Vector3(at.x, 0.0, at.z), Vector3.UP)
 		return
 	var mode: String = "slap" if randf() < 0.5 else "throw"
-	if npc.global_position.distance_to(offender.global_position) > NPC_SLAP_REACH:
+	if npc.global_position.distance_to(offender.global_position) > NPC_SLAP_REACH or String(npc.name) == "Bartender":
 		mode = "throw"
 	object.available = now() + NpcIdle.reaction_seconds(mode) + 0.5
 	if mode == "slap":
@@ -804,15 +823,54 @@ func _npc_throw_back(npc: Node3D, index: int, target_id: int, title: String) -> 
 		_settle({"index": index}, Vector3(from.x, 0.0, from.z), Vector3.UP)
 		return
 	var aim: Vector3 = target.eye_position() + Vector3.DOWN * 0.4
-	var flat := Vector3(aim.x - from.x, 0.0, aim.z - from.z)
-	var flight: float = clampf(flat.length() / NPC_THROW_SPEED, 0.25, 1.2)
-	var velocity: Vector3 = flat / flight
-	velocity.y = (aim.y - from.y + 0.5 * GRAVITY * flight * flight) / flight
+	from = npc_release_point(npc, from, aim)
+	var skip: Array[RID] = [target.get_rid()]
+	var velocity: Vector3 = npc_throw_velocity(from, aim, skip)
 	_launch(index, from, velocity, 0, false)
 	_projectiles[-1]["npc"] = true
 	_projectiles[-1]["npc_title"] = title
 	object.available = now() + session.room.settings.miss_cooldown
 	fx("sound", from, Vector3.ZERO, Color.WHITE, "whoosh")
+
+
+## 되던질 물건을 놓는 자리: 손 위치를 머리 위 높이까지 올리고 상대 쪽으로 조금 내민다(바 윗면·테이블 위로 출발).
+func npc_release_point(npc: Node3D, hand: Vector3, aim: Vector3) -> Vector3:
+	var base: Vector3 = npc.global_position
+	var lift: float = NPC_RELEASE_SEATED if bool(npc.get("seated")) else NPC_RELEASE_STAND
+	var toward := Vector3(aim.x - base.x, 0.0, aim.z - base.z)
+	var reach: Vector3 = toward.normalized() * NPC_RELEASE_REACH if toward.length() > 0.01 else Vector3.ZERO
+	return Vector3(base.x + reach.x, maxf(hand.y, base.y + lift), base.z + reach.z)
+
+
+## 되던지기 처음 속도: 빠르기 일정한 낮은 포물선부터 차례로 높여 보며 벽·바·테이블에 안 걸리는 첫 포물선.
+## exclude = 미리 그릴 때 무시할 몸(맞힐 사람). 방장 물리(_step_projectiles)와 같은 중력이다.
+func npc_throw_velocity(from: Vector3, aim: Vector3, exclude: Array[RID]) -> Vector3:
+	var space := game.get_world_3d().direct_space_state
+	var flat := Vector3(aim.x - from.x, 0.0, aim.z - from.z)
+	var quickest: float = clampf(flat.length() / NPC_THROW_SPEED, 0.25, 1.2)
+	var velocity := Vector3.ZERO
+	for step in range(NPC_ARC_TRIES):
+		var flight: float = lerpf(quickest, maxf(NPC_ARC_MAX_FLIGHT, quickest), float(step) / float(NPC_ARC_TRIES - 1))
+		velocity = flat / flight
+		velocity.y = (aim.y - from.y + 0.5 * GRAVITY * flight * flight) / flight
+		if _arc_clear(space, from, velocity, flight, aim, exclude):
+			return velocity
+	return velocity
+
+
+## 포물선이 상대 몸에 닿기 전에 벽·가구(충돌 층 1)에 걸리지 않는가.
+func _arc_clear(space: PhysicsDirectSpaceState3D, from: Vector3, velocity: Vector3, flight: float, aim: Vector3, exclude: Array[RID]) -> bool:
+	var last := from
+	var t := NPC_ARC_STEP
+	while t <= flight + NPC_ARC_STEP:
+		var spot: Vector3 = from + velocity * t + Vector3.DOWN * (0.5 * GRAVITY * t * t)
+		if spot.distance_to(aim) < NPC_ARC_ARRIVE:
+			return true
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(last, spot, 1, exclude)).is_empty():
+			return false
+		last = spot
+		t += NPC_ARC_STEP
+	return true
 
 
 ## [방장] 싸대기: 반드시 맞는다. 맞은 사람은 NPC 반대쪽으로 날아가 쓰러진다.
@@ -1045,7 +1103,7 @@ func _shake() -> void:
 		target.rotation = base + Vector3(sin(age * 31.0), 0, cos(age * 27.0)) * WOBBLE_ANGLE * fade * fade
 
 
-## 건드리면 소리 나고 흔들리는 물건(도면 v3). node = 방(pub_game.tscn) 안 노드 이름(game_room_builder.gd 가 붙인 이름).
+## 건드리면 소리 나고 흔들리는 물건(도면 v3). node = 방(pub_game.tscn) 안 노드 이름(art/pub/room/*.gd 가 붙인 이름 — 지도 art/pub/room/README.md).
 ## theme: -1 = 두 테마 모두, 0 = 펍만(오락실에서는 바·럼주통 그림이 빠진다). at = 바라봐야 하는 자리(손 닿는 높이).
 static func touch_spots() -> Array[Dictionary]:
 	var bar: AABB = TableView.BAR_BOX

@@ -11,7 +11,7 @@ extends RefCounted
 ##   3) 부드러운 법선: 곡면은 매끈하게 보이고, 같은 점을 두 번 넣은 곳만 각진 모서리가 된다
 ##      (요청서 "곡면은 smooth normals, 평평한 상판·패널은 평면 유지").
 ##   + 점토 재질 clay(): 빛이 표면을 감싸 도는 확산(Lambert Wrap) + 약한 테두리 빛(rim) → 명암 경계가 부드러워
-##      손으로 빚은 클레이 느낌이 난다. 화면 공간 그림자(SSAO)는 방 환경(game_room_builder._lighting)이 켠다.
+##      손으로 빚은 클레이 느낌이 난다. 화면 공간 그림자(SSAO)는 방 환경(art/pub/room/room_lights.gd build_lighting)이 켠다.
 ##
 ## [옆모습·단면 점을 적는 규칙] (x 오른쪽, y 위) 평면에서 "재료가 왼쪽, 바깥이 오른쪽"이 되게 돈다.
 ##   - 물레 깎기: (반지름, 높이)를 바닥 가운데 → 바깥 → 위 → 윗면 가운데 순서로.
@@ -284,7 +284,7 @@ static func ring_mesh(key: String, ring_radius: float, profile: PackedVector2Arr
 
 ## 세로 골이 진 누빔 판(바 앞면·벽 아래 징두리의 가죽 패딩 — 요청서 콘셉트 01 의 청록 누빔 벽).
 ## 크기 length(벽을 따라) × height, 골 하나 폭 channel, 가장 볼록한 곳 depth. 앞면 = +Z, 바닥 가운데 = 원점.
-## 같은 길이는 한 번만 만든다 → 긴 벽은 이 판을 여러 장 이어 붙인다(game_room_builder._wainscot).
+## 같은 길이는 한 번만 만든다 → 긴 벽은 이 판을 여러 장 이어 붙인다(art/pub/room/room_shell.gd).
 static func channel_panel_mesh(length: float, height: float, channel: float, depth: float) -> ArrayMesh:
 	var key := "channel|%.3f|%.3f|%.3f|%.3f" % [length, height, channel, depth]
 	if _cache.has(key):
@@ -407,6 +407,45 @@ static func flat_shape_mesh(key: String, outline: PackedVector2Array) -> ArrayMe
 		var uvs: Array[Vector2] = [center, a, b, center]
 		_quad(surface, points, [Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK], uvs)
 	return _finish(key, surface)
+
+
+## 오목한 모양도 되는 두께 있는 판(2026-11-16, 창 구멍 둘레 벽 조각용). outline = 앞에서 본 2D 테두리(x 오른쪽·y 위, 돌림 방향 상관없음).
+## 앞면 = z 0(+Z 를 봄) · 뒷면 = z -thickness. flat_shape_mesh·sweep_mesh 뚜껑은 가운데 점 부채꼴이라 볼록 모양만 되는데,
+## 아치 창 윗부분(네모에서 아치를 파낸 모양)은 오목해서 Geometry2D.triangulate_polygon 으로 삼각형을 나눈다.
+static func solid_shape_mesh(key: String, outline: PackedVector2Array, thickness: float) -> ArrayMesh:
+	var cache_key := "solid|%s|%.4f" % [key, thickness]
+	if _cache.has(cache_key):
+		return _cache[cache_key]
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var no_uv: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+	var triangles := Geometry2D.triangulate_polygon(outline)
+	for t in range(0, triangles.size(), 3):
+		var a := outline[triangles[t]]
+		var b := outline[triangles[t + 1]]
+		var c := outline[triangles[t + 2]]
+		# 삼각형 하나 = 점 넷 중 마지막이 겹친 사각형(_quad 가 넓이 0 인 둘째 삼각형은 건너뛴다).
+		var front: Array[Vector3] = [Vector3(a.x, a.y, 0.0), Vector3(b.x, b.y, 0.0), Vector3(c.x, c.y, 0.0), Vector3(c.x, c.y, 0.0)]
+		var back: Array[Vector3] = [Vector3(a.x, a.y, -thickness), Vector3(b.x, b.y, -thickness), Vector3(c.x, c.y, -thickness), Vector3(c.x, c.y, -thickness)]
+		_quad(surface, front, [Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK], no_uv)
+		_quad(surface, back, [Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD], no_uv)
+	# 옆면: 테두리 한 변마다 바깥을 보는 네모. 돌림 방향(넓이 부호)으로 바깥 쪽을 정한다.
+	var area := 0.0
+	for i in range(outline.size()):
+		var p := outline[i]
+		var q := outline[(i + 1) % outline.size()]
+		area += p.x * q.y - q.x * p.y
+	var turn := 1.0 if area > 0.0 else -1.0
+	for i in range(outline.size()):
+		var a := outline[i]
+		var b := outline[(i + 1) % outline.size()]
+		if a.distance_to(b) < 0.00001:
+			continue
+		var side := (b - a).normalized()
+		var out := Vector3(side.y, -side.x, 0.0) * turn
+		var points: Array[Vector3] = [Vector3(a.x, a.y, 0.0), Vector3(b.x, b.y, 0.0), Vector3(b.x, b.y, -thickness), Vector3(a.x, a.y, -thickness)]
+		_quad(surface, points, [out, out, out, out], no_uv)
+	return _finish(cache_key, surface)
 
 
 ## 꺾인 길을 따라가는 매끈한 관(밧줄·발받침·전선·큐대). points = 3D 길, radius = 관 반지름.

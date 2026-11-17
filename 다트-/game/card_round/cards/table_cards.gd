@@ -1,6 +1,6 @@
 extends Node3D
 ## 원형 테이블 위의 카드 전부: 가운데 덱 더미, 자리마다 7칸(왼손과 같은 카드), 방해 보상 예약 2칸.
-## 칸 위치는 펍 생성물의 자리 매트(art/pub/game_room_builder.gd: 카드 7칸 x = -0.36 + 0.12c, z = 0.66 / 예약 칸 z = 0.49)와 같다.
+## 칸 위치는 펍 생성물의 자리 매트(art/pub/room/room_seating.gd: 카드 7칸 x = -0.36 + 0.12c, z = 0.66 / 예약 칸 z = 0.49)와 같다.
 ## 좌표는 월드 기준(이 노드는 원점에 둔다). 규칙(누가 무슨 카드)은 round_rules.gd 가 정하고 여기서는 보여 주기만 한다.
 
 const CardView = preload("res://game/card_round/cards/card_view.gd")
