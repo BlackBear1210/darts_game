@@ -1,5 +1,5 @@
 """실제 ENet 3프로세스: 초대/암호/정원/착석/호스트 권한/다트 턴 카드/재준비 검증."""
-import argparse,time
+import argparse,math,time
 from pathlib import Path
 from run_multiplayer import Peer,free_port,wait_for,PROJECT
 
@@ -18,7 +18,8 @@ def main():
         client.command('secure_join',[code,'bad'])
         wait_for([client],lambda ss:ss[0]['command_id']>=2 and not ss[0]['connecting'] and '비밀번호' in ss[0]['message'],'wrong password rejected')
         client.command('secure_join',[code,'test-password'])
-        states=wait_for(peers,lambda ss:all(len(s['room']['players'])==2 and s['markers']==2 and s['room']['phase']==0 for s in ss),'authenticated joins visible in waiting map')
+        # 손님 차림(look)은 들어온 뒤 방장을 한 번 거쳐 돌아온다 → 두 화면의 방 정보가 같아질 때까지 기다린다(2026-11-18).
+        states=wait_for(peers,lambda ss:all(len(s['room']['players'])==2 and s['markers']==2 and s['room']['phase']==0 for s in ss) and ss[0]['room']==ss[1]['room'],'authenticated joins visible in waiting map')
         client_id=states[1]['local_id']
         assert states[0]['room']==states[1]['room']
         assert not any('password' in key and key!='has_password' for key in states[1]['room'])
@@ -68,8 +69,28 @@ def main():
         states=wait_for([host,client],lambda ss:all(len(s['match']['players'][1]['hand'])==6 and s['match']['phase']==2 for s in ss),'remote card use during dart turn')
         assert states[0]['match']['players']==states[1]['match']['players']
         host.command('lobby')
-        wait_for([host,client],lambda ss:all(s['room']['phase']==0 and s['match']['phase']==0 and all(not p['ready'] for p in s['room']['players']) for s in ss),'back to map and re-ready')
+        states=wait_for([host,client],lambda ss:all(s['room']['phase']==0 and s['match']['phase']==0 and all(not p['ready'] for p in s['room']['players']) for s in ss),'back to map and re-ready')
         print('PASS: invite/password/capacity, host-only settings, seated readiness, setting consent reset, real remote card use, map return',flush=True)
+        # 2026-11-18 "방 만든 뒤 대기 없애기": 로비로 돌아와도·경기를 시작해도 경기 화면을 지우고 새로 만들지 않는다
+        # (app/main.gd → GameView.begin_match). 같은 화면에서 두 번째 경기: 점수·손패는 새로, 손님 준비·카드·움직임은 그대로 통한다.
+        first_match=states[0]['room']['match_id']
+        assert all(all(p['seated'] for p in s['poses']) for s in states),'map return keeps players seated'
+        host.command('ready',True);client.command('ready',True)
+        states=wait_for([host,client],lambda ss:all(s['room']['phase']==2 and s['room']['match_id']==first_match+1 and s['match']['match_id']==first_match+1 and s['match']['phase']==5 for s in ss),'second match on the same map')
+        assert all(p['score']==0 and len(p['hand'])==7 for s in states for p in s['match']['players']),'second match starts clean'
+        wait_for([host,client],lambda ss:all(s['match']['phase']==2 for s in ss),'second match darts',timeout=8)
+        client.command('card',['select',0])
+        wait_for([host,client],lambda ss:all(s['match']['players'][1]['pending_card']>=0 for s in ss),'client card request in second match')
+        client_pose=lambda s:next(p for p in s['poses'] if p['id']==client_id)
+        client.command('seat')
+        wait_for([host,client],lambda ss:all(not client_pose(s)['seated'] for s in ss),'client stands up in second match')
+        start=client_pose(host.status())['position']
+        # 테이블 가운데(TableView.TABLE_CENTER = (0, 0, 4.4))에서 바깥쪽을 보고 앞으로 걷는다(테이블에 막히지 않게).
+        away=math.atan2(-start[0],-(start[2]-4.4))
+        client.command('move',[0,-1,away,False,False])
+        wait_for([host,client],lambda ss:all(math.dist(client_pose(s)['position'],start)>0.3 for s in ss),'client walks in second match')
+        client.command('stop')
+        print('PASS: second match on the same map (no scene rebuild)',flush=True)
     finally:
         for peer in peers:peer.stop()
     for path in output.glob('*.log'):

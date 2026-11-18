@@ -1,8 +1,22 @@
+# 최신 인수인계 — 경기 화면 재사용 (2026-11-18)
+
+- **라운지 방은 경기 화면(GameView)을 경기마다 새로 만들지 않는다.** 경기 시작·로비로 돌아오기 때 `app/main.gd` 가 `_game.begin_match(room)` 을 부른다(전용 서버만 예전처럼 새로 만든다).
+  - 경기마다 처음으로 돌아가야 하는 값을 `GameView`·`MatchController` 에 새로 더하면 `begin_match`(game.gd) 나 `reset_match`(match_controller.gd) 에서도 되돌린다. 안 그러면 두 번째 경기에 지난 경기 값이 남는다.
+  - 경기 안에서 붙였다 떼는 노드(봇 수다 담당 같은 것)는 `begin_match` 에서 새로 붙인다.
+  - 보내는 쪽 번호(`_motion_sequence` · `_sequence` · `_request_number`)는 되돌리지 않는다. 받는 쪽(`_last_motion_sequence` · `_controls`)만 되돌린다.
+  - `tests/run_lounge.py`(방장+손님 실제 연결)가 두 번째 경기가 깨끗한지 본다. 한 프로세스 확인용 시험 `test_match_reuse.gd` 는 커밋하지 않았다(사용자 요청).
+- **확인용 시험은 저장소에 남기지 않는다**(2026-11-18 사용자 요청 "검증용 gd 나 스크립트 … 용량만 차지하는 거면 삭제"). 작업 중 확인용으로 만든 시험은 스크래치에 두고, 팀 공용·README 에 적힌 시험만 저장소에 둔다.
+  - 이번에 지운 것: `test_asset_warmup` · `test_bot_walk`(커밋 39a459c) · `test_fp_grip`(커밋 445f67d). 필요하면 그 커밋에서 꺼낸다.
+- **화면 없는 실행(헤드리스)에서는 스레드로 읽지 않는다.** 엔진의 가짜 그리기 장치가 여러 스레드 메시 만들기에 깨진다(`asset_warmup.gd start` · `lobby_backdrop.gd _ready`).
+- 상세: `작업기록/2026-11-18_경기시작_대기없애기_화면재사용.md`.
+
+---
+
 # 최신 인수인계 — 봇 걷기 · 미리 읽기 · 타이틀 펍 (2026-11-17 밤 2)
 
-- **봇 걷기를 고치면** `tests/test_bot_walk.gd` 를 돌린다(좌우 바꿈 횟수·도착 시간). 몸막 구역은 `TableView.in_block_zone`(투척선 앞 다트 홀 전체)이다.
+- **봇 걷기를 고치면** 좌우로 떨지 않는지 본다(재던 시험 `test_bot_walk.gd` 는 11-18 에 지움 — 커밋 39a459c 에서 꺼낼 수 있다). 몸막 구역은 `TableView.in_block_zone`(투척선 앞 다트 홀 전체)이다.
 - **연출에서 기다릴 때** `get_tree().create_timer` 를 쓰지 않는다. 그 노드에 묶인 트윈(`ShuffleMotions.pause(노드, 초)`)으로 기다린다. 경기에서 나가면 연출 노드가 먼저 트리에서 빠지기 때문이다.
-- **경기 중에 새 모델을 load 하면** `app/asset_warmup.gd` 목록에도 더한다. 안 더하면 들어갈 때 다시 렉이 난다. `tests/test_asset_warmup.gd` 가 소품·오락기 목록을 맞춰 본다.
+- **경기 중에 새 모델을 load 하면** `app/asset_warmup.gd` 목록에도 더한다. 안 더하면 들어갈 때 다시 렉이 난다. 소품은 `prop_looks.gd` `REST`, 오락기는 `arcade_room.gd` 목록과 같아야 한다(맞춰 보던 `test_asset_warmup.gd` 는 11-18 에 지움).
 - **타이틀 펍**(`lobby/lobby_backdrop.gd`)은 뒤에서 읽은 뒤 짓는다. 다 지으면 `built` 신호가 오고 `is_built()` 가 true 가 된다. 그 전엔 `_table`·`_camera` 가 비어 있다.
   - 시험·화면 찍기는 `built` 를 기다린다.
   - 경기 모델 미리 읽기는 펍 파일을 다 읽은 다음(`loaded` 신호) 시작한다(`main._start_warmup`).
@@ -13,7 +27,7 @@
 
 # 최신 인수인계 — 다트 그립 · 크기 카드 · 힘 카드 바람 (2026-11-17 밤)
 
-- **손 모양을 바꾸면** `tests/render_fp_arm.gd` 로 찍고 **`tests/test_fp_grip.gd` 를 꼭 돌린다**(손이 다트를 뚫는지 mm 로 잰다). 엄지 1~2° 차이로 뚫린다.
+- **손 모양을 바꾸면** `tests/render_fp_arm.gd` 로 찍어 **손이 다트를 뚫는지 꼭 본다**(mm 로 재던 `test_fp_grip.gd` 는 11-18 에 지움 — 커밋 445f67d 에서 꺼낼 수 있다). 엄지 1~2° 차이로 뚫린다.
   - 값: `first_person_arm.gd` `GRIP_BEND` · `PINCH_NUDGE`(집는 자리 보정) · `LARGE_NUDGE`(큰 다트 비켜 두기) · `GRIP_ROLL` · `ELBOW_OPEN`. `GRIP_BEND` 를 바꾸면 두 NUDGE 도 다시 재야 한다.
   - 아래 오후 칸의 펜 쥐기 값(검지 30/50/20 · 엄지 20/15/10 · 45°)은 옛 값이다.
 - **손에 든 다트 크기**: `HeldDart` 에 직접 배율을 걸지 않는다. `FirstPersonArm.held_dart(_held_dart_base, 배율)` 로 만든다. 팔에는 늘 `_held_dart_base`(배율 없는 자세)를 준다.

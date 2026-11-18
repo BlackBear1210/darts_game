@@ -106,7 +106,13 @@ func _refresh_screen() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
 	if _game != null and (_game.controller.state.match_id != session.room.match_id or (session.room.phase == RoomState.Phase.LOBBY and _game.controller.state.phase != MatchState.Phase.WAITING)):
-		_remove_game()
+		# 경기 시작(경기 번호가 바뀜)·로비로 돌아오기: 라운지 방에서는 화면을 그대로 두고 경기 상태만 새로 한다
+		# (2026-11-18 "방 만든 뒤 대기 없애기" — 지우고 새로 만들면 펍 1.2초 · 오락실 1.9초 멈췄다).
+		# 전용 서버는 경기마다 계정 기록(_backend.watch_match)을 새로 묶어야 해서 예전처럼 새로 만든다.
+		if social and not _dedicated:
+			_game.begin_match(session.room)
+		else:
+			_remove_game()
 	if _game == null:
 		_game = AssetWarmup.scene(AssetWarmup.GAME_SCENE).instantiate() as GameView
 		_game.name = "Game"

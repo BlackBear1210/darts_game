@@ -63,6 +63,12 @@ func _ready() -> void:
 	add_child(_viewport)
 	# 펍이 오기 전 빈 3D 화면은 회색이다 → 검게 덮어 두었다가 지은 뒤 밝힌다.
 	modulate = Color.BLACK
+	# 화면 없는 실행(시험·전용 서버)은 바로 읽어 짓는다 — 엔진의 가짜 그리기 장치는 여러 스레드 읽기에 깨진다(app/asset_warmup.gd start).
+	if DisplayServer.get_name() == "headless":
+		var table_scene := load(TABLE_PATH) as PackedScene
+		loaded.emit()
+		_build(table_scene)
+		return
 	# 하위 자원도 여러 스레드로 나눠 읽는다(한 스레드 2.5초 → 1.1초).
 	if ResourceLoader.load_threaded_request(TABLE_PATH, "", true) != OK:
 		_build(load(TABLE_PATH) as PackedScene)

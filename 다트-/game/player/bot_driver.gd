@@ -59,7 +59,8 @@ static func random_charge() -> float:
 ## 매 프레임 다시 계산하므로 기억하는 경로가 없다 — 테이블을 지나면 바로 목표로 향한다.
 ## [2026-11-17 밤] 레인 벽 돌아가기(_around_lane)는 지웠다. 중앙 펜스·레인 충돌벽은 2026-11-12 에 없어졌고
 ## 몸막 판정이 투척선 앞 다트 홀 전체가 되면서 "몸막 구역에서 옆으로 먼저 빠진다"가 끝나지 않아
-## 봇이 그 자리에서 좌우로 떨며 투척선·자리에 못 갔다(사용자 지적 "좌우로 움직이며 버그"). 시험 tests/test_bot_walk.gd.
+## 봇이 그 자리에서 좌우로 떨며 투척선·자리에 못 갔다(사용자 지적 "좌우로 움직이며 버그").
+## (좌우 바꿈 횟수를 재던 확인용 시험 test_bot_walk.gd 는 2026-11-18 사용자 요청으로 지웠다 — 커밋 39a459c.)
 static func _steer(from: Vector3, goal: Vector3) -> Vector3:
 	var flat_from := Vector3(from.x, 0, from.z)
 	var to_target: Vector3 = Vector3(goal.x, 0, goal.z) - flat_from

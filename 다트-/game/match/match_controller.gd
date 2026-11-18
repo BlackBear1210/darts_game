@@ -89,6 +89,36 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 	state.players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
 
 
+## [2026-11-18 "방 만든 뒤 대기 없애기"] 경기 화면은 그대로 두고 경기 상태만 처음으로 되돌린다.
+## 예전엔 경기 번호(match_id)가 바뀌거나 로비로 돌아올 때 app/main.gd 가 경기 화면을 통째로 지우고 다시 만들었다
+## (펍 1.2초 · 오락실 1.9초 멈춤). 지금은 GameView.begin_match 가 이 함수를 부른다.
+## 연결(session 신호)·규칙(config)·내 번호(local_peer_id)·요청 번호(_request_number, 계속 올라가야 한다)는 그대로 둔다.
+func reset_match(room: RoomState) -> void:
+	room_settings = room.settings
+	state = MatchState.new()
+	state.match_id = room.match_id
+	for identity in room.players:
+		var player := MatchPlayer.new()
+		player.peer_id = identity.peer_id
+		player.display_name = identity.display_name
+		player.seat = identity.seat
+		player.is_bot = identity.is_bot
+		state.players.append(player)
+	state.players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
+	cards = null
+	notice = ""
+	_turn_end = 0.0
+	_phase_end = 0.0
+	_received_at = 0.0
+	_remote_seconds = 0.0
+	_pending_hit.clear()
+	_chaos_ages = {}
+	_flight_input = {}
+	_last_requests.clear()
+	_nullify_dealt = false
+	changed.emit()
+
+
 func start() -> void:
 	if local_peer_id == 1 and state.phase == MatchState.Phase.WAITING:
 		if room_settings.social_lobby: cards = MatchCards.new(self)

@@ -174,11 +174,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	emotes.name = "Emotes"
 	add_child(emotes)
 	emotes.setup(self)
-	if room.settings.solo and (session == null or session.is_host()):
-		bot_social = BotSocial.new()
-		bot_social.name = "BotSocial"
-		bot_social.game = self
-		add_child(bot_social)
+	_make_bot_social(room)
 	if DisplayServer.get_name() != "headless":
 		player_list = PlayerList.new()
 		player_list.name = "PlayerList"
@@ -213,6 +209,58 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	var me := actors.get(local_peer_id) as PlayerView
 	if me != null and not me.identity.is_bot:
 		_send_look.call_deferred(me.look, false)
+
+
+## 싱글 플레이(연습 방) 방장만: 봇 수다·헤클링 담당을 붙인다.
+func _make_bot_social(room: RoomState) -> void:
+	if room.settings.solo and (session == null or session.is_host()):
+		bot_social = BotSocial.new()
+		bot_social.name = "BotSocial"
+		bot_social.game = self
+		add_child(bot_social)
+
+
+## [2026-11-18 "방 만든 뒤 대기 없애기"] 화면(펍·오락실·사람·소품)은 그대로 두고 새 경기를 맞는다.
+## app/main.gd 가 경기 번호가 바뀔 때(경기 시작)와 로비로 돌아올 때 부른다.
+## 예전엔 그때마다 경기 화면을 지우고 새로 만들어 펍 1.2초 · 오락실 1.9초 멈췄다.
+## 지난 경기 흔적(꽂힌 다트·과녁 배치·손패·쓰러짐·봇 헤클링)만 치운다. 라운지 소품·음악·취기는 그대로 이어진다.
+func begin_match(room: RoomState) -> void:
+	controller.reset_match(room)
+	_clear_darts()
+	_flying_dart = null
+	_shown_turn = controller.state.turn_id
+	_shown_block = ""
+	_was_finished = false
+	_bot_ready_at = 0.0
+	_stun_until.clear()
+	_controls.clear()
+	# 움직임 번호는 받는 쪽만 처음으로 돌린다(보내는 쪽 번호는 계속 오른다).
+	# 방장 화면을 새로 만든 경우(전용 서버)에도 1번부터 다시 받는다.
+	_last_motion_sequence = -1
+	_throw_kick = 0.0
+	_held_pull = 0.0
+	_released_pull = 0.0
+	_board_shake = 0.0
+	table.board.show_layout(BoardLayout.new())
+	table.board.show_choice(-1)
+	for actor: PlayerView in actors.values():
+		actor.get_up()
+		actor.knockback = Vector3.ZERO
+	# 킬로그 반응·카드 받을 때 한 잔: 지난 경기에서 본 줄·라운드를 잊는다(새 경기 1라운드에도 반응하게).
+	if emotes != null: emotes._seen_feed.clear()
+	if lounge != null: lounge._last_deal = -1
+	if bot_social != null:
+		remove_child(bot_social)
+		bot_social.queue_free()
+		bot_social = null
+	_make_bot_social(room)
+	if room.phase != RoomState.Phase.LOBBY:
+		# 경기가 시작되면 모두 테이블에 앉아 카드 턴을 맞는다(예전 새로 만들 때와 같다).
+		for player in room.players:
+			force_seat(player.peer_id)
+	if DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_apply_state()
 
 
 ## 1인칭 왼손 카드 부채를 카메라에 붙인다. 화면이 없는 서버·검사에서는 만들지 않는다.

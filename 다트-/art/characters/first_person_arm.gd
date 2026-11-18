@@ -52,7 +52,8 @@ const ELBOW_OPEN: float = 90.0
 ##   이 각도에서 자루에 닿는 살 = 엄지 끝마디 · 검지 끝마디, 살을 뚫는 곳 0, 자루 표면까지 가장 가까운 살 0.66mm.
 ##   엄지를 1~2° 더 굽히면 자루가 엄지를 뚫고(thumb 8° → 3.4mm), 덜 굽히면 자루가 손에서 뜬다.
 ##   예전 값(펜 쥐기, 검지 30/50/20 · 엄지 20/15/10)은 자루가 손가락에 2.9mm 묻혀 있었다.
-## 바꿀 때는 tests/render_fp_arm.gd 로 찍고 tests/test_fp_grip.gd(손이 다트를 뚫는지 검사)를 꼭 돌린다.
+## 바꿀 때는 tests/render_fp_arm.gd 로 찍어 손이 다트를 뚫는지 꼭 본다.
+## (숫자로 재던 확인용 시험 test_fp_grip.gd 는 2026-11-18 사용자 요청으로 지웠다 — 커밋 445f67d 에서 꺼내 쓸 수 있다.)
 const GRIP_BEND: Dictionary = {
 	"thumb_01.R": 7.0, "thumb_02.R": 7.0, "thumb_03.R": 7.0,
 	"index_01.R": 50.0, "index_02.R": 60.0, "index_03.R": 20.0,

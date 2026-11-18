@@ -11,7 +11,8 @@ extends RefCounted
 ##
 ## 쓰는 곳: app/main.gd — _ready 에서 start(), 매 프레임 poll(), 경기 장면은 scene(GAME_SCENE).
 ## 소품(prop_looks.gd)·오락기(arcade_room.gd)는 원래대로 load(path) 를 부른다 — 이미 읽어 붙잡아 둔 것을 바로 받는다.
-## 새 모델을 경기 중에 load 로 읽게 되면 아래 목록에도 더한다(tests/test_asset_warmup.gd 가 두 파일의 목록과 맞는지 본다).
+## 새 모델을 경기 중에 load 로 읽게 되면 아래 목록에도 더한다(prop_looks.gd REST · arcade_room.gd 목록과 같아야 한다).
+## 목록을 맞춰 보던 확인용 시험 test_asset_warmup.gd 는 2026-11-18 사용자 요청으로 지웠다(커밋 39a459c 에서 꺼내 쓸 수 있다).
 
 const GAME_SCENE := "res://game/game.tscn"
 ## 손에 드는 소품(prop_looks.gd make → "res://art/props/%s.tscn"). 펍·오락실 모두 경기 방에 처음부터 놓인다.
@@ -38,11 +39,16 @@ static func paths() -> Array[String]:
 
 ## 뒤에서 읽기 시작한다. 여러 번 불러도 한 번만 읽는다.
 static func start() -> void:
+	# 화면 없는 실행(시험·전용 서버)은 바로 읽는다: 엔진의 가짜 그리기 장치(dummy)는 여러 스레드가 메시를 동시에 만들면 깨진다
+	# (2026-11-18 tests/run_lounge.py 손님 로그 "Attempting to initialize the wrong RID"). 멈춰 보일 화면도 없다.
+	var threaded: bool = DisplayServer.get_name() != "headless"
 	for path in paths():
 		if _held.has(path) or _loading.has(path) or not ResourceLoader.exists(path):
 			continue
+		if not threaded:
+			_held[path] = load(path)
 		# 하위 자원도 여러 스레드로 나눠 읽는다(펍 기준 한 스레드 2.5초 → 1.1초).
-		if ResourceLoader.load_threaded_request(path, "", true) == OK:
+		elif ResourceLoader.load_threaded_request(path, "", true) == OK:
 			_loading.append(path)
 
 
