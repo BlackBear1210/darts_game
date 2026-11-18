@@ -7,9 +7,19 @@ extends SubViewportContainer
 ## 판정은 경기와 같은 BoardScorer 를 쓰지만 로비 장식일 뿐 어떤 기록에도 남지 않는다.
 
 signal scored(text: String, screen: Vector2)
+## 펍을 다 지었을 때(그 전에는 검은 화면이고 과녁 클릭도 안 받는다).
+signal built
+## 펍 파일을 다 읽었을 때(짓기 직전). 다른 무거운 읽기는 이때부터 시작하면 펍 읽기를 늦추지 않는다(app/main.gd).
+signal loaded
 
-const TABLE_SCENE: PackedScene = preload("res://game/table/table.tscn")
+## [2026-11-17 밤 "실행할 때 렉"] 펍(table.tscn → art/pub/pub_game.tscn)은 읽는 데 2.2~2.4초 걸린다.
+## 예전엔 preload 라 게임 창이 뜨기 전에 그만큼 더 기다렸다(창이 약 7초 만에 떴다) → 이제 뒤에서(백그라운드 스레드) 읽고,
+## 다 읽히면 그때 짓고 검은 화면에서 서서히 밝힌다(창은 약 2.8초, 펍은 그 뒤 1.4~2초).
+## 짓기 0.2초 + 처음 그리기 0.5~0.7초는 그때 한 번 멈춘다(검은 채로 넘긴다). 메시 묶기는 여러 프레임에 나눈다(spread_batching).
+const TABLE_PATH := "res://game/table/table.tscn"
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
+## 펍이 나타나며 밝아지는 시간(초).
+const FADE_IN: float = 0.6
 const Sfx = preload("res://art/audio/sfx.gd")
 
 ## 카메라: 투척선 뒤 오른쪽 어깨 높이에서 과녁 왼쪽을 본다 → 과녁이 화면 오른쪽 1/3 에 크게 걸린다.
@@ -36,6 +46,8 @@ var _darts_root: Node3D
 var _thrower: Node3D
 var _rig: CharacterMotion
 var _next_attract: float = 1.4
+## 밝히기 시작까지 남은 프레임(0 = 시작함 · −1 = 아직 안 지음).
+var _fade_frames: int = -1
 var _time: float = 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -49,7 +61,18 @@ func _ready() -> void:
 	_viewport.gui_disable_input = true
 	_viewport.msaa_3d = Viewport.MSAA_2X
 	add_child(_viewport)
-	_table = TABLE_SCENE.instantiate() as TableView
+	# 펍이 오기 전 빈 3D 화면은 회색이다 → 검게 덮어 두었다가 지은 뒤 밝힌다.
+	modulate = Color.BLACK
+	# 하위 자원도 여러 스레드로 나눠 읽는다(한 스레드 2.5초 → 1.1초).
+	if ResourceLoader.load_threaded_request(TABLE_PATH, "", true) != OK:
+		_build(load(TABLE_PATH) as PackedScene)
+
+
+## 뒤에서 읽은 펍으로 방·카메라·던지는 캐릭터를 짓는다.
+func _build(table_scene: PackedScene) -> void:
+	_table = table_scene.instantiate() as TableView
+	# 메시 묶기를 여러 프레임에 나눠 나타나는 순간의 멈춤을 줄인다(한 번에 묶으면 0.45초).
+	_table.spread_batching = true
 	_viewport.add_child(_table)
 	_darts_root = Node3D.new()
 	_viewport.add_child(_darts_root)
@@ -67,9 +90,41 @@ func _ready() -> void:
 	_thrower.rotation.y = atan2(-to_board.x, -to_board.z)
 	_rig = CharacterMotion.new(_thrower, 0.4)
 	_rng.seed = 2026
+	# 펍을 처음 그리는 프레임은 재질·셰이더 준비로 0.5~0.7초 걸린다(예전엔 시작 화면 뒤에 숨어 있던 시간).
+	# 검은 채로 그 프레임을 넘긴 다음 밝힌다(_process) — 멈춘 사이에 밝히기가 다 지나가 펍이 툭 튀어나오지 않게.
+	_fade_frames = 2
+	built.emit()
+
+
+## 펍을 다 지었는지(시험·화면 찍기에서 기다릴 때 쓴다).
+func is_built() -> bool:
+	return _table != null
+
+
+## 뒤에서 읽던 펍이 다 왔으면 짓는다. 아직이면 false.
+func _try_build() -> bool:
+	var status := ResourceLoader.load_threaded_get_status(TABLE_PATH)
+	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		return false
+	var table_scene: PackedScene = null
+	if status == ResourceLoader.THREAD_LOAD_LOADED:
+		table_scene = ResourceLoader.load_threaded_get(TABLE_PATH) as PackedScene
+	if table_scene == null:
+		table_scene = load(TABLE_PATH) as PackedScene
+	loaded.emit()
+	_build(table_scene)
+	return true
 
 
 func _process(delta: float) -> void:
+	# 지은 다음다음 프레임에 밝히기 시작한다(첫 그리기 멈춤이 지난 뒤 — _build).
+	if _fade_frames > 0:
+		_fade_frames -= 1
+		if _fade_frames == 0:
+			create_tween().tween_property(self, "modulate", Color.WHITE, FADE_IN)
+	# 타이틀이 가려진 동안(경기 중)에는 짓지 않는다 — 짓는 순간의 멈춤이 경기 중에 오지 않게.
+	if _table == null and (not is_visible_in_tree() or not _try_build()):
+		return
 	if not is_visible_in_tree():
 		_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
@@ -101,7 +156,7 @@ static func _framed_fov() -> float:
 
 ## 과녁 한가운데가 화면 어디에 보이는지(시험·안내 표시용).
 func board_screen_point() -> Vector2:
-	if _viewport.size.x == 0:
+	if _table == null or _viewport.size.x == 0:
 		return Vector2.ZERO
 	var scale_ratio := Vector2(_viewport.size) / size
 	return _camera.unproject_position(_table.board.global_position) / scale_ratio
@@ -109,7 +164,7 @@ func board_screen_point() -> Vector2:
 
 ## 화면 좌표가 과녁 위면 내 다트를 던지고 true. 다트 포인터가 빈 곳 클릭을 넘길 때 부른다.
 func throw_at(screen: Vector2) -> bool:
-	if not is_visible_in_tree() or _viewport.size.x == 0:
+	if _table == null or not is_visible_in_tree() or _viewport.size.x == 0:
 		return false
 	var scale_ratio := Vector2(_viewport.size) / size
 	var point := screen * scale_ratio

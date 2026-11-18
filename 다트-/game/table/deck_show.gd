@@ -202,8 +202,11 @@ func _deck_center() -> Vector3:
 	return TableView.TABLE_CENTER + Vector3.UP * (TableView.TABLE_HEIGHT + TableCards.FELT_TOP)
 
 
+## seconds 초 기다린다. 이 노드에 묶인 트윈으로 기다린다 — 경기 중 나가 게임이 화면에서 빠지면 섞기·나눠 주기가 그 자리에서 멈추고,
+## 게임이 지워지면 트윈과 함께 사라진다(2026-11-17 밤: 예전 get_tree().create_timer 는 나간 뒤에도 울려
+## get_tree() 가 비어 있다는 오류가 한꺼번에 수십 개 났다 — 편집기 실행이면 그 오류를 디버거로 보내느라 더 멈췄다).
 func _wait(seconds: float) -> void:
-	await get_tree().create_timer(seconds, false).timeout
+	await ShuffleMotions.pause(self, seconds)
 
 
 ## 손 부채에 보일 손패: 아직 덱에서 안 닿은 칸은 -1(그 칸은 비워 둔다).

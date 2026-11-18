@@ -164,6 +164,9 @@ func _shoot_stage() -> void:
 func _run_lobby() -> void:
 	var backdrop: Control = LOBBY_BACKDROP.new()
 	root.add_child(backdrop)
+	# 펍은 뒤에서 읽은 뒤 짓는다(2026-11-17 밤) → 다 지은 다음 몸짓이 자리 잡을 시간을 준다.
+	if not backdrop.is_built():
+		await backdrop.built
 	await create_timer(2.2).timeout
 	var thrower: Node3D = backdrop.get("_thrower")
 	var to_board := (TableView.BOARD_CENTER - thrower.global_position).normalized()

@@ -1,3 +1,16 @@
+# 최신 인수인계 — 봇 걷기 · 미리 읽기 · 타이틀 펍 (2026-11-17 밤 2)
+
+- **봇 걷기를 고치면** `tests/test_bot_walk.gd` 를 돌린다(좌우 바꿈 횟수·도착 시간). 몸막 구역은 `TableView.in_block_zone`(투척선 앞 다트 홀 전체)이다.
+- **연출에서 기다릴 때** `get_tree().create_timer` 를 쓰지 않는다. 그 노드에 묶인 트윈(`ShuffleMotions.pause(노드, 초)`)으로 기다린다. 경기에서 나가면 연출 노드가 먼저 트리에서 빠지기 때문이다.
+- **경기 중에 새 모델을 load 하면** `app/asset_warmup.gd` 목록에도 더한다. 안 더하면 들어갈 때 다시 렉이 난다. `tests/test_asset_warmup.gd` 가 소품·오락기 목록을 맞춰 본다.
+- **타이틀 펍**(`lobby/lobby_backdrop.gd`)은 뒤에서 읽은 뒤 짓는다. 다 지으면 `built` 신호가 오고 `is_built()` 가 true 가 된다. 그 전엔 `_table`·`_camera` 가 비어 있다.
+  - 시험·화면 찍기는 `built` 를 기다린다.
+  - 경기 모델 미리 읽기는 펍 파일을 다 읽은 다음(`loaded` 신호) 시작한다(`main._start_warmup`).
+- **메시 묶기 나누기**(`StaticBatch.optimize_spread`, `TableView.spread_batching`)는 타이틀 펍 전용이다. 경기 방에 켜면 오락실 색 바꾸기(`_recolor`)가 늦게 생긴 묶음을 놓친다.
+- 상세: `작업기록/2026-11-17_밤2_봇좌우떨림_렉정리.md`.
+
+---
+
 # 최신 인수인계 — 다트 그립 · 크기 카드 · 힘 카드 바람 (2026-11-17 밤)
 
 - **손 모양을 바꾸면** `tests/render_fp_arm.gd` 로 찍고 **`tests/test_fp_grip.gd` 를 꼭 돌린다**(손이 다트를 뚫는지 mm 로 잰다). 엄지 1~2° 차이로 뚫린다.

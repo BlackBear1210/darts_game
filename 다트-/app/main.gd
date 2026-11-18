@@ -1,7 +1,9 @@
 extends Node
 ## 지속되는 연결 노드와 교체되는 화면을 조립한다.
 
-const GAME_SCENE: PackedScene = preload("res://game/game.tscn")
+## 경기 장면(game.tscn)·소품·오락기 모델은 타이틀 화면에서 뒤에서 미리 읽어 붙잡아 둔다(2026-11-17 밤 "실행·나갈 때 렉").
+## 예전 preload 는 첫 화면이 뜨기 전에 1.2초를 더 기다리게 했다.
+const AssetWarmup = preload("res://app/asset_warmup.gd")
 const HUD_SCENE: PackedScene = preload("res://ui/game_hud.tscn")
 
 @onready var session: NetworkSession = $NetworkSession
@@ -29,6 +31,12 @@ func _ready() -> void:
 	front = FrontDoor.new()
 	front.name = "FrontDoor"
 	add_child(front)
+	# 경기 모델 미리 읽기는 타이틀 뒤 펍 파일을 다 읽은 다음에 시작한다(같이 읽으면 펍이 2초 넘게 늦게 뜬다).
+	var backdrop: Node = front.get("_backdrop")
+	if backdrop != null and not backdrop.call("is_built"):
+		backdrop.connect("loaded", _start_warmup, CONNECT_ONE_SHOT)
+	else:
+		_start_warmup()
 	front.host_requested.connect(func(options: RoomSettings, player_name: String, password: String, port: int) -> void:
 		session.host_room(player_name, port, options, password))
 	front.join_requested.connect(func(player_name: String, address: String, port: int, code: String, password: String) -> void:
@@ -100,7 +108,7 @@ func _refresh_screen() -> void:
 	if _game != null and (_game.controller.state.match_id != session.room.match_id or (session.room.phase == RoomState.Phase.LOBBY and _game.controller.state.phase != MatchState.Phase.WAITING)):
 		_remove_game()
 	if _game == null:
-		_game = GAME_SCENE.instantiate() as GameView
+		_game = AssetWarmup.scene(AssetWarmup.GAME_SCENE).instantiate() as GameView
 		_game.name = "Game"
 		add_child(_game)
 		_game.developer_enabled = developer_mode
@@ -213,6 +221,17 @@ func open_settings(mode: String = "personal") -> void:
 		if _game != null: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED)
 	settings_panel.leave_requested.connect(session.leave_room)
 	add_child(settings_panel)
+
+## 경기 모델을 뒤에서 읽기 시작한다(app/asset_warmup.gd).
+func _start_warmup() -> void:
+	AssetWarmup.start()
+	set_process(true)
+
+
+## 뒤에서 읽던 모델이 다 오면 붙잡아 두고, 남은 게 없으면 이 프레임 처리를 끈다.
+func _process(_delta: float) -> void:
+	set_process(AssetWarmup.poll())
+
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(settings_panel): return

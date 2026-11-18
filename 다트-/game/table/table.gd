@@ -170,6 +170,9 @@ const MACHINE_FACE_GAP: float = 0.12
 
 @onready var board: BoardView = $Board
 var is_ready: bool = true
+## true 면 정적 메시 묶기를 여러 프레임에 나눠 한다(StaticBatch.optimize_spread). 트리에 넣기 전에 정한다.
+## 타이틀 뒤 펍(lobby/lobby_backdrop.gd)만 켠다 — 경기 방은 묶은 뒤 테마 색을 바꾸므로 한 번에 묶는다.
+var spread_batching: bool = false
 ## 다트 머신 그림(_ready 에서 만든다). 테마가 바뀌면 set_machine_skin 으로 다시 칠한다.
 var machine: DartMachine
 ## 지금 깔아 둔 자리 번호(0~3). 방 인원수에 맞춰 GameView.sync_room 이 정한다(기본 = 4자리 전부).
@@ -436,7 +439,8 @@ func _prepare_pub() -> void:
 	_apply_seats(pub)
 	# 화면 없는 시험(--headless)에서는 그리지 않으므로 묶는 시간만 아낀다.
 	if DisplayServer.get_name() != "headless":
-		StaticBatch.optimize(pub)
+		if spread_batching: StaticBatch.optimize_spread(pub)
+		else: StaticBatch.optimize(pub)
 
 
 ## 방 한 칸을 덮는 판(바닥·천장). 가장자리는 벽 두께만큼 넉넉히 덮는다.

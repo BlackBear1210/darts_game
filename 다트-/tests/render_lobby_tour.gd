@@ -21,6 +21,9 @@ func _run() -> void:
 	main = load("res://app/main.tscn").instantiate()
 	root.add_child(main)
 	var front: Control = main.front
+	# 뒤 펍은 뒤에서 읽은 뒤 짓는다(2026-11-17 밤) → 다 지을 때까지 기다린다.
+	if not front._backdrop.is_built():
+		await front._backdrop.built
 	await capture("01_lobby_intro", 0.35)
 	await capture("02_lobby_home", 1.6)
 	# 첫 메뉴 버튼 위로 포인터를 옮겨 조준 자세를 본다.

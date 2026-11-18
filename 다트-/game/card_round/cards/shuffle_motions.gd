@@ -204,6 +204,18 @@ static func flip(host: Node, card: Node3D, up: bool, duration: float, delay: flo
 	return tween
 
 
-## seconds 초 기다린다(게임 일시정지 중에는 멈춘다).
+## seconds 초 기다린다(게임 일시정지 중에는 멈춘다). 섞기 빠르기(_speed)를 따른다.
 static func wait(host: Node, seconds: float) -> void:
-	await host.get_tree().create_timer(seconds / _speed(host), false).timeout
+	await pause(host, seconds / _speed(host))
+
+
+## host 에 묶인 트윈으로 seconds 초 기다린다(빠르기 배율 없음).
+## 묶인 트윈은 host 가 화면(트리)에서 빠지면 멈추고 host 가 지워지면 함께 사라진다 → 경기 중 나가도 섞기 연출이 깨진 노드를 건드리지 않는다
+## (2026-11-17 밤: get_tree().create_timer 는 나간 뒤에도 울려 "get_tree() 가 비었다"·"이미 지워진 카드" 오류가 수십 개 났다).
+## 이미 화면 밖이면 다시 들어올 때까지 기다린다(그대로 지워지면 영영 안 깨어난다 — 오류 없음).
+static func pause(host: Node, seconds: float) -> void:
+	if not host.is_inside_tree():
+		await host.tree_entered
+	var tween := host.create_tween()
+	tween.tween_interval(seconds)
+	await tween.finished

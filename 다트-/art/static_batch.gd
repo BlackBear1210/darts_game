@@ -27,6 +27,10 @@ const NO_BATCH_PREFIXES: Array[String] = ["Seat"]
 const ROUNDHOUSE_DIR := "res://art/environments/roundhouse/"
 
 
+## optimize_spread 가 한 프레임에 묶는 시간(마이크로초). 넘으면 다음 프레임으로 넘긴다.
+const SPREAD_BUDGET_USEC: int = 6000
+
+
 ## root 아래 정적 메시를 묶어 RuntimeStaticBatches 노드에 넣는다. 반환값은 로그·검증용 개수.
 static func optimize(root: Node3D) -> Dictionary:
 	var groups: Dictionary = {}
@@ -40,39 +44,78 @@ static func optimize(root: Node3D) -> Dictionary:
 	var batched_vertices := 0
 	for key in groups:
 		var group: Dictionary = groups[key]
-		var sources: Array = group.sources
-		if sources.size() < 2:
+		if group.sources.size() < 2:
 			continue
-		var surface := SurfaceTool.new()
-		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-		for source in sources:
-			var mesh_instance: MeshInstance3D = source
-			var transform := root.global_transform.affine_inverse() * mesh_instance.global_transform
-			var arrays := mesh_instance.mesh.surface_get_arrays(0)
-			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
-			# 크기를 바꾼(scale) 메시도 명암이 틀어지지 않도록 법선은 역전치 행렬로 옮긴다.
-			var normal_basis := transform.basis.inverse().transposed()
-			# 인덱스가 있는 기본 도형과 인덱스 없는 각진 메시를 같은 방식으로 풀어 넣는다.
-			# append_from 만 쓰면 섞인 묶음에서 인덱스 없는 삼각형이 사라지는 문제가 있었다.
-			var count := indices.size() if not indices.is_empty() else vertices.size()
-			source_vertices += count
-			for i in range(count):
-				var index := indices[i] if not indices.is_empty() else i
-				surface.set_normal((normal_basis * normals[index]).normalized())
-				surface.add_vertex(transform * vertices[index])
-			mesh_instance.hide()
-			source_count += 1
-		var batch := MeshInstance3D.new()
-		batch.name = "Batch_%03d" % batch_count
-		batch.mesh = surface.commit()
-		batched_vertices += batch.mesh.surface_get_array_len(0)
-		batch.material_override = group.material
-		container.add_child(batch)
+		var counts := _batch_group(root, group, container, batch_count)
+		source_count += group.sources.size()
+		source_vertices += counts.x
+		batched_vertices += counts.y
 		batch_count += 1
 	assert(source_vertices == batched_vertices, "Static batch dropped geometry")
 	return {"source_meshes": source_count, "batches": batch_count, "preserved_triangles": source_vertices / 3}
+
+
+## optimize 와 같은 묶기를 여러 프레임에 나눠 한다(한 프레임 SPREAD_BUDGET_USEC 까지). 기다리지 않고 부르면 된다.
+## [2026-11-17 밤 "실행할 때 렉"] 타이틀 뒤 펍(lobby/lobby_backdrop.gd)이 나타날 때 한 번에 묶으면 0.45초 멈췄다.
+## 다 묶기 전에는 아직 안 묶인 메시가 원래대로 보인다(그림은 같고 그리기 호출만 많다).
+## 경기 방에는 쓰지 않는다 — 오락실 테마가 묶은 뒤 재질을 바꾸는데(lounge_world._recolor), 늦게 생긴 묶음은 그 색을 놓친다.
+static func optimize_spread(root: Node3D, budget_usec: int = SPREAD_BUDGET_USEC) -> void:
+	var groups: Dictionary = {}
+	collect(root, root, groups)
+	var container := Node3D.new()
+	container.name = "RuntimeStaticBatches"
+	root.add_child(container)
+	var started := Time.get_ticks_usec()
+	var batch_count := 0
+	for key in groups:
+		var group: Dictionary = groups[key]
+		if group.sources.size() < 2:
+			continue
+		if Time.get_ticks_usec() - started > budget_usec:
+			if not root.is_inside_tree():
+				return
+			await root.get_tree().process_frame
+			# 기다리는 사이 방이 지워졌거나 화면에서 빠졌으면 그만둔다.
+			if not is_instance_valid(root) or not root.is_inside_tree() or not is_instance_valid(container):
+				return
+			started = Time.get_ticks_usec()
+		var alive: Array = group.sources.filter(func(source: Variant) -> bool: return is_instance_valid(source))
+		if alive.size() < 2:
+			continue
+		group.sources = alive
+		_batch_group(root, group, container, batch_count)
+		batch_count += 1
+
+
+## 한 묶음(같은 재질·같은 격자 칸)을 메시 하나로 합치고 원본은 숨긴다. 반환 = (원본 정점 수, 묶은 정점 수).
+static func _batch_group(root: Node3D, group: Dictionary, container: Node3D, batch_index: int) -> Vector2i:
+	var source_vertices := 0
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for source in group.sources:
+		var mesh_instance: MeshInstance3D = source
+		var transform := root.global_transform.affine_inverse() * mesh_instance.global_transform
+		var arrays := mesh_instance.mesh.surface_get_arrays(0)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		# 크기를 바꾼(scale) 메시도 명암이 틀어지지 않도록 법선은 역전치 행렬로 옮긴다.
+		var normal_basis := transform.basis.inverse().transposed()
+		# 인덱스가 있는 기본 도형과 인덱스 없는 각진 메시를 같은 방식으로 풀어 넣는다.
+		# append_from 만 쓰면 섞인 묶음에서 인덱스 없는 삼각형이 사라지는 문제가 있었다.
+		var count := indices.size() if not indices.is_empty() else vertices.size()
+		source_vertices += count
+		for i in range(count):
+			var index := indices[i] if not indices.is_empty() else i
+			surface.set_normal((normal_basis * normals[index]).normalized())
+			surface.add_vertex(transform * vertices[index])
+		mesh_instance.hide()
+	var batch := MeshInstance3D.new()
+	batch.name = "Batch_%03d" % batch_index
+	batch.mesh = surface.commit()
+	batch.material_override = group.material
+	container.add_child(batch)
+	return Vector2i(source_vertices, batch.mesh.surface_get_array_len(0))
 
 
 ## 묶을 후보를 "재질 + 격자 칸" 키로 모은다.
