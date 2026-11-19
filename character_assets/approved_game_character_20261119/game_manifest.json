@@ -1,0 +1,127 @@
+{
+  "source": "character_assets\\approved_rig_20261119\\character_source.blend",
+  "source_sha256": "6024434afeb61ae95e41497dd543fa36b626ee94b9b513f14cc8ac87b3a32b5f",
+  "game_asset": "다트-\\art\\characters\\rigged\\approved_character.glb",
+  "game_asset_sha256": "f1e8f10441ff05e370742abfcc3a9cbc8077aa27bce619de374c8f87a6367726",
+  "scale": 1.8370432589508672,
+  "transform": [
+    [
+      1.3869291137780237e-07,
+      -1.837043285369873,
+      0.0,
+      6.518566575408613e-09
+    ],
+    [
+      1.837043285369873,
+      1.3869291137780237e-07,
+      0.0,
+      0.08634103089570999
+    ],
+    [
+      0.0,
+      0.0,
+      1.837043285369873,
+      0.8998121023178101
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "uniform_placement_only": true,
+  "bind_inverse_transform_errors": {
+    "Body": 1.2036781326982014e-07,
+    "Top_01": 9.245927368097646e-08,
+    "Bottom_01": 4.0808510594454864e-08,
+    "Shoes_01": 3.7438704152110554e-08
+  },
+  "uv_errors": {
+    "Body": 0.0
+  },
+  "approved_motion_transform_errors": {
+    "Walk:0": 1.0882054653622544e-06,
+    "Walk:6": 1.0145108451755218e-06,
+    "Walk:12": 9.644275835449194e-07,
+    "Walk:18": 4.887944301026084e-07,
+    "Walk:24": 1.0882054653622544e-06,
+    "Sit_Down:0": 5.981382529862612e-07,
+    "Sit_Down:24": 2.053402180302887e-06,
+    "Sit_Down:48": 2.6221386674818695e-06
+  },
+  "approved_core_bones": 22,
+  "compatibility_extra_bones": 44,
+  "game_bones": 66,
+  "animations": [
+    "Card_Hold_L",
+    "Cheer",
+    "Crouch_Idle",
+    "Crouch_Walk",
+    "Dart_Throw",
+    "Drink_R",
+    "Idle",
+    "Jump_Air",
+    "Look_Down",
+    "Look_Left",
+    "Look_Right",
+    "Point_R",
+    "Seated_Stool",
+    "Sit_Down",
+    "Sit_Idle",
+    "Sit_Stool",
+    "Stand_Stool",
+    "Stand_Up",
+    "Tripo_afraid",
+    "Tripo_cheer",
+    "Tripo_dance_02",
+    "Tripo_dance_03",
+    "Tripo_dance_05",
+    "Tripo_freaky",
+    "Tripo_walk",
+    "Walk",
+    "Wheel_Spread"
+  ],
+  "visible_parts": [
+    "Body",
+    "Top_01",
+    "Bottom_01",
+    "Shoes_01"
+  ],
+  "seat_bottom_before_adjustment": 0.28826704621315,
+  "seat_root_up": 0.31173295378684995,
+  "seat_root_forward": 0.19288954218984106,
+  "seat_joint_rotations_unchanged": true,
+  "face_anchors_godot": {
+    "eyes": [
+      1.3453211877845206e-08,
+      1.5868663787841797,
+      -0.17819319665431976
+    ],
+    "hat": [
+      3.744708543251818e-09,
+      1.7852668762207031,
+      -0.04960016533732414
+    ],
+    "mouth": [
+      1.4007984106001459e-08,
+      1.4748066663742065,
+      -0.18554136157035828
+    ],
+    "cigar": [
+      0.025718621909618378,
+      1.471132516860962,
+      -0.19288954138755798
+    ]
+  },
+  "generator": "character_assets\\approved_game_character_20261119\\build_game_character.py",
+  "legacy_hips_translation_preserved": true,
+  "hand_socket_targets": "output\\character_nude_base_20261116\\game_apply_20261119\\socket_targets.json",
+  "socket_only_patch_binary_payload_unchanged": true,
+  "image_name_patch_binary_payload_unchanged": true,
+  "reviewed_motion_cache": "reviewed_clips.npz",
+  "postprocessed_skin_weights": [
+    "Bottom_01",
+    "Shoes_01"
+  ]
+}

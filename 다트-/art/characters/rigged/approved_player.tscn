@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://art/characters/rigged/approved_character.glb" id="1"]
+
+[node name="ApprovedPlayer" instance=ExtResource("1")]
+metadata/approved_walk_sit = true
+metadata/face_anchors = {"eyes": Vector3(1.34532119e-08, 1.58686638, -0.178193197), "hat": Vector3(3.74470854e-09, 1.78526688, -0.0496001653), "mouth": Vector3(1.40079841e-08, 1.47480667, -0.185541362), "cigar": Vector3(0.0257186219, 1.47113252, -0.192889541)}
+metadata/face_fit_scale = 0.78
+metadata/hat_fit_scale = 0.93

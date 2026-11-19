@@ -5,9 +5,10 @@ extends SceneTree
 ##   & $godot --headless --path . --script res://art/pub/pub_builder.gd
 
 const PUB_GAME_SCENE := "res://art/pub/pub_game.tscn"
-## 기본 차림 조각 수(머리·귀·눈 4·눈썹 2·입·양팔·머리카락·상의·하의·신발).
-## 캐릭터 메시 조각 수. 2026-11-08 다른 작업자가 캐릭터를 Tripo 모델(tripo_part_0~8, 9조각)로 바꿨다(예전 15조각 · Top_Reference 셔츠).
-const WORN_PART_COUNT := 9
+## 승인 기본 차림: 머리·눈을 포함한 피부와 별도 상의·하의·신발.
+const WORN_PART_COUNT := 4
+const MotionEmotes = preload("res://art/characters/motion_emotes.gd")
+const Outfit = preload("res://art/characters/player_outfit.gd")
 
 
 func _initialize() -> void:
@@ -19,6 +20,7 @@ func _run() -> void:
 	await _check_table_scene()
 	await _check_characters_and_rig()
 	await _check_player_view()
+	await _check_motion_emotes()
 	await _check_board_follows_layout()
 	await _check_dart_paint_and_scale()
 	print("PASS: game look — room signature, collision-only table, chalk scores, 4 rigged characters + bartender, seat/crouch/aim/throw poses, per-seat render layers, board numbers follow layout, dart flight color + landed scale")
@@ -79,13 +81,27 @@ func _check_characters_and_rig() -> void:
 	for seat in range(4):
 		var worn := PlayerLook.character(seat)
 		var parts := _worn_parts(worn)
-		assert(parts.size() == WORN_PART_COUNT and "tripo_part_0" in parts, "기본 차림이 아닙니다: " + str(parts))
-		# 셔츠 자리 색 칠하기는 Tripo 모델에서 뺐다(art/player_look.gd: 상의·팔이 한 재질이라 피부까지 물든다) → 자리 구분은 이름표·매트·HUD.
+		assert(parts.size() == WORN_PART_COUNT, "기본 차림이 아닙니다: " + str(parts))
+		for expected in ["Body", "Top_01", "Bottom_01", "Shoes_01"]:
+			assert(expected in parts, "모듈 부품 누락: " + expected)
+		for mesh: MeshInstance3D in worn.find_children("*", "MeshInstance3D", true, false):
+			var material := mesh.mesh.surface_get_material(0) as StandardMaterial3D
+			assert(material != null and mesh.skin != null, "재질 또는 스킨이 빠졌습니다")
+		# 상의 색 선택은 피부·머리·눈 재질에 영향을 주지 않는다.
+		var top := worn.find_child("Top_01", true, false) as MeshInstance3D
+		var body := worn.find_child("Body", true, false) as MeshInstance3D
+		Outfit.tint_shirt(worn, 1)
+		assert(top.get_surface_override_material(0) != null and body.get_surface_override_material(0) == null)
+		Outfit.tint_shirt(worn, 0)
+		assert(top.get_surface_override_material(0) == null)
 		worn.free()
 	var model := PlayerLook.character(0)
 	root.add_child(model)
 	var rig := CharacterMotion.new(model, 0.0)
 	var skeleton := model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	var animations := model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	for preset: String in ["afraid", "cheer", "dance_02", "dance_03", "dance_05", "freaky", "walk"]:
+		assert(animations.has_animation("Tripo_" + preset), "수신 프리셋 누락: " + preset)
 	# 팔·머리 덧씌움은 모디파이어 결과라 뼈 값이 아니라 뼈에 붙은 노드(BoneAttachment3D)로 잰다.
 	var hand_l := model.find_child("hand_L", true, false) as Node3D
 	var hand_r := model.find_child("hand_R", true, false) as Node3D
@@ -93,10 +109,11 @@ func _check_characters_and_rig() -> void:
 	await _animate(rig, 0.1, 0.0, CharacterMotion.Posture.SEAT, false, false)
 	assert(rig.clip == CharacterMotion.SEATED)
 	assert(_bone_height(skeleton, "hips") < 0.75, "앉았는데 골반이 높습니다")
+	_check_clothing_edges(model, skeleton)
 	# 일어서면 일어나는 모션을 끝낸 뒤 서기로 돌아간다.
 	await _animate(rig, 0.1, 0.0, CharacterMotion.Posture.STAND, false, false)
 	assert(rig.clip == CharacterMotion.STAND_UP)
-	await _animate(rig, 1.4, 0.0, CharacterMotion.Posture.STAND, false, false)
+	await _animate(rig, animations.get_animation(CharacterMotion.STAND_UP).length + 0.2, 0.0, CharacterMotion.Posture.STAND, false, false)
 	assert(rig.clip == CharacterMotion.IDLE)
 	# 숙이기: 골반이 낮아진다.
 	await _animate(rig, 0.6, 0.0, CharacterMotion.Posture.CROUCH, false, false)
@@ -133,12 +150,89 @@ func _check_characters_and_rig() -> void:
 	bartender.free()
 
 
+## 가까운 정점이 다른 손·발에 붙어 옷이 긴 가시로 늘어나는 내보내기 오류를 잡는다.
+func _check_clothing_edges(model: Node3D, skeleton: Skeleton3D) -> void:
+	for part in ["Top_01", "Bottom_01"]:
+		var instance := model.find_child(part, true, false) as MeshInstance3D
+		var transforms: Array[Transform3D] = []
+		for bind in range(instance.skin.get_bind_count()):
+			var bone: int = skeleton.find_bone(instance.skin.get_bind_name(bind))
+			transforms.append(skeleton.get_bone_global_pose(bone) * instance.skin.get_bind_pose(bind))
+		for surface in range(instance.mesh.get_surface_count()):
+			var arrays: Array = instance.mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+			var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+			var influences: int = bones.size() / vertices.size()
+			var posed := PackedVector3Array()
+			for vertex in range(vertices.size()):
+				var point := Vector3.ZERO
+				for influence in range(influences):
+					var index: int = vertex * influences + influence
+					point += transforms[bones[index]] * vertices[vertex] * weights[index]
+				posed.append(point)
+			for triangle in range(0, indices.size(), 3):
+				for edge in range(3):
+					var a: int = indices[triangle + edge]
+					var b: int = indices[triangle + (edge + 1) % 3]
+					if vertices[a].distance_to(vertices[b]) < 0.05:
+						assert(posed[a].distance_to(posed[b]) < 0.2, part + "의 면이 비정상적으로 늘어났습니다")
+	print("PASS: seated clothing has no stretched spike edges")
+
+
 ## 실제 시간으로 프레임을 돌린다. AnimationPlayer 가 실제 시간으로 흐르고 뼈에는 프레임이 지나야 반영된다.
 func _animate(rig: CharacterMotion, seconds: float, speed: float, posture: CharacterMotion.Posture, airborne: bool, aiming: bool) -> void:
 	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
 	while Time.get_ticks_msec() < until:
 		rig.animate(root.get_process_delta_time(), speed, posture, airborne, 0.0, aiming)
 		await process_frame
+
+
+func _check_motion_emotes() -> void:
+	var model := PlayerLook.character(0)
+	root.add_child(model)
+	var rig := CharacterMotion.new(model)
+	rig.holding_cards = true
+	for index in range(MotionEmotes.CLIPS.size()):
+		assert(rig.play_emote(index))
+		await _animate(rig, 0.15, 1.0, CharacterMotion.Posture.STAND, false, false)
+		assert(rig.emote_clip == MotionEmotes.CLIPS[index] and rig.clip == MotionEmotes.CLIPS[index])
+		assert((rig.get("_layer") as CharacterPoseLayer).left.weight > 0.7, "모션 중에도 왼손 카드 자세 유지")
+		assert(rig.play_emote(MotionEmotes.STOP))
+		await _animate(rig, 0.05, 0.0, CharacterMotion.Posture.STAND, false, false)
+		assert(rig.emote_clip.is_empty() and rig.clip == CharacterMotion.IDLE)
+	assert(not rig.play_emote(-1) and not rig.play_emote(99))
+	# 새 승인 리깅은 앉은 감정표현에도 기존 승인 발 위치를 유지한다.
+	var skeleton := model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	var foot_probe := BoneAttachment3D.new()
+	foot_probe.bone_name = "foot.L"
+	skeleton.add_child(foot_probe)
+	await _animate(rig, 2.3, 0.0, CharacterMotion.Posture.SEAT, false, false)
+	var seated_foot: Vector3 = foot_probe.global_position
+	assert(rig.play_emote(1))
+	await _animate(rig, 0.6, 0.0, CharacterMotion.Posture.SEAT, false, false)
+	assert(foot_probe.global_position.distance_to(seated_foot) < 0.035, "앉은 감정표현에서 승인 다리 자세가 풀렸습니다")
+	rig.stop_emote()
+	await _animate(rig, 2.3, 0.0, CharacterMotion.Posture.STAND, false, false)
+	# 짧은 프리셋은 끝나면 자동으로 기본 동작으로 복귀한다.
+	assert(rig.play_emote(5))
+	await _animate(rig, 1.2, 0.0, CharacterMotion.Posture.STAND, false, false)
+	assert(rig.emote_clip.is_empty() and rig.clip == CharacterMotion.IDLE)
+	# 앉은 춤은 엉덩이·다리를 고정하고 계속된다. 점프·조준·투척은 중단한다.
+	assert(rig.play_emote(0))
+	await _animate(rig, 0.1, 0.0, CharacterMotion.Posture.SEAT, false, false)
+	assert(not rig.emote_clip.is_empty(), "앉은 춤이 중단됐습니다")
+	rig.play_emote(MotionEmotes.STOP)
+	for reason in range(3):
+		assert(rig.play_emote(0))
+		await _animate(rig, 0.02, 0.0, CharacterMotion.Posture.STAND, reason == 0, reason == 1)
+		if reason == 2:
+			rig.play_throw()
+		assert(rig.emote_clip.is_empty(), "점프/조준/투척 시 모션 취소")
+	model.queue_free()
+	await process_frame
+	print("PASS: 7 motion emotes while moving, left-hand cards, stop, natural completion, gameplay interruption")
 
 
 func _worn_parts(model: Node3D) -> Array[String]:
@@ -164,6 +258,11 @@ func _check_player_view() -> void:
 	root.add_child(view)
 	view.configure(player)
 	await process_frame
+	view.seated = false
+	view.position.y = 0.0
+	view.velocity = Vector3(0, 0, -PlayerView.SPEED)
+	assert(view.can_emote(), "이동 중에도 모션 시작 가능")
+	view.velocity = Vector3.ZERO
 	var model := view.get_node("Model") as Node3D
 	assert(model.scene_file_path == PlayerLook.CHARACTER_SCENE)
 	assert(is_zero_approx(model.rotation.y), "캐릭터 정면은 PlayerView 정면과 같은 -Z 입니다")

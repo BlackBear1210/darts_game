@@ -5,7 +5,7 @@ extends Node3D
 ## [왜 바꿨나] 2026-11-09 사용자 지적 "게임 시점에서 플레이어 팔이 아직 예전 프로토타입으로 보인다".
 ## 몸·NPC·바텐더는 2026-11-06·11-08 에 리깅 캐릭터로 바뀌었는데 1인칭 손만 옛 도형 모델
 ## (character_factory.create_hand — 구 + 막대로 만든 벙어리장갑과 소매)로 남아 있었다.
-## 이제 선수 몸과 **같은 리깅 캐릭터**(art/characters/rigged/player_character.tscn)의 오른팔을 그대로 쓴다
+## 이제 PlayerLook.CHARACTER_SCENE과 같은 리깅 캐릭터의 오른팔을 그대로 쓴다
 ## → 3인칭으로 보이는 내 팔과 1인칭 내 팔의 소매·피부·손 모양이 같다.
 ##
 ## [어떻게 팔만 보이나]
@@ -23,7 +23,7 @@ extends Node3D
 
 ## 1인칭에 남기는 메시 조각(위 주석의 측정 결과). 목록에 없는 조각은 전부 끈다 —
 ## 모델을 다시 구워 조각이 늘어나도 얼굴·다리가 화면에 튀어나오지 않는다.
-const ARM_PARTS: Array[String] = ["tripo_part_0", "tripo_part_4"]
+const ARM_PARTS: Array[String] = ["tripo_part_0", "tripo_part_4", "Body", "Top_01"]
 ## 손에 쥔 다트 위치를 맞출 소켓(GLB 에 들어 있는 BoneAttachment 자식). 없으면 hand.R 뼈로 맞춘다.
 const DART_SOCKET := "Socket_Dart_R"
 const HAND_BONE := "hand.R"
@@ -75,7 +75,10 @@ const RELEASE_BEND: float = 0.12
 ## → 1인칭 뷰모델 관례대로 줄여 다트와 비율을 맞춘다(3인칭 몸은 그대로다).
 const HAND_SCALE: float = 0.52
 ## 모든 1인칭 손이 같은 원본을 쓰므로 오른팔 메시를 한 번만 만든다.
-static var _right_arm_mesh: ArrayMesh
+static var _right_arm_meshes: Dictionary = {}
+## 새 모델 손은 기존 Tripo 손보다 작아 원래 크기로 사용한다.
+const MODULAR_HAND_SCALE: float = 1.0
+var _modular: bool = false
 
 var seat: int = 0
 ## 꾸미기 옷 색 번호(art/characters/player_outfit.gd SHIRT_COLORS). 0 = 원래 그림 색. 소매가 3인칭 내 몸과 같은 색이 된다.
@@ -119,6 +122,7 @@ func _ready() -> void:
 	var model: Node3D = PlayerLook.character(seat)
 	model.name = "Model"
 	add_child(model)
+	_modular = model.find_child("Top_01", true, false) != null
 	var skeletons: Array[Node] = model.find_children("*", "Skeleton3D", true, false)
 	var players: Array[Node] = model.find_children("*", "AnimationPlayer", true, false)
 	if skeletons.is_empty() or players.is_empty():
@@ -221,10 +225,11 @@ func _show_arm_only(model: Node3D) -> void:
 		var mesh := node as MeshInstance3D
 		mesh.visible = ARM_PARTS.has(mesh.name)
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		if mesh.name == "tripo_part_0":
-			if _right_arm_mesh == null:
-				_right_arm_mesh = _extract_right_arm(mesh)
-			mesh.mesh = _right_arm_mesh
+		if mesh.visible and mesh.name != "tripo_part_4":
+			var key: int = mesh.mesh.get_instance_id()
+			if not _right_arm_meshes.has(key):
+				_right_arm_meshes[key] = _extract_right_arm(mesh)
+			mesh.mesh = _right_arm_meshes[key] as ArrayMesh
 
 
 ## 원본의 정점·UV·스킨은 유지하고 오른팔에 속한 면만 그린다. 3인칭 공유 리소스는 수정하지 않는다.
@@ -233,7 +238,9 @@ func _extract_right_arm(instance: MeshInstance3D) -> ArrayMesh:
 	var arm_binds: Array[int] = []
 	for bind in range(instance.skin.get_bind_count()):
 		var bone_name: String = str(instance.skin.get_bind_name(bind))
-		if bone_name in ["upper_arm.R", "forearm.R", "hand.R"]:
+		# 새 몸에는 손가락도 함께 있으므로 손가락 뼈의 면까지 남긴다.
+		var right_finger: bool = bone_name.ends_with(".R") and bone_name.get_slice("_", 0) in ["thumb", "index", "middle", "ring", "pinky"]
+		if bone_name in ["upper_arm.R", "forearm.R", "hand.R"] or right_finger or bone_name.begins_with("extra_RightHand"):
 			arm_binds.append(bind)
 	for surface in range(instance.mesh.get_surface_count()):
 		var arrays: Array = instance.mesh.surface_get_arrays(surface)
@@ -272,9 +279,13 @@ func _grip_at_origin(model: Node3D, rig: Skeleton3D) -> void:
 	# (2026-11-17 밤 사용자 지적 "다트 크기 카드를 쓰면 손 크기도 같이 커진다").
 	var held: Transform3D = dart_grip.orthonormalized()
 	# 다트와 같은 방향으로 자루를 잡는다: 다트 자세를 그대로 쓰고 축을 따라 자루 쪽으로 물러난다.
-	var target: Transform3D = held if pointing else held.rotated_local(Vector3.BACK, GRIP_ROLL).translated_local(GRIP_PIVOT)
+	var approved: bool = bool(model.get_meta("approved_walk_sit", false))
+	# 새 손의 소켓 축에 맞춰 아래팔이 화면 아래로 이어지게 한다.
+	var roll: float = GRIP_ROLL + PI if approved else GRIP_ROLL
+	var target: Transform3D = held if pointing else held.rotated_local(Vector3.BACK, roll).translated_local(GRIP_PIVOT)
 	# 크기는 쥔 자리를 축으로 줄인다 — 손은 작아져도 다트를 쥔 지점은 그대로다.
-	target.basis = target.basis.scaled(Vector3.ONE * HAND_SCALE)
+	var view_scale: float = MODULAR_HAND_SCALE if _modular and not approved else HAND_SCALE
+	target.basis = target.basis.scaled(Vector3.ONE * view_scale)
 	model.transform = target * grip.affine_inverse()
 	_model = model
 	_hold_normal = model.transform
@@ -296,7 +307,8 @@ func _grip_transform(model: Node3D, rig: Skeleton3D) -> Transform3D:
 	var socket := model.find_child(DART_SOCKET, true, false) as Node3D
 	if socket != null:
 		grip = grip * socket.transform
-	if not pointing:
+	# 승인 리깅의 손 형태는 유지하고 실제 손바닥 소켓을 사용한다.
+	if not pointing and not bool(model.get_meta("approved_walk_sit", false)):
 		var pinch: Variant = _pinch_frame(rig)
 		if pinch != null:
 			grip = pinch
@@ -328,7 +340,8 @@ func _pinch_frame(rig: Skeleton3D) -> Variant:
 	var back: Vector3 = pads[1] - pads[2]
 	back = (back - across * back.dot(across)).normalized()
 	var basis := Basis(across, back.cross(across).normalized(), back)
-	return Transform3D(basis, (pads[0] + fingers) * 0.5 + basis * PINCH_NUDGE)
+	var nudge: Vector3 = Vector3.ZERO if _modular else PINCH_NUDGE
+	return Transform3D(basis, (pads[0] + fingers) * 0.5 + basis * nudge)
 
 
 ## rig 좌표 → model 좌표 변환(스켈레톤이 모델 아래 몇 단계에 있든 부모를 따라 곱한다).

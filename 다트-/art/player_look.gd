@@ -15,15 +15,15 @@ const SYMBOLS: Array[String] = ["●", "▲", "■", "◆"]
 const MAT_SIDES: Array[int] = [32, 3, 4, 4]
 ## 화면에 보이는 캐릭터 이름(기획 2-4).
 const CHARACTER_NAMES: Array[String] = ["삐죽이", "바가지", "반짝이", "뽀글이"]
-## 플레이어·봇 공용 리깅 캐릭터. 수신 Tripo 외형과 텍스처를 그대로 쓴다.
-## GLB 생성기: character_assets/reference_character_20261105/incoming_tripo_20261107/build_game_character.py
-const CHARACTER_SCENE: String = "res://art/characters/rigged/player_character.tscn"
+## 플레이어·봇 공용 모듈 캐릭터. 승인한 얼굴·거북목·옷·갈색 신발·곱슬머리를 사용한다.
+## 생성기: character_assets/approved_game_character_20261119/build_game_character.py (Blender).
+## 기존 player_character.tscn/Tripo 모델은 NPC와 이전 에셋의 참조용으로 보존한다.
+const CHARACTER_SCENE: String = "res://art/characters/rigged/approved_player.tscn"
 
 
 ## seat 자리의 캐릭터를 새로 만든다. 정면은 -Z 이고, 모션은 CharacterMotion 이 튼다.
 static func character(_seat: int) -> Node3D:
-	# 상의와 오른팔이 같은 재질이라 전체를 자리 색으로 칠하면 피부색까지 바뀐다.
-	# 수신 색을 보존하고 자리 구분은 기존 이름표·매트·HUD의 색과 모양을 쓴다.
+	# 기본 보라 티셔츠를 유지한다. 옷 색 선택은 PlayerOutfit이 상의 부품에만 적용한다.
 	return (load(CHARACTER_SCENE) as PackedScene).instantiate() as Node3D
 
 

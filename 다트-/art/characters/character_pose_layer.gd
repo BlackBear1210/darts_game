@@ -26,6 +26,18 @@ var seat_pin := 0.0
 var _pin_bones := PackedInt32Array()
 var _pin_positions: Array[Vector3] = []
 var _pin_rotations: Array[Quaternion] = []
+## 오른손목을 얼굴 앞 목표로 끌어당기는 비율(0~1). 2026-11-16 머리가 크고 팔이 짧은 원본 디자인 몸은
+## 모션 그대로면 조준·마시기 손이 턱 아래에서 멈춘다 → 팔 두 마디를 IK 로 다시 굽힌다. CharacterMotion 이 넣는다.
+## 눈 위치를 알려 준 모델(setup_reach)만 움직인다. 눈이 텍스처인 모델은 그대로다.
+var reach := 0.0
+## 손목 목표 = 두 눈 사이 + reach_offset(모델 기준 m). 머리가 돈 만큼 같이 돈다.
+var reach_offset := Vector3.ZERO
+var _reach_ready := false
+var _eye_in_head := Vector3.ZERO
+var _head_rest_facing := Quaternion.IDENTITY
+var _upper_arm_r := -1
+var _forearm_r := -1
+var _hand_r := -1
 
 ## 앉은 다리 방향(모델 기준, 오른쪽 다리 = +X 쪽. 왼쪽은 x 를 뒤집는다).
 ## 허벅지: 앞(−Z)으로 거의 수평(무릎이 조금 벌어진다). 정강이: 아래로, 발이 의자 밑으로 25도 들어간다.
@@ -38,6 +50,7 @@ var _neck: int
 var _head: int
 ## [허벅지, 정강이, 발, 좌우 부호] — 왼쪽 -1, 오른쪽 +1.
 var _legs: Array = []
+var pose_safety: RefCounted
 
 
 ## 팔 하나의 덧씌운 자세. 회전만 덮어쓴다(팔 뼈는 위치 이동이 없다).
@@ -114,6 +127,48 @@ func _process_modification() -> void:
 	_turn(rig, _neck, Vector3.RIGHT, look_pitch * 0.5)
 	_turn(rig, _head, Vector3.RIGHT, look_pitch * 0.5)
 	rig.set_bone_pose_scale(_head, Vector3.ONE * head_scale)
+	if _reach_ready and reach > 0.001:
+		_reach_right_hand(rig)
+	if pose_safety != null:
+		pose_safety.apply()
+
+
+## 두 눈 사이 점(스켈레톤 기준, 쉬는 자세)을 알려 주면 reach 를 쓸 수 있다.
+func setup_reach(rig: Skeleton3D, eye_center: Vector3) -> void:
+	_upper_arm_r = rig.find_bone("upper_arm.R")
+	_forearm_r = rig.find_bone("forearm.R")
+	_hand_r = rig.find_bone("hand.R")
+	var head_rest := rig.get_bone_global_rest(_head)
+	_eye_in_head = head_rest.affine_inverse() * eye_center
+	_head_rest_facing = head_rest.basis.get_rotation_quaternion()
+	_reach_ready = _upper_arm_r >= 0 and _forearm_r >= 0 and _hand_r >= 0
+
+
+## 위팔·아래팔을 두 마디 IK 로 굽혀 손목을 얼굴 앞 목표로 reach 만큼 옮긴다.
+## 팔꿈치는 모션이 굽힌 쪽(평면)을 그대로 쓰고, 손은 모션의 방향을 지켜 다트·컵이 돌아가지 않는다.
+func _reach_right_hand(rig: Skeleton3D) -> void:
+	var head_pose := rig.get_bone_global_pose(_head)
+	var head_turn := head_pose.basis.get_rotation_quaternion() * _head_rest_facing.inverse()
+	var hand_facing := rig.get_bone_global_pose(_hand_r).basis.get_rotation_quaternion()
+	var shoulder := rig.get_bone_global_pose(_upper_arm_r).origin
+	var elbow := rig.get_bone_global_pose(_forearm_r).origin
+	var wrist := rig.get_bone_global_pose(_hand_r).origin
+	var target := wrist.lerp(head_pose * _eye_in_head + head_turn * reach_offset, reach)
+	var upper := shoulder.distance_to(elbow)
+	var lower := elbow.distance_to(wrist)
+	var axis := (target - shoulder).normalized()
+	var distance := clampf(shoulder.distance_to(target), absf(upper - lower) + 0.001, upper + lower - 0.001)
+	var bend := (elbow - shoulder) - axis * (elbow - shoulder).dot(axis)
+	if bend.length_squared() < 0.000001:
+		return
+	bend = bend.normalized()
+	var cos_shoulder := (upper * upper + distance * distance - lower * lower) / (2.0 * upper * distance)
+	var new_elbow := shoulder + axis * (upper * cos_shoulder) + bend * (upper * sqrt(maxf(0.0, 1.0 - cos_shoulder * cos_shoulder)))
+	_aim(rig, _upper_arm_r, _forearm_r, new_elbow - shoulder, 1.0)
+	var placed_elbow := rig.get_bone_global_pose(_forearm_r).origin
+	_aim(rig, _forearm_r, _hand_r, shoulder + axis * distance - placed_elbow, 1.0)
+	var forearm_facing := rig.get_bone_global_pose(_forearm_r).basis.get_rotation_quaternion()
+	rig.set_bone_pose_rotation(_hand_r, forearm_facing.inverse() * hand_facing)
 
 
 ## 앉은 채 춤 때 엉덩이를 묶을 뼈와 앉은 자세(위치·회전)를 넣는다.

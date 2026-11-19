@@ -1,3 +1,9 @@
+# 2026-11-19 모션 검수 후 인수인계
+
+현재 배포용 플레이어는 `art/characters/rigged/approved_character.glb`다. 다시 내보낼 때 생성기 옆의 `motion_review_patch.py`와 `reviewed_clips.npz`를 함께 사용한다. [검사 범위·게임 캡처·재현 절차](2026-11-19_전체모션_외형검수.md).
+
+---
+
 # 최신 인수인계 — 경기 화면 재사용 (2026-11-18)
 
 - **라운지 방은 경기 화면(GameView)을 경기마다 새로 만들지 않는다.** 경기 시작·로비로 돌아오기 때 `app/main.gd` 가 `_game.begin_match(room)` 을 부른다(전용 서버만 예전처럼 새로 만든다).

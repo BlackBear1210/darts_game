@@ -1,6 +1,6 @@
 class_name CharacterMotion
 extends RefCounted
-## 리깅 캐릭터(rigged/tripo_character.glb)의 몸짓을 정한다. 디자인 담당 소유.
+## 리깅 캐릭터의 몸짓을 정한다(선수: approved_character.glb · NPC: tripo_character.glb). 디자인 담당 소유.
 ## PlayerView·로비가 쓰는 겉면은 예전 CharacterRig 와 같다: 매 프레임 animate(), 던질 때 play_throw().
 ##
 ## 온몸: AnimationPlayer 가 서기·걷기·숙이기·점프·앉기·일어서기 모션을 튼다.
@@ -58,6 +58,12 @@ const JUMP_TAKEOFF := 10.0 / 30.0
 const JUMP_RATE := 0.8
 ## 마시는 동안 고개를 뒤로 젖히는 각도(라디안).
 const DRINK_HEAD_BACK := 0.45
+## 손 IK 목표: 두 눈 사이에서 오른손목까지(모델 기준 m — 오른쪽 +X, 위 +Y, 앞 -Z). 눈 메시(Eye_L·Eye_R)가 있는 모델만 쓴다.
+## 조준은 다트가 오른눈 앞에 오게, 마시기는 컵이 입에 닿게 잡았다(2026-11-16 원본 디자인 몸 기준).
+const AIM_REACH := Vector3(0.10, -0.07, -0.12)
+const DRINK_REACH := Vector3(0.03, -0.215, -0.10)
+## 던지기에서 손이 얼굴 앞을 떠나는 순간(놓는 39프레임). 그때까지 IK 를 풀어 휘두름이 모션 그대로 나간다.
+const THROW_RELEASE := 39.0 / 30.0
 const BLINK_EVERY := 3.4
 const BLINK_TIME := 0.12
 ## 왕머리가 커지는 빠르기.
@@ -84,6 +90,7 @@ var clip := ""
 ## 선택한 Tripo 모션. 한 번 재생하고 기본 동작으로 돌아간다.
 var emote_clip: String = ""
 
+var _approved_walk_sit: bool = false
 var _model: Node3D
 var _player: AnimationPlayer
 var _layer: CharacterPoseLayer
@@ -103,12 +110,15 @@ var _next_blink := 0.0
 ## model = PlayerLook.character() 로 만든 캐릭터. 트리에 붙인 뒤에 만든다.
 func _init(model: Node3D, seed_offset := 0.0) -> void:
 	_model = model
+	_approved_walk_sit = bool(model.get_meta("approved_walk_sit", false))
 	_player = model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	var rig := model.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
 	_card_socket = model.find_child("Socket_Card_L", true, false) as Node3D
 	# Tripo 얼굴은 눈과 피부가 하나의 텍스처 메시다. 분리된 눈이 있을 때만 기존 깜빡임을 쓴다.
 	var head := model.find_child("Head_Base", true, false) as MeshInstance3D
-	if head != null:
+	if head == null:
+		head = model.find_child("Body", true, false) as MeshInstance3D
+	if head != null and model.find_child("Eye_L", true, false) is MeshInstance3D and model.find_child("Eye_R", true, false) is MeshInstance3D:
 		_eyes.assign([model.find_child("Eye_L", true, false), model.find_child("Eye_R", true, false)])
 		_pupils.assign([model.find_child("Pupil_L", true, false), model.find_child("Pupil_R", true, false)])
 		_skin = head.mesh.surface_get_material(0)
@@ -121,7 +131,10 @@ func _init(model: Node3D, seed_offset := 0.0) -> void:
 	_layer = CharacterPoseLayer.new()
 	rig.add_child(_layer)
 	_layer.setup(rig, CharacterPoseLayer.Arm.new(rig, LEFT_ARM, path), CharacterPoseLayer.Arm.new(rig, RIGHT_ARM, path))
+	if _approved_walk_sit:
+		_layer.pose_safety = preload("res://art/characters/character_pose_safety.gd").new(rig,model)
 	_setup_seat_pin(rig, path)
+	_setup_reach(rig)
 	# 네 명이 같은 박자로 숨쉬고 깜빡이지 않게 자리마다 시작 시각을 다르게 준다.
 	_seed = seed_offset
 	_time = seed_offset
@@ -186,6 +199,7 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	var drink: Vector2 = CharacterRig.drink_curve(drinking)
 	if not emote_clip.is_empty():
 		_layer.right.follow(_layer.right.pose, 0.0, amount)
+		_layer.reach = lerpf(_layer.reach, 0.0, amount)
 	else:
 		_update_right_arm(delta, amount, aiming, drink.x)
 	_update_left_arm(amount)
@@ -194,7 +208,9 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	_layer.lean = lean
 	_layer.head_tilt = head_tilt
 	# 앉아 있으면 허벅지는 방석 위 수평, 발은 의자 발걸이 위(2026-11-08 — 모션 그대로면 무릎이 방석을 뚫는다).
-	_layer.seat_legs = lerpf(_layer.seat_legs, 1.0 if posture == Posture.SEAT else 0.0, 1.0 - exp(-SEAT_LEGS_RATE * delta))
+	# 승인한 새 앉기에는 기존 낮은 의자용 다리 보정을 덮어쓰지 않는다.
+	var seat_leg_target: float = 1.0 if posture == Posture.SEAT and not _approved_walk_sit else 0.0
+	_layer.seat_legs = lerpf(_layer.seat_legs, seat_leg_target, 1.0 - exp(-SEAT_LEGS_RATE * delta))
 	_layer.head_scale = lerpf(_layer.head_scale, head_scale, minf(1.0, delta * HEAD_SCALE_RATE))
 	if is_instance_valid(_card_fan):
 		_card_fan.position = _model.to_local(_card_socket.global_position)
@@ -213,7 +229,11 @@ func _setup_seat_pin(rig: Skeleton3D, path: String) -> void:
 	var bones := PackedInt32Array()
 	var positions: Array[Vector3] = []
 	var rotations: Array[Quaternion] = []
-	for bone_name: String in SEAT_PIN_BONES:
+	var pin_names := SEAT_PIN_BONES.duplicate()
+	if _approved_walk_sit:
+		# 앉은 감정표현에서도 승인한 다리 자세를 고정한다.
+		pin_names.append_array(PackedStringArray(["thigh.L", "shin.L", "foot.L", "toe.L", "thigh.R", "shin.R", "foot.R", "toe.R"]))
+	for bone_name: String in pin_names:
 		var bone := rig.find_bone(bone_name)
 		var position_track := seated.find_track(NodePath("%s:%s" % [path, bone_name]), Animation.TYPE_POSITION_3D)
 		var rotation_track := seated.find_track(NodePath("%s:%s" % [path, bone_name]), Animation.TYPE_ROTATION_3D)
@@ -223,6 +243,21 @@ func _setup_seat_pin(rig: Skeleton3D, path: String) -> void:
 		positions.append(seated.position_track_interpolate(position_track, 0.0))
 		rotations.append(seated.rotation_track_interpolate(rotation_track, 0.0))
 	_layer.set_seat_pin(bones, positions, rotations)
+
+
+## 눈 메시가 따로 있으면 두 눈 사이(쉬는 자세)를 손 IK 기준점으로 넘긴다.
+func _setup_reach(rig: Skeleton3D) -> void:
+	var anchors: Dictionary = _model.get_meta("face_anchors", {})
+	if anchors.has("eyes"):
+		_layer.setup_reach(rig, anchors["eyes"] as Vector3)
+		return
+	var center := Vector3.ZERO
+	for eye_name: String in ["Eye_L", "Eye_R"]:
+		var eye := _model.find_child(eye_name, true, false) as MeshInstance3D
+		if eye == null:
+			return
+		center += rig.global_transform.affine_inverse() * eye.global_transform * eye.get_aabb().get_center()
+	_layer.setup_reach(rig, center * 0.5)
 
 
 func _update_body(speed_ratio: float, posture: Posture, airborne: bool) -> void:
@@ -243,7 +278,7 @@ func _update_body(speed_ratio: float, posture: Posture, airborne: bool) -> void:
 			_player.seek(fmod(_seed, _player.get_animation(next).length), true)
 			# 처음부터 앉아 있던 사람(봇·NPC)은 다리도 바로 앉은 자세다.
 			if next == SEATED:
-				_layer.seat_legs = 1.0
+				_layer.seat_legs = 0.0 if _approved_walk_sit else 1.0
 	if moving:
 		_player.speed_scale = clampf(speed_ratio * WALK_RATE, WALK_RATE_MIN, WALK_RATE_MAX)
 	else:
@@ -275,9 +310,19 @@ func _update_right_arm(delta: float, amount: float, aiming: bool, drink_lift: fl
 		if _throw_time < THROW_END:
 			arm.pose = arm.sample(_player.get_animation(THROW), _throw_time)
 			arm.weight = 1.0
+			_layer.reach_offset = AIM_REACH
+			_layer.reach = 1.0 - smoothstep(THROW_START, THROW_RELEASE, _throw_time)
 			return
 		_throw_time = -1.0
 		_aim_time = 0.0
+	var reach_goal := 0.0
+	if aiming:
+		_layer.reach_offset = AIM_REACH
+		reach_goal = 1.0
+	elif drink_lift > 0.0:
+		_layer.reach_offset = DRINK_REACH
+		reach_goal = drink_lift
+	_layer.reach = lerpf(_layer.reach, reach_goal, amount)
 	if aiming:
 		arm.follow(arm.sample(_player.get_animation(THROW), _aim_time), 1.0, amount)
 	elif drink_lift > 0.0:

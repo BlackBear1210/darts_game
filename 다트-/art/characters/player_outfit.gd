@@ -43,6 +43,7 @@ const WATCH_ALONG: float = 0.86
 const WATCH_RADIUS: float = 0.036
 
 static var _shirt_materials: Dictionary = {}
+static var _modular_shirt_materials: Dictionary = {}
 
 
 ## 빈 값·옛 값·남이 보낸 이상한 값을 목록 안으로 맞춘다(방장이 받은 값도 이것을 거친다).
@@ -82,18 +83,77 @@ static func dress(model: Node3D, look: Dictionary) -> void:
 	if skeleton == null:
 		return
 	var head: Node3D = NpcOutfit.on_bone(skeleton, "head")
-	hat(head, int(clean.hat))
+	hat(_fitted_head(model, head, "hat"), int(clean.hat))
+	var eyes: Node3D = _fitted_head(model, head, "eyes")
 	match int(clean.eyes):
-		1: NpcOutfit.glasses(head)
-		2: _sunglasses(head, "15151a", "1b1b1f", 0.12)
-		3: _sunglasses(head, "e08a2e", "c9a24f", 0.25)
+		1: NpcOutfit.glasses(eyes)
+		2: _sunglasses(eyes, "15151a", "1b1b1f", 0.12)
+		3: _sunglasses(eyes, "e08a2e", "c9a24f", 0.25)
+	var mouth: Node3D = _fitted_head(model, head, "mouth")
 	match int(clean.mustache):
-		1: NpcOutfit.mustache(head)
-		2: _thick_mustache(head)
+		1: NpcOutfit.mustache(mouth)
+		2: _thick_mustache(mouth)
 	if int(clean.cigar) == 1:
-		_cigar(head)
+		_cigar(_fitted_head(model, head, "cigar"))
 	if int(clean.watch) > 0:
-		_watch(skeleton, int(clean.watch))
+		_watch(skeleton, int(clean.watch), 0.75 if model.find_child("Top_01", true, false) != null else 1.0)
+
+
+## 새 모델의 눈·머리·입 위치로 기존 꾸미기 부품의 받침만 맞춘다. NPC용 원본 치수는 유지한다.
+static func _fitted_head(model: Node3D, head: Node3D, kind: String) -> Node3D:
+	if model.find_child("Top_01", true, false) == null:
+		return head
+	var anchors: Dictionary = model.get_meta("face_anchors", {})
+	if anchors.has(kind):
+		var anchor_target: Vector3 = anchors[kind]
+		var anchor_scale: float = float(model.get_meta("hat_fit_scale" if kind == "hat" else "face_fit_scale", 1.0))
+		var anchor_origin := Vector3(NpcOutfit.HEAD_AXIS.x, 1.57, -0.245)
+		if kind == "hat":
+			anchor_origin = Vector3(NpcOutfit.HEAD_AXIS.x, NpcOutfit.HAT_BASE_Y, 0.0)
+		elif kind == "mouth":
+			anchor_origin = Vector3(-0.012, 1.37, -0.207)
+		elif kind == "cigar":
+			anchor_origin = CIGAR_MOUTH
+		var anchor_node := Node3D.new()
+		anchor_node.name = "Approved_" + kind
+		head.add_child(anchor_node)
+		anchor_node.transform = Transform3D(Basis.from_scale(Vector3.ONE * anchor_scale), anchor_target - anchor_origin * anchor_scale)
+		return anchor_node
+	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
+	var left := model.find_child("Eye_L", true, false) as MeshInstance3D
+	var right := model.find_child("Eye_R", true, false) as MeshInstance3D
+	var hair := model.find_child("Hair_01", true, false) as MeshInstance3D
+	if skeleton == null or left == null or right == null or hair == null:
+		return head
+	var to_rig: Transform3D = skeleton.global_transform.affine_inverse()
+	var eye_l: Vector3 = to_rig * left.global_transform * left.get_aabb().get_center()
+	var eye_r: Vector3 = to_rig * right.global_transform * right.get_aabb().get_center()
+	var target: Vector3 = (eye_l + eye_r) * 0.5
+	var amount: float = absf(eye_l.x - eye_r.x) / 0.2
+	var original := Vector3(NpcOutfit.HEAD_AXIS.x, 1.57, -0.245)
+	if kind == "hat":
+		var bounds: AABB = hair.get_aabb()
+		target = to_rig * hair.global_transform * bounds.get_center()
+		target.y += bounds.size.y * 0.5 - 0.06
+		amount = bounds.size.x / 0.36
+		original = Vector3(NpcOutfit.HEAD_AXIS.x, NpcOutfit.HAT_BASE_Y, 0.0)
+	elif kind == "eyes":
+		var front: Vector3 = left.get_aabb().get_center() - Vector3(0, 0, left.get_aabb().size.z * 0.5)
+		target.z = (to_rig * left.global_transform * front).z - 0.008
+	else:
+		var socket := model.find_child("Socket_Mouth", true, false) as Node3D
+		if socket == null:
+			return head
+		target = skeleton.get_bone_global_rest(skeleton.find_bone("head")) * socket.position
+		original = Vector3(-0.012, 1.37, -0.207)
+		if kind == "cigar":
+			original = CIGAR_MOUTH
+			target += Vector3(0.025, -0.004, -0.008)
+	var fit := Node3D.new()
+	fit.name = "Modular_" + kind
+	head.add_child(fit)
+	fit.transform = Transform3D(Basis.from_scale(Vector3.ONE * amount), target - original * amount)
+	return fit
 
 
 ## 입힌 부품을 모두 벗긴다(뼈 받침 "Outfit_*" 를 통째로 지운다). 캐릭터를 새로 만들지 않고 차림만 바꿀 때 쓴다
@@ -111,6 +171,18 @@ static func undress(model: Node3D) -> void:
 
 ## 몸통 그림의 티셔츠 칸만 다시 칠한다(index 0 = 원래 그림). 1인칭 팔(art/characters/first_person_arm.gd)도 같은 함수를 쓴다.
 static func tint_shirt(model: Node3D, index: int) -> void:
+	var top := model.find_child("Top_01", true, false) as MeshInstance3D
+	if top != null:
+		for surface in range(top.mesh.get_surface_count()):
+			if index <= 0 or index >= SHIRT_COLORS.size():
+				top.set_surface_override_material(surface, null)
+				continue
+			if not _modular_shirt_materials.has(index):
+				var material := top.mesh.surface_get_material(surface).duplicate() as BaseMaterial3D
+				material.albedo_color = SHIRT_COLORS[index]
+				_modular_shirt_materials[index] = material
+			top.set_surface_override_material(surface, _modular_shirt_materials[index] as Material)
+		return
 	for node in model.find_children("tripo_part_0", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
 		if index <= 0 or index >= SHIRT_COLORS.size():
@@ -280,7 +352,7 @@ static func _cigar(head: Node3D) -> void:
 # ─────────────────────────────── 시계 ───────────────────────────────
 
 ## 왼쪽 손목 시계: 손목 고리(줄) + 손등 쪽 시계 판. kind 1 금 · 2 은 · 3 전자(검정 줄 + 초록 화면).
-static func _watch(skeleton: Skeleton3D, kind: int) -> void:
+static func _watch(skeleton: Skeleton3D, kind: int, size: float = 1.0) -> void:
 	var arm: int = skeleton.find_bone("forearm.L")
 	var hand: int = skeleton.find_bone("hand.L")
 	if arm < 0 or hand < 0:
@@ -295,6 +367,7 @@ static func _watch(skeleton: Skeleton3D, kind: int) -> void:
 	var outward: Vector3 = (Vector3.LEFT - along * Vector3.LEFT.dot(along)).normalized()
 	var side: Vector3 = along.cross(outward).normalized()
 	holder.transform = Transform3D(Basis(side, along, outward), a.lerp(b, WATCH_ALONG))
+	holder.scale = Vector3.ONE * size
 	var colors: Array = [["c9a24f", "f3ead2", 0.3, 0.85], ["b9bec6", "eef2f5", 0.25, 0.85], ["1d1d22", "4fd27a", 0.6, 0.0]][kind - 1]
 	var band := RoundKit.clay("outfit_watch_band_%d" % kind, colors[0], colors[2], colors[3])
 	MeshKit.mesh_node(holder, "WatchBand", RoundKit.ring_mesh("outfit_watch_band", WATCH_RADIUS, RoundKit.rounded_rect_profile(Vector2(0.008, 0.024), 0.003, 3), 20),

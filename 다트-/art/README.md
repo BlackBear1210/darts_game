@@ -6,6 +6,8 @@
 **2026-10-26부터 F5 실제 경기에 연결되어 있다.** 경기 방(펍)·다트판·캐릭터·다트·HUD 색이 모두 이 폴더의 코드로 그려진다.
 아트 기준은 [docs/ART_DIRECTION.md](../docs/ART_DIRECTION.md), 에셋 출처는 [docs/ASSET_REGISTER.md](../docs/ASSET_REGISTER.md).
 
+현재 플레이어의 승인 GLB는 게임용 모션 23개와 발목 가중치를 내보내기 마지막에 적용한다. 재생성과 실제 화면 검수 기록은 [전체 모션 외형 검수](../작업기록/2026-11-19_전체모션_외형검수.md)에 있다.
+
 ## 한눈에: F5 경기에서 무엇이 어디서 오나
 
 | 화면에 보이는 것 | 그리는 파일 | 경기 쪽 연결 지점 |
@@ -13,7 +15,7 @@
 | 펍 방 전체(벽·바닥·바·창문·조명·주크박스·바텐더·다트판 양옆 장식·옷방 상자) | `pub/game_room_builder.gd`(조립표) + `pub/room/*.gd`(구역별 모듈 — [모듈 지도](pub/room/README.md)) → 생성물 `pub/pub_game.tscn` | `game/table/table.tscn`의 자식 `Pub` |
 | 창 밖 3D 밤거리·하늘·달·관람차(2026-11-16) | `pub/street_outside.gd` + `street_night/sky/moon/halo.gdshader` + 움직임 `street_motion.gd` → 같은 생성물의 `Outside` | 오락실에서는 통째로 뺀다(`lounge_world.gd` `ARCADE_SKIP`) |
 | 다트판(칸·숫자·뒤판) | `board_art.gd` | `game/board/board.gd`(BoardView)가 실행 때 그림. 카드로 숫자 순서가 바뀌면 다시 그림 |
-| 플레이어·봇 캐릭터(리깅, 셔츠만 자리 색) | `characters/rigged/player_character.tscn` | `player_look.gd` `character()` → `game/player/player.gd`(PlayerView `_dress`) |
+| 플레이어·봇 캐릭터(승인 모듈 모델·리깅·꾸미기) | `characters/rigged/approved_player.tscn` → `approved_character.glb` | `player_look.gd` `character()` → `game/player/player.gd`(PlayerView `_dress`) |
 | 펍 NPC(손님·바텐더) | `characters/character_factory.gd` → 생성물 `characters/chr_*.tscn` | 손님 `pub/room/room_guests.gd` · 바텐더 `pub/room/room_bar.gd` |
 | 플레이어·봇 몸짓(서기·걷기·숙이기·점프·앉기·조준·던지기·카드 들기·가리키기·만세·마시기·엿보기·왕머리·깜빡임) | `characters/character_motion.gd` + `characters/character_pose_layer.gd` | PlayerView `_process`, 로비 `lobby_backdrop.gd` |
 | 펍 NPC 몸짓 | `characters/character_rig.gd` | `pub/npc_idle.gd` |
@@ -28,7 +30,23 @@
 **충돌(부딪힘)은 디자인 쪽에 없다.** 벽·테이블·바·주크박스·스툴 장애물의 충돌 상자는 `game/table/table.gd`(TableView)가 상수로 만든다.
 그래서 사람이 부딪히는 가구를 옮길 때는 TableView 상수(`BAR_BOX`, `JUKEBOX_BOX`, `OBSTACLES` …)를 같이 바꾸고 생성기를 다시 돌린다.
 
-## 리깅 캐릭터 다시 만들기
+## 현재 선수·봇 — 승인 Tripo 얼굴·새 몸·의상·리깅 (2026-11-19)
+
+`player_look.gd`가 `characters/rigged/approved_player.tscn`을 읽는다. 승인 원본은 저장소 루트 `character_assets/approved_rig_20261119/character_source.blend`이며 생성기는 `character_assets/approved_game_character_20261119/build_game_character.py`다.
+
+```text
+blender --background --factory-startup --python character_assets/approved_game_character_20261119/build_game_character.py
+```
+
+- 저장소 루트에서 실행한다. 이전 게임 동작을 읽는 `output/character_nude_base_20261116/game_apply_20261118/character_game_rig.blend`와 소켓 계약 `output/character_nude_base_20261116/game_apply_20261119/legacy_contract.json`도 필요하다. 출력은 `approved_character.glb`와 `approved_player.tscn`이다.
+- 승인 원본은 수정하지 않는다. 전체 균일 배치로 키1.8m·정면-Z·바닥0을 맞추며 얼굴 비율·기본 형태·UV·법선은 보존한다. 머리·눈이 포함된 Body, Top_01, Bottom_01, Shoes_01 총4개 독립 표시 메시다.
+- 22개 승인 변형 뼈 + 44개 게임 호환 보조 뼈, 동작27개. 승인 Walk/Sit_Down/Sit_Idle/Stand_Up과 기존 게임용 추가 모션을 제공한다. 게임 의자 별칭3개는 원래 앉기 회전을 유지하고 전체 배치만 맞춘다.
+- 가져오기 설정 `meshes/generate_lods=false`, `meshes/force_disable_compression=true`, `animation/fps=24`, `animation/remove_immutable_tracks=false`를 유지한다. 압축/LOD로 승인 외형을 다시 바꾸거나 상수 트랙을 제거하지 않는다.
+- `approved_walk_sit` 메타데이터가 기존 낮은 의자용 다리 보정을 끄고 승인 앉기를 사용하게 한다. 앉은 감정표현에는 승인 골반·다리를 고정한다. 얼굴 기준점은 꾸미기/손 IK에만 쓰며 얼굴 메시를 수정하지 않는다.
+- 1인칭은 같은 Body/Top_01의 오른팔 면을 복사해 사용하고 실제 손바닥 소켓으로 다트를 맞춘다. 화면용 팔 배율/방향은 별도로 맞추며 3인칭 몸 비율은 유지한다. 승인 손에 손가락별 변형 가중치는 없어 쥐기/펴기 변형은 후속 작업이다.
+- 실제 게임 화면/검증/한계는 `작업기록/2026-11-19_승인리깅_게임적용.md`와 저장소 루트 `output/character_nude_base_20261116/game_apply_20261119/`를 따른다.
+
+## 이전 v18 리깅 캐릭터 다시 만들기
 
 원본은 `character_assets/reference_character_20261105/` 다. `animated_base_v18/` 은 고치지 않고,
 `game_ready_v19/build_game_motions.py` 가 v18 을 열어 게임에 없던 모션을 더한 뒤 GLB 를 내보낸다.

@@ -75,6 +75,9 @@ var _still: float = 0.0
 ## 쓰러진 자세(뼈마다 부모 기준 자세). 물리 중에 매 프레임 적어 두고, 일어날 때 여기서부터 섞는다.
 var _fallen: Array[Transform3D] = []
 var _blend: float = 0.0
+var _pieces: Array = []
+var _pose_safety:RefCounted
+var _self_collisions:bool=false
 
 
 ## model(리깅 캐릭터) 뼈대에 래그돌을 붙인다. 뼈대나 필요한 뼈가 없으면 null.
@@ -85,11 +88,24 @@ static func attach(model: Node3D) -> Node:
 	if found.is_empty():
 		return null
 	var rig := found[0] as Skeleton3D
-	for piece: Array in PIECES:
+	var pieces: Array = PIECES.duplicate(true)
+	if bool(model.get_meta("approved_walk_sit", false)):
+		# 승인22뼈대에서 실제 윗몸을 변형하는 것은 chest다. 호환용 extra_Spine1은 메시 가중치가 없다.
+		for piece: Array in pieces:
+			if piece[0] == "extra_Spine1": piece[0] = "chest"
+			if piece[1] == "extra_Spine1": piece[1] = "chest"
+		# 신발까지 물리 충돌 범위에 포함해 반대쪽 바짓단을 관통하지 않게 한다.
+		for side:String in ["L","R"]:
+			pieces.append(["foot."+side,"toe."+side,0.065,0.7,"cone",25.0,15.0,Vector3.ZERO])
+	for piece: Array in pieces:
 		if rig.find_bone(piece[0]) < 0 or rig.find_bone(piece[1]) < 0:
 			return null
 	var ragdoll: Node = load("res://art/characters/ragdoll.gd").new()
 	ragdoll.name = "Ragdoll"
+	ragdoll._pieces = pieces
+	if bool(model.get_meta("approved_walk_sit",false)):
+		ragdoll._self_collisions=true
+		ragdoll._pose_safety=preload("res://art/characters/character_pose_safety.gd").new(rig,model,true)
 	ragdoll._build(rig)
 	return ragdoll
 
@@ -103,12 +119,20 @@ func _build(rig: Skeleton3D) -> void:
 	_simulator = PhysicalBoneSimulator3D.new()
 	_simulator.name = "RagdollBodies"
 	rig.add_child(_simulator)
-	for piece: Array in PIECES:
+	for piece: Array in _pieces:
 		var body := _make_piece(piece)
 		_simulator.add_child(body)
 		_bodies.append(body)
 		if str(piece[4]) == "root":
 			_hips = body
+	if _self_collisions:
+		# 관절로 직접 이어진 이웃 조각만 충돌에서 제외한다.
+		var bodies:Dictionary={}
+		for body:PhysicalBone3D in _bodies:bodies[rig.find_bone(body.bone_name)]=body
+		for bone:int in bodies:
+			var parent:int=rig.get_bone_parent(bone)
+			while parent>=0 and not bodies.has(parent):parent=rig.get_bone_parent(parent)
+			if parent>=0:bodies[bone].add_collision_exception_with(bodies[parent])
 	# 이 노드는 물리 뒤에 돈다(자식 순서) → 물리가 정한 자세를 읽어 기억할 수 있다.
 	rig.add_child(self)
 	for bone in range(rig.get_bone_count()):
@@ -136,7 +160,7 @@ func _make_piece(piece: Array) -> PhysicalBone3D:
 	body.angular_damp = ANGULAR_DAMP
 	body.can_sleep = true
 	body.collision_layer = BODY_LAYER
-	body.collision_mask = WORLD_MASK
+	body.collision_mask = WORLD_MASK | BODY_LAYER if _self_collisions else WORLD_MASK
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = radius
@@ -236,6 +260,7 @@ func _process_modification() -> void:
 	if _rig == null:
 		return
 	if simulating:
+		if _pose_safety!=null:_pose_safety.apply()
 		for bone in range(_fallen.size()):
 			_fallen[bone] = _rig.get_bone_pose(bone)
 		return
@@ -247,3 +272,4 @@ func _process_modification() -> void:
 	for bone in range(_fallen.size()):
 		var target: Transform3D = _rig.get_bone_pose(bone)
 		_rig.set_bone_pose(bone, target.interpolate_with(_fallen[bone], weight))
+	if _pose_safety!=null:_pose_safety.apply()

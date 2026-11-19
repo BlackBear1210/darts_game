@@ -25,6 +25,8 @@
 
 2026-11-12 변경: F5 공용 맵은 중앙 펜스와 진입 제한벽을 없앴다. 투척선 앞 다트 홀 전체가 몸 판정 후보이며 선 뒤에서만 던진다. `RoundRules.Effect.contributors`가 동일 방해카드의 실제 사용자들을 추적하고 2/3인 협동을 계산한다. `MatchCards`는 실제 peer ID·인원·배율을 공개하고, `BoardChaos.boost`와 `BoardLayout.apply_card_change`를 F5/F6가 공유한다.
 
+2026-11-19 선수·봇 외형: `PlayerLook.CHARACTER_SCENE`은 `art/characters/rigged/approved_player.tscn` → `approved_character.glb`를 읽는다. 승인 원본은 저장소 루트 `character_assets/approved_rig_20261119/character_source.blend`이며, `character_assets/approved_game_character_20261119/build_game_character.py`가 균일 배치(키1.8m·정면-Z)만 적용한다. 표시 몸·보라 반팔·남색 긴바지·갈색 신발은 독립 메시4개이고 승인 얼굴/머리/눈은 몸에 포함된 원본 그대로다. 승인22개 변형 뼈에 기존 계약용44개 보조 뼈를 더해66개 이름과27개 동작을 제공한다. 승인 Walk/Sit 회전은 유지하고 게임 의자용 Sit_Stool/Seated_Stool/Stand_Stool은 전체 위치만 맞춘다. 새 모델에서는 기존 낮은 의자 다리 IK를 끄고, 앉은 감정표현은 승인 골반·다리를 고정한다. `PlayerOutfit`은 메타데이터 얼굴 기준점으로 꾸미기를 배치하고, `FirstPersonArm`은 실제 손바닥 소켓과 오른팔 면을 쓴다. 손가락별 변형 가중치는 아직 없다. 기존 NPC 모델, 이동·충돌·음성 규칙은 유지한다. 마이크 입 변형은 아직 연결하지 않았다.
+
 Autoload는 없다. `/root/Main/NetworkSession`은 화면 전환 중 유지한다.
 RPC는 이 지속 노드에서만 수신하고, Game/MatchController는 로컬 signal 구독으로 자기 책임의 메시지를 받는다.
 화면을 없앤 직후 도착한 이동 패킷도 삭제된 Scene 경로를 조회하지 않는다.
@@ -203,3 +205,7 @@ TextureRect와 안내 Label은 마우스 입력을 무시하고 SubViewport.gui_
 `tests/test_art_showcase.gd`: 아트 쇼케이스의 투척·채점·카메라·HUD 입력, `-- --render`로 네 시점 렌더.
 `tests/test_game_look.gd`: F5 외형 연결 — 방 서명·충돌 없는 방·칠판·관절 몸짓·렌더 레이어·과녁 숫자 재배치·다트 색/크기.
 `tests/render_game_look.gd`: 실제 F5 장면 10장 + 던지기 낱장 30장(`output/game_look/`).
+
+## 승인 캐릭터의 모션 보정 (2026-11-19)
+
+승인 캐릭터는 23개 게임용 클립과 발목 가중치를 GLB 내보내기 마지막에 적용한다. 원본 Walk, Sit_Down, Sit_Idle, Stand_Up 클립은 내보낸 데이터를 보존한다. `CharacterPoseLayer`는 팔 동작과 시선 등 게임 입력을 합친 뒤 승인 모델 전용 `character_pose_safety.gd`를 실행해 손목, 팔꿈치 위치, 목과 다리를 조정한다. 넘어짐에서는 `Ragdoll`이 물리 뼈 결과와 일어나기 보간 뒤에 같은 보정을 적용한다. 승인 모델의 물리 조각은 가슴과 양발을 포함한 13개다.

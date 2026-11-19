@@ -1,0 +1,9 @@
+{
+  "user_approved": true,
+  "user_quote": "좋아. 리깅은 이걸로 하고, 이제 이 캐릭터를 게임에 적용해봐.",
+  "scope": "승인 얼굴·몸·반팔·바지·신발 및 걷기/앉기 리깅 원본 고정. 게임에 연결 승인.",
+  "files_sha256": {
+    "character_source.blend": "6024434afeb61ae95e41497dd543fa36b626ee94b9b513f14cc8ac87b3a32b5f",
+    "character_source.glb": "f5e8046c4dad8ab3b6cf8eafc3bdb7520d12f96e093f5ac4ca4f0e49c8d50fc5"
+  }
+}
