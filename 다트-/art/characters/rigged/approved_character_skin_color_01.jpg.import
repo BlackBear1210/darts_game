@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dar0dk6satsc5"
-path="res://.godot/imported/approved_character_skin_color_01.jpg-e1612aaf5aef23b8ef1eddabf99fe7ac.ctex"
+path.s3tc="res://.godot/imported/approved_character_skin_color_01.jpg-e1612aaf5aef23b8ef1eddabf99fe7ac.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "560b83c0d0d46f4ade1801f5df2d83c8"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://art/characters/rigged/approved_character_skin_color_01.jpg"
-dest_files=["res://.godot/imported/approved_character_skin_color_01.jpg-e1612aaf5aef23b8ef1eddabf99fe7ac.ctex"]
+dest_files=["res://.godot/imported/approved_character_skin_color_01.jpg-e1612aaf5aef23b8ef1eddabf99fe7ac.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

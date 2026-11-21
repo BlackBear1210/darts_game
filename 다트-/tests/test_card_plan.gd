@@ -77,7 +77,7 @@ func _run() -> void:
 			_check(is_equal_approx(effect.mul, 0.5) or is_equal_approx(effect.mul, 1.0 / 3.0), "나누기 범위")
 	for count in operations: _check(count > 400 and count < 600, "연산 종류별 25% 분포")
 	_check(not Catalog.is_available(Catalog.type_of("plus_10")) and not Catalog.is_available(Catalog.type_of("times_2")) and not Catalog.is_available(Catalog.type_of("minus_20")), "삭제 카드 지급 제외")
-	_check(CardHandRules.CATEGORY_NAMES.size() == 5 and Catalog.count() == 31, "28종 + 번호 보존용 삭제 카드 3칸")
+	_check(CardHandRules.CATEGORY_NAMES.size() == 5 and Catalog.count() == 59, "28종 + 번호 보존용 삭제 카드 3칸 + 2026-11-21 새 카드 28종")
 	var layout := BoardLayout.new()
 	layout.ring_multipliers = [3, 1, 2]
 	layout.inner_bull_score = 59
@@ -149,10 +149,15 @@ func _run() -> void:
 	_check(controller.state.turn_index == 1 and controller.state.darts_left == 3, "재도전은 즉시 추가 3발")
 	_match_use(controller, 1, "retry")
 	_check(not controller.cards.rules.seats[1].extra_turn and controller.state.players[1].hand.size() == 1, "경기당 1회 초과는 손패 소모 없이 거절")
+	# 구역 지목은 쓰는 순간 무작위 구역(2026-11-21 CARD_PLAN) — 정해진 구역을 읽어서 맞춘다.
 	_match_use(controller, 0, "sector_bid", 0)
-	_check(controller.cards.score(0).points == -20, "구역 지목 실패는 미스에도 싱글 감점")
+	var bid: int = _queued_choice(controller, "sector_bid")
+	var bid_layout: BoardLayout = controller.state.active_player().layout
+	_check(bid >= 0 and bid < 20 and int(controller.state.active_player().card_effects.get("marked_sector", -1)) == bid, "구역 지목 무작위 구역이 화면에 표시됨")
+	_check(controller.cards.score(0).points == -bid_layout.numbers[bid] * bid_layout.ring_multipliers[0], "구역 지목 실패는 미스에도 싱글 감점")
 	_match_use(controller, 0, "sector_bid", 0)
-	_check(controller.cards.score(20, {"hit_sectors": [0]}).points == 35, "구역 지목 성공 +15")
+	bid = _queued_choice(controller, "sector_bid")
+	_check(controller.cards.score(20, {"hit_sectors": [bid]}).points == 35, "구역 지목 성공 +15")
 	controller.cards.begin_round()
 	_check(controller.state.players[1].layout.overrides.is_empty(), "다음 라운드 점수 고정 해제")
 	controller.state.turn_index = 0
@@ -178,6 +183,12 @@ func _run() -> void:
 	await process_frame
 	print("FAIL: card plan" if failed else "PASS: card plan arithmetic, decimal wins, random distributions, score table, composed geometry, area, round lifetime and hand shuffle")
 	quit(1 if failed else 0)
+
+
+func _queued_choice(controller: MatchController, kind: String) -> int:
+	for effect in controller.cards.rules.effects:
+		if effect.kind == kind and effect.state == Rules.EffectState.QUEUED: return effect.choice
+	return -1
 
 
 func _match_use(controller: MatchController, seat: int, id: String, choice: int = -1) -> void:

@@ -70,10 +70,9 @@ const WOBBLE_SECONDS: float = 0.7
 const WOBBLE_ANGLE: float = 0.12
 ## 오락실 테마에서 펍 그림에서 빼는 묶음(같은 자리에 기계를 세운다).
 ## Windows(2026-10-31 늦은 밤): 오락실은 창 없는 방 — 창을 빼고 그 벽에 네온 간판을 단다(간판이 창에 겹쳐 잘리던 문제).
-## BistroTables(2026-11-08): 펍 뒤쪽 비스트로 테이블 2개 — 오락실은 그 자리가 오락기 앞이라 빼고 충돌도 끈다(TableView.rebuild_pub).
 ## Guests(2026-11-08): 펍 손님은 NPC 테이블 의자·바 스툴에 앉아 있어서, 그 가구가 빠지는 오락실에서는 허공에 앉게 된다 → 같이 뺀다.
 ## Outside(2026-11-16): 창 밖 3D 거리·밤하늘(art/pub/street_outside.gd) — 창 없는 오락실에서는 안 보이니 통째로 뺀다.
-const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests", "BistroTables", "Outside"]
+const ARCADE_SKIP: Array[String] = ["Bar", "NpcCorner", "PoolTable", "Barrels", "PubOnly", "Windows", "Guests", "Outside"]
 ## 오락실 테마에서 바꾸는 펍 재질 색(재질 이름 → 색). 2026-11-08 라운드하우스 펍 재질(art/pub/room/room_kit.gd)도 포함:
 ## 누빔 가죽 → 자두색, 코브 → 어두운 보라, 숨은 빛 띠 → 시안(요청서 2장 "시안·마젠타는 얇은 테두리에만").
 ## 라운드하우스 GLB 가구(안락의자 LeatherTeal · 탁자 WoodWalnut/WoodPanel · 축음기 WoodDark …)도 같은 이름이라 같은 색을 받는다.
@@ -910,6 +909,26 @@ func _break(index: int, at: Vector3, velocity: Vector3, owner: int, victim: Play
 	var name: String = "병" if kind == "bottle" else "큐대"
 	if victim != null: feed("broken", thrower, "%s 와장창!" % name, victim)
 	else: feed("broken", thrower, "%s 와장창! · %s" % [name, reason])
+
+## [방장] 카드 던지기 카드(2026-11-21, game/match/card_world.gd): 카드가 지나간 길(from → to) 가까이 놓인 병·잔·큐대를 깬다.
+## 들고 있거나 이미 깨진 것·다른 테마 소품은 그대로. 깬 개수를 돌려준다(킬로그는 _break 가 적는다).
+const CARD_SHATTER_RADIUS: float = 0.3
+func shatter_on_path(from: Vector3, to: Vector3, owner: int) -> int:
+	var broken: int = 0
+	var time: float = now()
+	for index in range(objects.size()):
+		var object: Dictionary = objects[index]
+		if str(object.kind) not in FRAGILE or int(object.holder) != 0 or time < float(object.get("broken", 0.0)) or not _in_theme(object):
+			continue
+		var at: Vector3 = object.position
+		var closest: Vector3 = Geometry3D.get_closest_point_to_segment(at, from, to)
+		if closest.distance_to(at) <= CARD_SHATTER_RADIUS:
+			_break(index, at, (to - from).normalized() * 6.0, owner, null, "카드 던지기")
+			broken += 1
+	if broken > 0:
+		_publish()
+	return broken
+
 
 ## 캡슐이 터진다: 맞은 사람(없으면 1.6m 안 가장 가까운 사람)에게 안에 든 효과.
 func _burst_capsule(index: int, at: Vector3, owner: int, target_id: int) -> void:

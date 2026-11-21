@@ -52,8 +52,8 @@ static func build_lighting(p: Node3D) -> void:
 	var pool: Vector3 = TableView.POOL_TABLE_BOX.get_center()
 	for dz: float in [-0.65, 0.65]:
 		_pendant(p, Vector3(pool.x, LOUNGE_PENDANT_Y, pool.z + dz), ceiling, 0.4, 5.0, false, 0.9)
-	# 뒤쪽 줄: 소파 위 · 입구 앞. 비스트로 테이블 등은 room_guests.gd build_bistro_tables 가 단다(오락실에서 테이블과 같이 빠진다).
-	var back_row: float = TableView.BISTRO_TABLES[0].z
+	# 뒤쪽 줄: 소파 위 · 입구 앞(뒷벽에서 0.95m 앞 줄 — 2026-11-21 비스트로 테이블을 지우며 그 z 를 그대로 숫자로 남김).
+	var back_row: float = 7.55
 	# 2026-11-16: 입구 앞 등은 꾸미기 방 상자(앞면 z 7.55) 지붕 위에 걸리지 않게 상자 앞 0.9m 로 당겼다.
 	for spot: Vector2 in [Vector2(TableView.SOFA_AT.x, back_row), Vector2(DOOR_X, TableView.FITTING_ROOM_BOX.position.z - 0.9)]:
 		_pendant(p, Vector3(spot.x, LOUNGE_PENDANT_Y, spot.y), ceiling, 0.4, 5.0, false, 0.9)

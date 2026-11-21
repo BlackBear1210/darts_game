@@ -32,6 +32,9 @@ var stun_player: Callable
 var throw_stray: Callable
 ## 다트에 두 번 맞은 사람을 쓰러뜨리는 GameView 함수. knock_down(peer_id, push). 없으면 횟수만 센다.
 var knock_down: Callable
+## [2026-11-21 새 카드] 사람 몸이 필요한 카드 처리(GameView 의 CardWorld.host_action): card_world(action, data) -> Variant.
+## "bind"/"pull" → 맞은 사람 peer ID(0 = 빗나감), "card_throw" → 던졌으면 true. 없으면(씬 없는 시험) 빗나감으로 본다.
+var card_world: Callable
 var developer_enabled: bool = false
 var notice: String = ""
 var _turn_end: float = 0.0
@@ -63,6 +66,9 @@ const BODY_STUN_SECONDS: float = 3.0
 const DART_HITS_TO_FALL: int = 2
 ## 그냥 던진 다트에 맞았을 때 잠깐 움찔하는 시간(초). 몸으로 막기(BODY_STUN_SECONDS)보다 짧다.
 const STRAY_HIT_STUN: float = 1.0
+## 고무 다트: 과녁에 맞고 튕겨 다시 꽂히기까지(초)와 튕겨 가는 거리(과녁 반지름 비율). 시연값.
+const RUBBER_SECONDS: float = 0.35
+const RUBBER_REACH := Vector2(0.15, 0.35)
 ## 다트를 던질 수 있는 단계(조준·비행·정산). 카드 충전·테이블 집합·대기 중에는 다트를 꺼내지 않는다.
 const DART_PHASES: Array[MatchState.Phase] = [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]
 
@@ -184,6 +190,8 @@ func _accept_throw(sender: int, match_id: int, turn_id: int, request_id: int, ai
 	if in_throw_zone.is_valid() and not in_throw_zone.call(sender):
 		return
 	_last_requests[sender] = request_id
+	if _card_throw(sender, charge):
+		return
 	_launch(sender, aim, charge, request_id)
 
 
@@ -193,7 +201,9 @@ func _accept_stray(sender: int, match_id: int, request_id: int, charge: float) -
 	var player: MatchPlayer = state.find_player(sender)
 	if player == null or player.is_bot or match_id != state.match_id:
 		return
-	if state.phase not in DART_PHASES or player.darts <= 0:
+	# 카드 던지기 카드가 걸려 있으면 다트가 없어도 카드는 던질 수 있다.
+	var card_ready: bool = cards != null and bool(cards.modifiers(sender).get("card_throw", false))
+	if state.phase not in DART_PHASES or (player.darts <= 0 and not card_ready):
 		return
 	if not is_finite(charge) or charge < 0 or charge > 1 or request_id <= int(_last_requests.get(sender, 0)):
 		return
@@ -201,6 +211,9 @@ func _accept_stray(sender: int, match_id: int, request_id: int, charge: float) -
 	var active := state.active_player()
 	var mine: bool = active != null and active.peer_id == sender
 	if mine and state.phase != MatchState.Phase.AIMING:
+		return
+	if _card_throw(sender, charge):
+		_last_requests[sender] = request_id
 		return
 	if not throw_stray.is_valid() or not bool(throw_stray.call(sender, charge)):
 		return
@@ -264,7 +277,38 @@ func bot_throw(aim: Vector2, charge: float) -> void:
 	if in_throw_zone.is_valid() and not in_throw_zone.call(active.peer_id):
 		return
 	_request_number += 1
+	if _card_throw(active.peer_id, charge):
+		return
 	_launch(active.peer_id, aim, charge, _request_number)
+
+
+## 카드 던지기 카드(2026-11-21): 걸려 있으면 이번 투척은 다트 대신 카드가 날아간다(다트·점수·차례는 그대로).
+## 맞은 사람 기절·병 깨기는 CardWorld 가 한다. 던졌으면 true.
+func _card_throw(peer_id: int, charge: float) -> bool:
+	if cards == null or not bool(cards.modifiers(peer_id).get("card_throw", false)) or not card_world.is_valid():
+		return false
+	if not bool(card_world.call("card_throw", {"peer_id": peer_id, "charge": charge})):
+		return false
+	cards.consume_card_throw(peer_id)
+	add_feed(feed_entry("card", state.find_player(peer_id), "카드를 휙 던짐!"))
+	_publish()
+	return true
+
+
+## 차례 바꾸기 카드: 지금 차례를 끝내지 않고 같은 차례 번호(turn_index)에서 바뀐 사람으로 다시 시작한다.
+func restart_turn() -> void:
+	_pending_hit.clear()
+	_begin_turn()
+
+
+## 타이머 감소 카드: 남은 조준 시간을 ratio 배로 줄인다(그래도 floor_seconds 는 남긴다). 줄인 뒤 남은 초.
+func cut_timer(ratio: float, floor_seconds: float) -> float:
+	var left: float = maxf(_turn_end - _now(), 0.0)
+	var cut: float = minf(left, maxf(floor_seconds, left * ratio))
+	_turn_end = _now() + cut
+	if state.phase == MatchState.Phase.AIMING:
+		_phase_end = _turn_end
+	return cut
 
 
 ## 확정된 한 발을 비행으로 보낸다. 사람과 봇이 같은 경로를 쓴다.
@@ -286,8 +330,15 @@ func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void
 
 
 ## 카드 궤적 효과를 넣은 비행 계산. 가림판·숫자 섞기는 꽂힐 때 센다(MatchCards.landing_points).
+## 2026-11-21 새 다트 카드: 좌표 고정(마지막 꽂힌 자리로 똑같이 — 바람·무게·졸림 무시, 충전 1) · 관통(몸·셔터 무시) · 고무(맞고 튕김).
 func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 	var mods: Dictionary = cards.modifiers(peer_id) if cards != null else {}
+	var pierce: bool = bool(mods.get("pierce", false))
+	if bool(mods.get("repeat", false)) and cards != null and cards.last_landing.is_finite():
+		var fixed: Dictionary = _call_solve(cards.last_landing, 1.0, peer_id, 1.0, pierce)
+		var single: Dictionary = fixed.duplicate()
+		single["flights"] = [fixed]
+		return single
 	var adjusted: Vector2 = aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
 	if mods.get("drowsy", false):
 		# 방장이 한 발에 한 번만 정한다. 비행 중 다른 카드로 재계산해도 오차를 다시 뽑지 않는다.
@@ -300,14 +351,17 @@ func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 		if not _flight_input.has("pattern"): _flight_input.pattern = CardCatalog.special_offsets(_random)
 		offsets.assign(_flight_input.pattern)
 	var flights: Array[Dictionary] = []
-	for offset in offsets:
-		var one: Dictionary = solve_throw.call(adjusted + offset, charge, peer_id, CardCatalog.POWER_SPEED_MULTIPLIER if mods.get("power", false) else 1.0)
+	for index in range(offsets.size()):
+		var offset: Vector2 = offsets[index]
+		var one: Dictionary = _call_solve(adjusted + offset, charge, peer_id, CardCatalog.POWER_SPEED_MULTIPLIER if mods.get("power", false) else 1.0, pierce)
 		one["large"] = bool(mods.get("large", false))
 		# 힘 증가: 날아가는 다트 뒤 바람 줄기 연출용(GameView._show_throw → DartView.powered). 빠르기는 위 배율.
 		one["power"] = bool(mods.get("power", false))
 		var shape: Dictionary = cards.shape_now() if cards != null else BoardChaos.rest()
-		if BoardChaos.covered(Vector2(float(one.x), float(one.y)), shape) and absf(float(one.x)) < 50:
+		if not pierce and BoardChaos.covered(Vector2(float(one.x), float(one.y)), shape) and absf(float(one.x)) < 50:
 			one.target = (one.target as Vector3) + Vector3(0, 0, BoardChaos.SHUTTER_FRONT)
+		elif bool(mods.get("rubber", false)) and absf(float(one.x)) < 50:
+			one = _bounce(one, peer_id, index)
 		flights.append(one)
 	var data: Dictionary = flights[0].duplicate()
 	data["flights"] = flights
@@ -317,6 +371,29 @@ func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 		data.duration = maxf(float(data.duration), float(one.duration))
 
 	return data
+
+
+## 시험용 가짜 solve_throw(인자 4개)와도 맞도록 관통일 때만 5번째 인자를 넘긴다.
+func _call_solve(aim: Vector2, charge: float, peer_id: int, speed: float, pierce: bool) -> Dictionary:
+	if pierce:
+		return solve_throw.call(aim, charge, peer_id, speed, true)
+	return solve_throw.call(aim, charge, peer_id, speed)
+
+
+## 고무 다트: 처음 닿은 자리(bounce_at · bounce_time)에서 무작위 방향으로 튕겨 RUBBER_SECONDS 뒤 새 자리에 꽂힌다.
+## 튕길 방향·거리는 한 발에 한 번만 뽑는다(비행 중 다른 카드로 다시 계산해도 같은 자리). 판정은 새 자리(x, y)다.
+func _bounce(first: Dictionary, peer_id: int, index: int) -> Dictionary:
+	var key: String = "bounce_%d" % index
+	if not _flight_input.has(key):
+		_flight_input[key] = Vector2.from_angle(_random.randf_range(0, TAU)) * _random.randf_range(RUBBER_REACH.x, RUBBER_REACH.y)
+	var landing: Vector2 = Vector2(float(first.x), float(first.y)) + Vector2(_flight_input[key])
+	var second: Dictionary = _call_solve(landing, 1.0, peer_id, 1.0, true)
+	second["start"] = first.start
+	second["bounce_at"] = first.target
+	second["bounce_time"] = float(first.duration)
+	second["duration"] = float(first.duration) + RUBBER_SECONDS
+	second["reason"] = "고무 다트 튕김 · " + str(second.get("reason", ""))
+	return second
 
 
 ## 날아가는 다트에 궤적 카드가 걸렸다(2026-10-31 사용자 결정: 비행 중에 써도 적용). 같은 조준으로 다시 계산해
@@ -430,6 +507,13 @@ func _begin_turn() -> void:
 	state.darts_left = thrower.darts if thrower != null else 0
 	_pending_hit.clear()
 	_turn_end = _now() + config.turn_seconds
+	if thrower != null and cards != null and cards.actions.take_skip(thrower.peer_id):
+		# 점프 카드(2026-11-21): 이 사람의 이번 차례는 통째로 건너뛴다(다트는 남는다 — 그냥 던지기에는 쓸 수 있다).
+		state.darts_left = 0
+		state.last_hit = {"peer_id": thrower.peer_id, "points": 0, "reason": "점프 카드 · 차례 건너뜀", "request_id": -state.turn_id}
+		add_feed(feed_entry("card", thrower, "점프! 차례를 건너뜀"))
+		_set_phase(MatchState.Phase.SETTLING, config.settle_seconds)
+		return
 	if thrower != null and state.darts_left <= 0:
 		# 차례가 오기 전에 다트를 다 던져 버렸다 → 던질 것이 없으니 바로 다음 사람에게 넘긴다.
 		state.last_hit = {"peer_id": thrower.peer_id, "points": 0, "reason": "다트 없음 · 차례 넘김", "request_id": -state.turn_id}
@@ -461,6 +545,7 @@ func _land_dart() -> void:
 	if cards != null:
 		var result: Dictionary = cards.score(cards.landing_points(_pending_hit), _pending_hit)
 		_pending_hit.points = result.points
+		_pending_hit.taken = float(result.get("taken", 0.0))
 		if victim_id == 0:
 			_pending_hit.reason = "버스트 · 차례 시작 점수로 복귀" if result.bust else str(result.formula) + "점"
 		if result.bust: state.darts_left = 0
@@ -508,6 +593,8 @@ func _advance_turn() -> void:
 	state.turn_index += 1
 	if state.turn_index >= state.players.size():
 		state.turn_index = 0
+		# 차례 바꾸기 카드로 섞인 순서는 라운드가 끝나면 자리 순서로 돌아간다.
+		state.players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
 		if state.round_number >= config.rounds:
 			_set_phase(MatchState.Phase.FINISHED, 0)
 			return

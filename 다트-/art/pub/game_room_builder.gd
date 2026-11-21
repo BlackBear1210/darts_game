@@ -46,7 +46,7 @@ extends "res://art/pub/room/room_kit.gd"
 ##   art/pub/room/room_board_sides.gd 과녁 벽 양옆 꾸밈(네온·시계·트로피·깃발)   → PubOnly/BoardSideDecor
 ##   art/pub/room/room_seating.gd    카드 테이블·의자·자리 매트                 → TableAndSeats
 ##   art/pub/room/room_bar.gd        바·뒤 선반·냉장고                         → Bar
-##   art/pub/room/room_guests.gd     NPC 자리·손님·비스트로·당구대              → NpcCorner · Guests · BistroTables · PoolTable
+##   art/pub/room/room_guests.gd     NPC 자리·손님·당구대                       → NpcCorner · Guests · PoolTable
 ##   art/pub/room/room_decor.gd      창·그림·가구·인디 소품                     → Decor · Windows · Furnishings · PubOnly
 ##   art/pub/room/room_fitting.gd    꾸미기 방 상자                            → PubOnly/FittingRoom
 ##   art/pub/room/room_lights.gd     전등·방 환경                              → Lights
@@ -74,7 +74,6 @@ const GROUP_SOURCES: Dictionary = {
 	"Bar": "바·맥주 꼭지·뒤 선반·냉장고·바 스툴 — art/pub/room/room_bar.gd build_bar",
 	"NpcCorner": "NPC 구석 자리 — art/pub/room/room_guests.gd build_npc_corner",
 	"Guests": "앉은 손님 NPC — art/pub/room/room_guests.gd build_guests (몸짓 = art/pub/npc_idle.gd)",
-	"BistroTables": "비스트로 탁자 — art/pub/room/room_guests.gd build_bistro_tables",
 	"PoolTable": "당구대 — art/pub/room/room_guests.gd build_pool_table",
 	"PubOnly": "펍에만 있는 것(오락실 테마에서 빠진다) — art/pub/room/room_decor.gd · room_fitting.gd · room_board_sides.gd",
 	"PubOnly/IndieDecor": "인디 펍 선반 소품 — art/pub/room/room_decor.gd _indie_decor",
@@ -103,7 +102,6 @@ static func build() -> Node3D:
 	RoomBar.build_bar(_group(room, "Bar"))
 	RoomGuests.build_npc_corner(_group(room, "NpcCorner"))
 	RoomGuests.build_guests(_group(room, "Guests"))
-	RoomGuests.build_bistro_tables(_group(room, "BistroTables"))
 	RoomGuests.build_pool_table(_group(room, "PoolTable"))
 	var pub_only := _group(room, "PubOnly")
 	RoomDecor.build_decor(_group(room, "Decor"), _group(room, "Windows"), pub_only)

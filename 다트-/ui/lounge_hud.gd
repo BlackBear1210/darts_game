@@ -20,6 +20,10 @@ const Rules = preload("res://game/card_round/rules/round_rules.gd")
 const MatchCards = preload("res://game/match/match_cards.gd")
 ## 위 가운데 라운드·남은 시간 표시(2026-10-31 저녁 — 다트 라운드 → 다음 카드 충전 라운드).
 const RoundBanner = preload("res://ui/round_banner.gd")
+## 카드별 "지금 쓸 수 있나" 조건 — 방장(MatchCards._use)과 같은 함수(2026-11-21).
+const CardActions = preload("res://game/match/match_card_actions.gd")
+## N 키로 키 안내를 숨기거나 다시 켤 때 잠깐 뜨는 알림(초).
+const HINT_TOAST_SECONDS: float = 1.6
 ## 자리 표식(색약이어도 모양으로 구분 — 기획 2-4).
 const SEAT_GLYPHS: Array[String] = ["●", "▲", "■", "◆"]
 ## 킬로그 한 줄이 떠 있는 시간(초)과 사라지는 시간.
@@ -70,6 +74,10 @@ var _link_dialog: AcceptDialog
 var _url: LineEdit
 var _link_error: Label
 var _time: float = 0.0
+## Tab 으로 고른 PICK 카드 대상(peer ID).
+var _pick: int = 0
+var _hint_toast: Label
+var _hint_toast_until: float = 0.0
 
 
 func _ready() -> void:
@@ -172,6 +180,10 @@ func _build_bottom() -> void:
 	_card_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_card_hint.add_theme_stylebox_override("normal", Style.card(Style.GOLD, Style.INK, Vector2(0, 4), 3, 14, 16))
 	_build_card_panel()
+	_hint_toast = Style.label(_root, "", 18, Style.INK)
+	_hint_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_toast.add_theme_stylebox_override("normal", Style.card(Style.CREAM, Style.INK, Vector2(0, 4), 3, 12, 14))
+	_hint_toast.visible = false
 	_prompt_box = HBoxContainer.new()
 	_prompt_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_prompt_box.add_theme_constant_override("separation", 14)
@@ -308,6 +320,8 @@ func _process(delta: float) -> void:
 	_card_hint.position = Vector2(clampf(hint_center - _card_hint.size.x / 2, 28, maxf(28, width - 28 - _card_hint.size.x)), height - 150)
 	_update_ready(room, waiting)
 	_ready_box.position = Vector2((width - _ready_box.size.x) / 2, height - 170)
+	_hint_toast.visible = _time < _hint_toast_until
+	_hint_toast.position = Vector2((width - _hint_toast.size.x) / 2, height - 92)
 	_result.visible = finished
 	if finished: _update_result()
 	_result.position = (Vector2(width, height) - _result.size) / 2
@@ -382,7 +396,7 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 	# 자동 줄바꿈만 두면 한글이 글자 사이에서 끊겨 "써\n요." "사\n람에게" 처럼 보였다.
 	if waiting:
 		_phase_title.text = "준비 시간"
-		_phase_detail.text = "자기 색 의자에 %s 로 앉고\nEnter 로 참여" % OS.get_keycode_string(Preferences.interact_key)
+		_phase_detail.text = "자기 색 의자에 %s 로 앉고\nEnter 로 참여" % OS.get_keycode_string(Preferences.interact_key) if Preferences.show_key_hints else "자기 색 의자에 앉아 참여"
 		if not room.settings.solo and room.players.size() < 2: _phase_detail.text += "\n친구가 들어오기를 기다리는 중…"
 	elif finished:
 		_phase_title.text = "경기 종료"
@@ -477,7 +491,7 @@ func _update_cards(state: MatchState, waiting: bool, finished: bool) -> void:
 		_show_card_panel(me, _target_name(state, me))
 	else:
 		_card_hint.text = "Q·E 로 카드 꺼내기 (1–7 바로) → %s 로 쓰기 · 효과는 지금 던지는 사람에게" % OS.get_keycode_string(Preferences.interact_key)
-		_card_hint.visible = true
+		_card_hint.visible = Preferences.show_key_hints
 
 
 ## 카드를 쓸 수 있는 때 = 다트 턴(조준·비행). 2026-10-31부터 따로 카드 턴은 없다.
@@ -485,21 +499,42 @@ static func _card_phase(state: MatchState) -> bool:
 	return state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]
 
 
-## Tab 이 무효(×0) 대상 바꾸기인지: 다트 턴에 무효를 꺼내 들었고 막을 사람이 둘 이상일 때만. 아니면 Tab = 플레이어 목록.
+## Tab 이 대상 바꾸기인지: 무효(×0)·PICK 카드(이속 감소·왕머리 등)를 꺼내 들었고 고를 사람이 둘 이상일 때만.
+## 아니면 Tab = 플레이어 목록(ui/player_list.gd).
 func tab_picks_target() -> bool:
 	if game == null or not _card_phase(game.controller.state): return false
 	var state: MatchState = game.controller.state
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
-	if me == null or me.pending_card < 0 or int(Catalog.card(me.pending_card).target) != Catalog.Target.COUNTER: return false
-	return _counter_targets(state, me).size() >= 2
+	if me == null or me.pending_card < 0: return false
+	match int(Catalog.card(me.pending_card).target):
+		Catalog.Target.COUNTER: return _counter_targets(state, me).size() >= 2
+		Catalog.Target.PICK: return _pick_targets(state, me).size() >= 2
+	return false
 
 
-## 무효(×0)로 막을 수 있는 사람 = 나 말고 카드를 꺼내 든 사람.
+## 무효(×0)로 막을 수 있는 사람 = 나 말고 카드를 꺼내 들었거나 방금 쓴 카드가 아직 걸려 있는 사람(대기 시간이 없어져서, 2026-11-21).
 func _counter_targets(state: MatchState, me: MatchPlayer) -> Array[int]:
 	var ids: Array[int] = []
 	for player in state.players:
-		if player.peer_id != me.peer_id and player.pending_card >= 0: ids.append(player.peer_id)
+		if player.peer_id != me.peer_id and (player.pending_card >= 0 or bool(player.card_effects.get("cancellable", false))): ids.append(player.peer_id)
 	return ids
+
+
+## PICK 카드 대상 후보 = 나 말고 모두. 처음 고른 사람은 지금 던지는 사람(내가 던지는 중이면 첫 사람).
+func _pick_targets(state: MatchState, me: MatchPlayer) -> Array[int]:
+	var ids: Array[int] = []
+	var active: MatchPlayer = state.active_player()
+	if active != null and active.peer_id != me.peer_id: ids.append(active.peer_id)
+	for player in state.players:
+		if player.peer_id != me.peer_id and not ids.has(player.peer_id): ids.append(player.peer_id)
+	return ids
+
+
+func _pick_target(state: MatchState, me: MatchPlayer) -> int:
+	var ids: Array[int] = _pick_targets(state, me)
+	if ids.is_empty(): return 0
+	if not ids.has(_pick): _pick = ids[0]
+	return _pick
 
 
 ## 무효(×0)로 막을 사람. Tab 으로 고른 사람이 카드를 내려놨으면 첫 사람으로 바꾼다. 없으면 0.
@@ -514,9 +549,13 @@ func _counter_target(state: MatchState, me: MatchPlayer) -> int:
 func _target_name(state: MatchState, me: MatchPlayer) -> String:
 	if int(Catalog.card(me.pending_card).target) == Catalog.Target.ALL: return "모든 플레이어 (나 포함)"
 	if int(Catalog.card(me.pending_card).target) == Catalog.Target.CASTER: return "나 (카드 사용자)"
+	if bool(Catalog.card(me.pending_card).get("aim", false)): return "조준점 방향의 첫 사람 (화면 가운데로 겨누기)"
 	if int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER:
 		var victim: int = _counter_target(state, me)
-		return "%s (Tab 바꾸기)" % state.find_player(victim).display_name if victim != 0 else "카드를 꺼내 든 사람 없음"
+		return "%s (Tab 바꾸기)" % state.find_player(victim).display_name if victim != 0 else "막을 카드가 없음"
+	if int(Catalog.card(me.pending_card).target) == Catalog.Target.PICK:
+		var picked: int = _pick_target(state, me)
+		return "%s (Tab 바꾸기)" % state.find_player(picked).display_name if picked != 0 else "대상 없음"
 	var active: MatchPlayer = state.active_player()
 	if active == null: return "대상 없음"
 	return "나 (지금 던지는 사람)" if active == me else "%s (지금 던지는 사람)" % active.display_name
@@ -540,11 +579,13 @@ func _show_card_panel(me: MatchPlayer, target: String) -> void:
 		var value: String = "선택 필요"
 		if choice >= 0:
 			if str(Catalog.card(type).choice) == "adjust": value = "+5" if choice == 0 else "−5"
+			elif str(Catalog.card(type).choice) == "parity": value = "홀" if choice == 0 else "짝"
 			else:
 				var active: MatchPlayer = game.controller.state.active_player()
 				value = "%d번째 칸 · %d" % [choice + 1, active.layout.numbers[choice]] if active != null else "선택 필요"
 		_choice_label.text = "Z ◀  %s  ▶ X" % value
-	var ratio: float = clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
+	# 2026-11-21: 준비 시간 0(Rules.READY_SECONDS) → 꺼내면 바로 "F 로 쓰기". 0 나누기를 피한다.
+	var ratio: float = 1.0 if Rules.READY_SECONDS <= 0.0 else clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
 	_card_bar.value = ratio * 100.0
 	_card_status.text = "준비 중…" if ratio < 1.0 else "%s 로 쓰기" % OS.get_keycode_string(Preferences.interact_key)
 	var active: MatchPlayer = game.controller.state.active_player()
@@ -567,8 +608,17 @@ func _blocked_card_reason(me: MatchPlayer) -> String:
 	if me.pending_card >= 0 and Catalog.card(me.pending_card).has("choice"):
 		if game.controller.state.phase != MatchState.Phase.AIMING: return "발사 전에 사용하는 카드입니다"
 		if int(me.card_effects.get("choice", -1)) < 0: return "Z · X로 값을 먼저 선택하세요"
-	var active: MatchPlayer = game.controller.state.active_player()
-	return MatchCards.duplicate_reason(me.pending_card, active.card_effects, me.peer_id) if active != null and me.pending_card >= 0 else ""
+	var state: MatchState = game.controller.state
+	var active: MatchPlayer = state.active_player()
+	if active == null or me.pending_card < 0: return ""
+	var kind: int = int(Catalog.card(me.pending_card).target)
+	var picked: int = _pick_target(state, me) if kind == Catalog.Target.PICK else 0
+	var context: String = CardActions.context_problem(me.pending_card, me.peer_id, state, picked)
+	if not context.is_empty(): return context + " · 다른 카드를 선택하세요"
+	if kind == Catalog.Target.COUNTER: return "" if not _counter_targets(state, me).is_empty() else "막을 카드가 없습니다 · 다른 카드를 선택하세요"
+	# 효과가 걸릴 사람의 지금 효과로 중복을 본다(나 = 카드 사용자 카드, 고른 사람 = PICK, 나머지 = 던지는 사람).
+	var aimed: MatchPlayer = me if kind == Catalog.Target.CASTER else (state.find_player(picked) if kind == Catalog.Target.PICK else active)
+	return MatchCards.duplicate_reason(me.pending_card, aimed.card_effects if aimed != null else {}, me.peer_id)
 
 
 func _update_prompt() -> void:
@@ -581,6 +631,8 @@ func _update_prompt() -> void:
 	if game.lounge != null and game.lounge.is_stunned(game.controller.local_peer_id):
 		pairs = [["✦", "잠깐 어질어질…"]]
 	var key := str(pairs)
+	# N 키(2026-11-21): 키 안내 칩을 숨긴다(배그 "키 안내 숨기기"). 충전 중 "놓기"·기절 표시도 같이 숨는다.
+	_prompt_box.visible = Preferences.show_key_hints
 	if key == _prompt_key: return
 	_prompt_key = key
 	for child in _prompt_box.get_children():
@@ -752,6 +804,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	var state: MatchState = game.controller.state
 	if event.keycode == KEY_B and game.lounge.focus(game.controller.local_peer_id).get("kind") == "link":
 		if game.lounge.bridge != null: game.lounge.bridge.open_player()
+	if event.keycode == KEY_N:
+		toggle_key_hints()
+		get_viewport().set_input_as_handled()
+		return
 	if not _card_phase(state): return
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	if me == null: return
@@ -768,8 +824,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.keycode == KEY_TAB and tab_picks_target():
 		# 대상을 고르는 건 무효(×0)뿐이다. 나머지 카드는 언제나 지금 던지는 사람에게 걸린다.
 		# 막을 사람이 둘 이상일 때만 Tab 이 대상 바꾸기다. 그 밖의 Tab 은 플레이어 목록(ui/player_list.gd, 2026-11-01).
-		var ids: Array[int] = _counter_targets(state, me)
-		_target = ids[(ids.find(_target) + 1) % ids.size()]
+		if int(Catalog.card(me.pending_card).target) == Catalog.Target.PICK:
+			var picks: Array[int] = _pick_targets(state, me)
+			_pick = picks[(picks.find(_pick_target(state, me)) + 1) % picks.size()]
+		else:
+			var ids: Array[int] = _counter_targets(state, me)
+			_target = ids[(ids.find(_target) + 1) % ids.size()]
 		get_viewport().set_input_as_handled()
 	elif event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
 		# Enter 는 예전 습관용 예비 키로만 남긴다(화면 안내는 F).
@@ -785,10 +845,21 @@ func use_lifted_card() -> bool:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	if me == null or me.pending_card < 0: return false
 	if not _blocked_card_reason(me).is_empty(): return true
-	var counter: bool = int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER
+	var kind: int = int(Catalog.card(me.pending_card).target)
 	var active: MatchPlayer = state.active_player()
-	game.controller.request_card("use", _counter_target(state, me) if counter else (active.peer_id if active != null else 0))
+	var value: int = active.peer_id if active != null else 0
+	if kind == Catalog.Target.COUNTER: value = _counter_target(state, me)
+	elif kind == Catalog.Target.PICK: value = _pick_target(state, me)
+	game.controller.request_card("use", value)
 	return true
+
+
+## N 키: 키 안내 칩·카드 쓰는 법 한 줄을 숨기거나 다시 보인다(저장 — 다음 판에도 그대로). 잠깐 알림을 띄운다.
+func toggle_key_hints() -> void:
+	Preferences.show_key_hints = not Preferences.show_key_hints
+	Preferences.save()
+	_hint_toast.text = "키 안내 보이기 · N 으로 숨기기" if Preferences.show_key_hints else "키 안내 숨김 · N 으로 다시 보기"
+	_hint_toast_until = _time + HINT_TOAST_SECONDS
 
 
 ## Q(-1)·E(+1): 손패를 왼쪽·오른쪽으로 넘기며 꺼내 든다. 끝에서는 반대쪽 끝으로 돈다. 아무것도 안 들었으면 E = 첫 장, Q = 마지막 장.
@@ -824,7 +895,7 @@ func _bar(fill: Color, thickness: int) -> ProgressBar:
 
 func _cycle_choice(me: MatchPlayer, step: int) -> void:
 	if me.pending_card < 0 or not Catalog.card(me.pending_card).has("choice"): return
-	var count: int = 2 if str(Catalog.card(me.pending_card).choice) == "adjust" else 20
+	var count: int = 2 if str(Catalog.card(me.pending_card).choice) in ["adjust", "parity"] else 20
 	var previous: int = int(me.card_effects.get("choice", -1))
 	var chosen: int = (0 if step > 0 else count - 1) if previous < 0 else posmod(previous + step, count)
 	game.controller.request_card("choice", chosen)

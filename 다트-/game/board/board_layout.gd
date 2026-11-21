@@ -17,6 +17,8 @@ const RADIUS: float = 0.30
 var blocked_sectors: Array[int] = []
 var hidden_sectors: Array[int] = []
 var overrides: Dictionary = {}
+## 링 확장 카드(2026-11-21): 트리플·더블 링 두께 배율. 1 = 원래 판. 판정(BoardScorer)과 그림(BoardArt)이 ring_edges 하나를 같이 쓴다.
+var ring_scale: float = 1.0
 
 
 func reset() -> void:
@@ -27,6 +29,7 @@ func reset() -> void:
 	blocked_sectors.clear()
 	hidden_sectors.clear()
 	overrides.clear()
+	ring_scale = 1.0
 
 
 func shuffle_with(random: RandomNumberGenerator) -> void:
@@ -96,7 +99,7 @@ func region_score(region: int) -> int:
 
 func to_snapshot() -> Dictionary:
 	return {"numbers": numbers.duplicate(), "multipliers": ring_multipliers.duplicate(), "inner": inner_bull_score,
-		"outer": outer_bull_score, "blocked": blocked_sectors.duplicate(), "hidden": hidden_sectors.duplicate(), "overrides": overrides.duplicate()}
+		"outer": outer_bull_score, "blocked": blocked_sectors.duplicate(), "hidden": hidden_sectors.duplicate(), "overrides": overrides.duplicate(), "ring": ring_scale}
 
 
 func apply_snapshot(data: Dictionary) -> void:
@@ -108,3 +111,12 @@ func apply_snapshot(data: Dictionary) -> void:
 	hidden_sectors.assign(data.get("hidden", []))
 	overrides.clear()
 	for key in data.get("overrides", {}): overrides[int(key)] = int(data.overrides[key])
+	ring_scale = clampf(float(data.get("ring", 1.0)), 1.0, 4.0)
+
+
+## 링 경계(정규화 반지름): x = 트리플 안쪽, y = 트리플 바깥, z = 더블 안쪽.
+## 트리플은 가운데(0.6055)를 축으로, 더블은 판 바깥 끝(1.0)을 축으로 두께가 scale 배가 된다(링 확장 카드).
+static func ring_edges(scale: float = 1.0) -> Vector3:
+	var middle: float = (TRIPLE_INNER + TRIPLE_OUTER) * 0.5
+	var half: float = (TRIPLE_OUTER - TRIPLE_INNER) * 0.5 * scale
+	return Vector3(middle - half, middle + half, 1.0 - (1.0 - DOUBLE_INNER) * scale)

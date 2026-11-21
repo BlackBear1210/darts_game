@@ -12,6 +12,12 @@ const BurstFx = preload("res://art/fx/burst_fx.gd")
 var lounge: Node3D
 var lounge_hud: CanvasLayer
 var _screen_fx: CanvasLayer
+## [2026-11-21 새 카드] 사람·물건에 닿는 카드(속박·끌어당기기·카드 던지기)와 화면 카드(정전·망원경·딸꾹질·유체이탈·원샷).
+## 카드별 코드는 이 두 파일에만 있다 — 게임 화면(GameView)은 붙이고 불러 주기만 한다.
+const CardWorld = preload("res://game/match/card_world.gd")
+const CardScreenEffects = preload("res://game/match/card_screen_effects.gd")
+var card_world: Node3D
+var _card_screen: CanvasLayer
 var _last_quality: int = -1
 ## 아수라장 다트 머신(2026-11-07): 과녁 회전·피자 분리·셔터의 모양 계산(판정과 화면이 같은 함수).
 ## 예전 "가림판" 카드의 파란 상자(_cover)는 머신 셔터가 대신한다.
@@ -170,6 +176,11 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	controller.stun_player = stun_player
 	controller.throw_stray = throw_stray
 	controller.knock_down = knock_down
+	card_world = CardWorld.new()
+	card_world.name = "CardWorld"
+	add_child(card_world)
+	card_world.setup(self)
+	controller.card_world = card_world.host_action
 	emotes = Emotes.new()
 	emotes.name = "Emotes"
 	add_child(emotes)
@@ -202,6 +213,9 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		if DisplayServer.get_name() != "headless":
 			_screen_fx = preload("res://game/card_round/fx/screen_debuff.gd").new()
 			add_child(_screen_fx)
+			_card_screen = CardScreenEffects.new()
+			_card_screen.name = "CardScreenEffects"
+			add_child(_card_screen)
 	if DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_state()
@@ -825,6 +839,9 @@ func _process(delta: float) -> void:
 		var time: float = Time.get_ticks_msec() / 1000.0
 		camera.rotation.z += sin(time * 1.7) * deg_to_rad(15.0) * strength
 		camera.h_offset = sin(time * 1.13) * 0.12 * strength
+	# 화면 카드(정전·딸꾹질·유체이탈·망원경·원샷). 조준(아래 aim_at)보다 먼저 — 카메라가 흔들리면 조준도 흔들린다.
+	if _card_screen != null:
+		_card_screen.apply(camera, local, state.active_player(), TableView.BOARD_CENTER, delta)
 	if seat_cards != null:
 		seat_cards.show_peek(local, delta)
 	if lounge != null:
@@ -850,13 +867,17 @@ func _process(delta: float) -> void:
 	if local.identity.pending_card >= 0:
 		var card: Dictionary = CardCatalog.card(local.identity.pending_card)
 		if str(card.get("choice", "")) == "sector": marked_sector = int(local.identity.card_effects.get("choice", -1))
+	# 이미 쓴 지목 카드(구역 지목 = 무작위 · 더블 오어 낫싱)가 노리는 칸 — 모두의 화면에 보인다.
+	if marked_sector < 0 and state.active_player() != null:
+		marked_sector = int(state.active_player().card_effects.get("marked_sector", -1))
 	table.board.show_choice(marked_sector)
 	# 다트 홀 밖(라운지)에서는 조준·충전 자체를 잠근다 — 방장도 같은 조건으로 거부한다.
 	var can_aim: bool = own_turn and state.phase == MatchState.Phase.AIMING and can_throw_from(controller.local_peer_id)
 	# 라운드당 다트(2026-11-15): 다트 단계에 다트가 남아 있으면 차례가 아니어도 아무 데나 던질 수 있다(점수 없음 · 사람이 맞으면 2번에 쓰러짐).
 	# 내 다트가 날아가는 중(비행·정산)에는 막는다 — 방장도 같은 조건으로 거부한다(MatchController._accept_stray).
 	var dart_phase: bool = state.phase in MatchController.DART_PHASES and not (own_turn and state.phase != MatchState.Phase.AIMING)
-	var can_stray: bool = dart_phase and local.identity.darts > 0
+	# 카드 던지기 카드가 걸려 있으면 다트가 없어도 던질 수 있다(카드가 날아간다).
+	var can_stray: bool = dart_phase and (local.identity.darts > 0 or bool(local.identity.card_effects.get("card_throw", false)))
 	var hands_free: bool = lounge == null or (lounge.held(controller.local_peer_id) < 0 and not lounge.is_stunned(controller.local_peer_id))
 	throw_input.enabled = (can_aim or can_stray) and not local.fallen and hands_free and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	throw_input.free_aim = true
@@ -865,11 +886,14 @@ func _process(delta: float) -> void:
 	var voice: VoiceChat = session.voice if session != null else null
 	for id: int in actors:
 		var actor := actors[id] as PlayerView
+		var effects: Dictionary = actor.identity.card_effects
+		# 목소리 변조·강제 음소거 카드(2026-11-21) → 재생 높낮이·중계 차단. 마이크 그림도 꺼진 모양.
+		if voice != null: voice.set_card_voice(id, float(effects.get("voice_pitch", 1.0)), bool(effects.get("mute", false)))
 		var mic: int = -1
 		if not actor.identity.is_bot:
-			mic = 2 if Preferences.person_muted(actor.identity.display_name) else (1 if voice != null and voice.is_speaking(id) else 0)
+			mic = 2 if Preferences.person_muted(actor.identity.display_name) or bool(effects.get("mute", false)) else (1 if voice != null and voice.is_speaking(id) else 0)
 		actor.set_mic(mic, voice.level(id) if mic == 1 else 0.0)
-		if voice != null: voice.set_warped(id, int((actors[id] as PlayerView).identity.card_effects.get("hit_penalty", 0)) > 0)
+		if voice != null: voice.set_warped(id, int(effects.get("hit_penalty", 0)) > 0)
 	# 지금 차례인 사람이 조준 중이면 그 캐릭터가 오른팔을 든다(다른 사람 화면에도 보인다).
 	var active := state.active_player()
 	for actor: PlayerView in actors.values():
@@ -936,10 +960,20 @@ func _show_score_popup(hit: Dictionary) -> void:
 	if DisplayServer.get_name() == "headless" or table == null or table.board == null:
 		return
 	var bust: bool = str(hit.get("reason", "")).begins_with("버스트")
-	ScorePopup.spawn(self, hit.target, roundi(float(hit.get("points", 0))), table.board.global_basis.z, bust)
+	# 지뢰를 밟았거나(지뢰 심기) 점수를 뺏겼으면(가로채기·반띵) 한마디를 바꿔 "MISS"로 보이지 않게 한다(2026-11-21).
+	var note: String = ""
+	if int(hit.get("mine_hits", 0)) > 0: note = "MINE!"
+	elif float(hit.get("taken", 0.0)) > 0.0: note = "%s TAKEN" % ScorePopup.number_text(-float(hit.taken))
+	ScorePopup.spawn(self, hit.target, float(hit.get("points", 0)), table.board.global_basis.z, bust, note)
 
 
 ## 못 움직이는 상태인가: 소품에 맞은 스턴(LoungeWorld)과 몸으로 막은 스턴을 함께 본다.
+## [방장] 넉백 없이 잠깐 못 움직이게 한다(속박·끌어당기기·카드 맞음 — CardWorld). 이미 더 길게 묶여 있으면 그대로.
+func freeze_player(peer_id: int, seconds: float) -> void:
+	if multiplayer.is_server():
+		_stun_until[peer_id] = maxf(float(_stun_until.get(peer_id, 0.0)), controller._now() + seconds)
+
+
 func _frozen(peer_id: int) -> bool:
 	if controller._now() < float(_stun_until.get(peer_id, 0.0)):
 		return true
@@ -1104,6 +1138,7 @@ func _receive_game_event(kind: String, data: Dictionary) -> void:
 	match kind:
 		"stray_dart": _show_stray(data)
 		"player_fall": _play_fall(data)
+		"card_fx": card_world.play(data)
 		"looks": _apply_looks(data)
 
 
@@ -1129,7 +1164,14 @@ func _show_throw(data: Dictionary) -> void:
 		dart.size_multiplier = DartView.LARGE_SIZE if bool(flight.get("large", false)) else 1.0
 		# 힘 증가 카드: 다트 뒤로 바람 줄기가 빨려 들어가듯 흐른다(겉모습 — 빠르기는 방장 계산 그대로).
 		dart.powered = bool(flight.get("power", false))
-		dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
+		if flight.has("bounce_at"):
+			# 고무 다트: 처음 닿는 곳까지 날아가 판에서 튕겨 나왔다가 새 자리에 꽂힌다(방장 계산 그대로 보이기만).
+			var bounce_at: Vector3 = flight.bounce_at
+			dart.fly(flight.start, bounce_at, float(flight.bounce_time), true, $Camera/Hand.position)
+			var rest: float = float(flight.duration) - float(flight.bounce_time)
+			dart.bounce_via(bounce_at + table.board.global_basis.z * 0.45 + Vector3.UP * 0.2, flight.target, rest)
+		else:
+			dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
 		dart.paint(color)
 		dart.landed.connect(_on_dart_landed.bind(dart))
 		_flying_darts.append(dart)
@@ -1211,7 +1253,7 @@ func _clear_darts() -> void:
 ## 효과가 끝나면 제자리로 부드럽게 돌아간다(차례가 바뀔 때 판이 덜컥 튀지 않게).
 func _show_chaos(delta: float) -> void:
 	var target: Dictionary = controller.chaos_shape()
-	var active: bool = absf(float(target.angle)) > 0.0 or float(target.split) > 0.0 or float(target.shutter) > 0.0 or float(target.get("vertical", 0)) > 0 or float(target.get("horizontal", 0)) > 0 or Vector2(target.get("move", Vector2.ZERO)).length() > 0
+	var active: bool = absf(float(target.angle)) > 0.0 or float(target.split) > 0.0 or float(target.shutter) > 0.0 or float(target.get("vertical", 0)) > 0 or float(target.get("horizontal", 0)) > 0 or Vector2(target.get("move", Vector2.ZERO)).length() > 0 or not is_equal_approx(float(target.get("scale", 1.0)), 1.0)
 	if active or _shown_chaos.is_empty():
 		_shown_chaos = target.duplicate()
 	else:
@@ -1223,18 +1265,20 @@ func _show_chaos(delta: float) -> void:
 		_shown_chaos.vertical = lerpf(float(_shown_chaos.get("vertical", 0)), 0, weight)
 		_shown_chaos.horizontal = lerpf(float(_shown_chaos.get("horizontal", 0)), 0, weight)
 		_shown_chaos.move = Vector2(_shown_chaos.get("move", Vector2.ZERO)).lerp(Vector2.ZERO, weight)
+		_shown_chaos.scale = lerpf(float(_shown_chaos.get("scale", 1.0)), 1.0, weight)
 	table.board.show_chaos(_shown_chaos)
 	if table.machine != null:
 		table.machine.show_chaos(_shown_chaos, delta)
 
 
 ## 방장이 한 발을 확정한다. 과녁까지 가는 길에 사람 몸이 있으면 거기서 멈춘다(몸으로 막기 — 0점 + 맞은 사람 스턴).
-func solve_dart(aim: Vector2, charge: float, peer_id: int = 0, speed_multiplier: float = 1.0) -> Dictionary:
+## pierce = 관통 다트 카드(2026-11-21): 몸을 뚫고 지나간다(막는 사람을 세지 않는다).
+func solve_dart(aim: Vector2, charge: float, peer_id: int = 0, speed_multiplier: float = 1.0, pierce: bool = false) -> Dictionary:
 	var config := throw_input.config
 	var thrower_id: int = peer_id if peer_id != 0 else controller.local_peer_id
 	var actor: PlayerView = actors[thrower_id] as PlayerView
 	var start: Vector3 = actor.eye_position()
-	var bodies: Array = _dart_bodies(thrower_id)
+	var bodies: Array = [] if pierce else _dart_bodies(thrower_id)
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	var aim_target := TableView.BOARD_CENTER + Vector3(aim.x * radius, aim.y * radius, 0)
 	var speed: float = lerpf(config.minimum_speed, config.maximum_speed, charge) * speed_multiplier
@@ -1246,6 +1290,8 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0, speed_multiplier:
 	# 꽂히는 순간 조각에 맞았는지 틈인지는 MatchCards.landing_points 가 그 시각 모양으로 센다(틈 = 0점).
 	var mods: Dictionary = controller.cards.modifiers(thrower_id) if controller.cards != null else {}
 	var reach: float = 1.0 + 2.0 * ((BoardChaos.SPLIT_MAX if mods.get("split", false) else 0.0) + (0.18 if mods.get("vertical", false) else 0.0) + (0.18 if mods.get("horizontal", false) else 0.0) + (0.25 if mods.get("move", false) else 0.0) + (BoardChaos.LARGE_RADIUS if mods.get("large", false) else 0.0))
+	# 과녁 크기 변화 카드: 커지면 판 끝도 그만큼 멀어진다.
+	reach *= maxf(float(mods.get("board_scale", 1.0)), 1.0)
 	var previous: Vector3 = start
 	var previous_time: float = 0
 	var step: float = 1.0 / 120.0

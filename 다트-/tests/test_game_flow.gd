@@ -145,9 +145,14 @@ func _check_hand_rules() -> void:
 	assert(CardHandRules.refill(hand, random) == 2 and hand.size() == 7)
 	var empty: Array[int] = []
 	assert(not CardHandRules.take(empty, CardHandRules.Category.BOARD))
-	var counts: Array[int] = [0, 0, 0, 0]
+	# 종류 5개(특수 추가)·가중치(DRAW_WEIGHTS)를 따른다 — 기대 장수 ±20%.
+	var counts: Array[int] = []
+	counts.resize(CardHandRules.CATEGORY_NAMES.size())
 	for draw in range(4000):
 		counts[CardHandRules.draw_category(random)] += 1
-	for amount in counts:
-		assert(amount > 800 and amount < 1200)
-	assert(CardHandRules.summary([0, 0, 3] as Array[int]) == "연산2 다트0 과녁0 물리1")
+	var weight_sum: float = 0.0
+	for weight in CardHandRules.DRAW_WEIGHTS: weight_sum += weight
+	for category in range(counts.size()):
+		var expected: float = 4000.0 * CardHandRules.DRAW_WEIGHTS[category] / weight_sum
+		assert(counts[category] > expected * 0.8 and counts[category] < expected * 1.2)
+	assert(CardHandRules.summary([0, 0, 3] as Array[int]) == "연산2 다트0 과녁0 피지컬1 특수0")

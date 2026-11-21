@@ -606,9 +606,10 @@ func _juice_service() -> void:
 	var vendor := _juice_vendor(Vector3(SHOP_LANE_X, 0, 4.0))
 	var customers: Array = []
 	var looks: Array = [["ff5aa8", false, NpcOutfit.Outfit.GUEST_CAP], ["49d6e6", true, NpcOutfit.Outfit.GUEST_BEANIE]]
-	for i: int in [1, 2]:
+	# 손님 스툴 = 0 · 2번(2026-11-21: 펍과 같이 방장 모니터 바로 앞 1번 스툴은 비운다 — 모니터를 가리지 않게).
+	for i: int in [0, 2]:
 		var z: float = TableView.BAR_STOOLS_Z[i]
-		var look: Array = looks[i - 1]
+		var look: Array = looks[0 if i == 0 else 1]
 		NpcIdle.spawn(self, "ArcadeGuest_%d" % i, Vector3(front + 0.45, 0, z), Vector3(box.position.x, 0, z), Color(look[0]), true, 0, i * 2.1,
 			0.8, look[1], look[2])
 		customers.append([z, Vector3(front - 0.22, top_y, z - 0.17), Vector3(front - 0.22, top_y, z + 0.15)])

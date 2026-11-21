@@ -126,9 +126,10 @@ static func offset_at(original: Vector2, shape: Dictionary) -> Vector2:
 	return result
 
 
+## 과녁 크기 변화 카드: shape.scale(기본 1). 그림은 Spin 노드 배율, 판정은 회전을 되돌린 뒤 배율로 나눈다.
 static func locate(point: Vector2, shape: Dictionary) -> Vector2:
 	if not point.is_finite() or covered(point, shape): return Vector2.INF
-	var local: Vector2 = (point - Vector2(shape.get("move", Vector2.ZERO))).rotated(-float(shape.get("angle", 0)))
+	var local: Vector2 = (point - Vector2(shape.get("move", Vector2.ZERO))).rotated(-float(shape.get("angle", 0))) / maxf(float(shape.get("scale", 1.0)), 0.1)
 	var vertical: float = float(shape.get("vertical", 0))
 	var horizontal: float = float(shape.get("horizontal", 0))
 	for x: float in [-1.0, 1.0] if vertical > 0 else [0.0]:
@@ -155,7 +156,7 @@ static func _locate_pizza(point: Vector2, split: float) -> Vector2:
 
 ## 지금 모양에서 과녁 평면 위 다트가 "판에 꽂힐 수 있는" 가장 먼 반지름(벌어진 조각 끝까지).
 static func reach(shape: Dictionary) -> float:
-	return 1.0 + float(shape.get("split", 0.0)) + float(shape.get("vertical", 0)) + float(shape.get("horizontal", 0)) + Vector2(shape.get("move", Vector2.ZERO)).length()
+	return (1.0 + float(shape.get("split", 0.0)) + float(shape.get("vertical", 0)) + float(shape.get("horizontal", 0))) * maxf(float(shape.get("scale", 1.0)), 1.0) + Vector2(shape.get("move", Vector2.ZERO)).length()
 
 
 ## 꽂힌 자리의 점수(움직인 모양 반영). 숫자 섞기는 layout 이 이미 갖고 있다.
@@ -171,7 +172,7 @@ static func area_result(point: Vector2, shape: Dictionary, layout: BoardLayout, 
 			_area_points.append(Vector2.from_angle(index * 2.399963229728653) * sqrt((index + 0.5) / AREA_SAMPLES))
 	var counts: Dictionary = {}
 	for sample in _area_points:
-		var region: int = BoardScorer.region_at(locate(point + sample * LARGE_RADIUS, shape))
+		var region: int = BoardScorer.region_at(locate(point + sample * LARGE_RADIUS, shape), layout.ring_scale)
 		counts[region] = int(counts.get(region, 0)) + 1
 	var best: int = 0
 	var choices: Array[int] = []

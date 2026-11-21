@@ -17,8 +17,11 @@ const HAND_SLOTS: int = CardHandRules.HAND_LIMIT
 ## 방해 성공 보상 카드가 들어가는 테이블 예약 칸 수(펍 자리 매트의 예약 2칸).
 const RESERVE_SLOTS: int = 2
 const DARTS_PER_TURN: int = 3
-## 카드를 꺼내 든 뒤 쓸 수 있을 때까지 기다리는 시간(초). 이 사이에 다른 사람이 보고 무효(×0)로 막을 수 있다. 시연값.
-const READY_SECONDS: float = 1.2
+## 카드를 꺼내 든 뒤 쓸 수 있을 때까지 기다리는 시간(초).
+## 2026-11-21 사용자 요청 "준비 중 대기시간을 없애줘": 0 — 고르거나 바꾸면 바로 쓴다.
+## 대신 무효(×0)는 "꺼내 든 카드"뿐 아니라 "방금 써서 아직 걸려 있는 카드"도 막을 수 있다(cancellable).
+## 0 이 아닌 값으로 되돌려도 되도록 is_ready·ready_ratio 는 0 나누기를 피한다.
+const READY_SECONDS: float = 0.0
 const DECK_SIZE: int = 40
 const COUNTDOWN_START: int = 500
 ## 순위별 골드(1~4위)와 방해 성공 1회당 골드. 시연값.
@@ -51,6 +54,8 @@ class Effect:
 	var contributors: Array[int] = []
 	## 결과 한 줄(예: "60 → 130", "숫자 섞기 무효").
 	var result: String = ""
+	## 카드 목록의 "value"/"values" 에서 정한 수치(과녁 배율·이동 배율 같은 것). dart_modifiers 의 "mod" 로 실린다.
+	var value: float = 1.0
 
 
 class Seat:
@@ -68,6 +73,8 @@ class Seat:
 	var gold: int = 0
 	var retry_used: bool = false
 	var extra_turn: bool = false
+	## 마지막으로 쓴 카드의 효과. 대기 시간이 없어져서 무효(×0)는 이것도 막을 수 있다(cancellable).
+	var last_effect: Effect = null
 
 
 var seats: Array[Seat] = []
@@ -213,12 +220,15 @@ func card_at(seat: int, slot: int) -> Card:
 # --- 꺼내기(대기)·사용 ---
 
 ## 카드를 위로 꺼내 든다. 한 번에 한 장만. 다른 카드를 꺼내면 앞 카드는 내려간다.
+## 고를 값이 있는 카드는 기본값을 바로 넣는다(대기 없이 바로 쓰게 — Z·X 로 바꿀 수 있다).
 func lift(seat: int, slot: int, now: float) -> bool:
 	var card: Card = card_at(seat, slot)
 	if card == null or finished:
 		return false
 	seats[seat].pending = card
 	seats[seat].pending_since = now
+	if card.choice < 0 and CardCatalog.card(card.type).has("choice"):
+		card.choice = random.randi_range(0, 19) if str(CardCatalog.card(card.type).choice) == "sector" else 0
 	return true
 
 
@@ -229,13 +239,15 @@ func lower(seat: int) -> void:
 
 ## 꺼내 든 카드가 준비 시간(READY_SECONDS)을 다 기다렸는가 — 기다려야 쓸 수 있다.
 func is_ready(seat: int, now: float) -> bool:
-	return seats[seat].pending != null and now - seats[seat].pending_since >= READY_SECONDS
+	return seats[seat].pending != null and (READY_SECONDS <= 0.0 or now - seats[seat].pending_since >= READY_SECONDS)
 
 
 ## 준비 막대 진행도 0~1(꺼내 든 카드가 없으면 0).
 func ready_ratio(seat: int, now: float) -> float:
 	if seats[seat].pending == null:
 		return 0.0
+	if READY_SECONDS <= 0.0:
+		return 1.0
 	return clampf((now - seats[seat].pending_since) / READY_SECONDS, 0.0, 1.0)
 
 
@@ -251,11 +263,27 @@ func valid_targets(seat: int, type: int) -> Array[int]:
 					targets.append(other)
 		CardCatalog.Target.ALL:
 			targets.assign(order)
+		CardCatalog.Target.PICK:
+			for other in order:
+				if other != seat:
+					targets.append(other)
 		CardCatalog.Target.COUNTER:
 			for other in order:
-				if other != seat and seats[other].pending != null:
+				if other != seat and (seats[other].pending != null or cancellable(seats[other].last_effect)):
 					targets.append(other)
 	return targets
+
+
+## 무효(×0)로 되돌릴 수 있는 효과인가: 아직 걸려 있고(대기·적용 중), 과녁 배치를 이미 바꾼 카드·쓰는 순간 끝난 카드가 아니다.
+## 과녁 배치 카드(숫자 섞기·점수 랜덤·고정·봉쇄·먹물)는 BoardLayout 을 바로 바꿔서 되돌리면 다른 카드 결과까지 지워진다.
+const UNCANCELLABLE_KINDS: Array[String] = ["shuffle", "random_scores", "lock_scores", "block_sector", "ink_board",
+	"hand_shuffle", "retry", "nullify", "all_dizzy"]
+func cancellable(effect: Effect) -> bool:
+	if effect == null or effect.state not in [EffectState.QUEUED, EffectState.ACTIVE]:
+		return false
+	if effect.timing == CardCatalog.Timing.INSTANT:
+		return false
+	return str(CardCatalog.card(effect.card_type).effect) not in UNCANCELLABLE_KINDS
 
 
 ## 꺼내 든 카드를 쓸 수 없는 이유. 쓸 수 있으면 빈 글자.
@@ -328,15 +356,38 @@ func use(seat: int, target: int, now: float) -> Dictionary:
 	if effect.kind == "precision":
 		effect.add = 5 if card.choice == 0 else -5
 		effect.label = "+5" if card.choice == 0 else "−5"
+	# 2026-11-21 CARD_PLAN: 구역 지목은 쓰는 순간 무작위 구역을 정한다(고르지 않는다).
+	if effect.kind == "sector_bid":
+		effect.choice = random.randi_range(0, 19)
+	if effect.kind == "parity":
+		effect.label = "홀짝 · 홀" if card.choice == 0 else "홀짝 · 짝"
+	if data.has("values"):
+		var pick: int = random.randi_range(0, (data.values as Array).size() - 1)
+		effect.value = float(data.values[pick])
+		if data.has("value_names"): effect.label = str(data.value_names[pick])
+	elif data.has("value"):
+		effect.value = float(data.value)
 
 	if effect.kind == "nullify":
 		var victim: Card = seats[target].pending
-		result.cancelled = victim
-		result.cancelled_slot = slot_of(target, victim)
-		_remove_card(target, victim)
 		effect.state = EffectState.DONE
-		effect.result = "「%s」 막음" % CardCatalog.card(victim.type).name
-		_nullify_from(target, victim.type, effect)
+		if victim != null:
+			result.cancelled = victim
+			result.cancelled_slot = slot_of(target, victim)
+			_remove_card(target, victim)
+			effect.result = "「%s」 막음" % CardCatalog.card(victim.type).name
+			_nullify_from(target, victim.type, effect)
+		else:
+			# 대기 시간이 없어졌으니 방금 쓴(아직 걸려 있는) 카드를 되돌린다(2026-11-21).
+			var undone: Effect = seats[target].last_effect
+			undone.state = EffectState.NULLIFIED
+			undone.result = "%s의 ×0에 막힘" % seats[seat].name
+			seats[target].last_effect = null
+			result["cancelled_effect"] = undone
+			effect.result = "「%s」 되돌림" % CardCatalog.card(undone.card_type).name
+	elif effect.timing == CardCatalog.Timing.INSTANT:
+		# 쓰는 순간 끝나는 카드(차례 바꾸기·속박 등). 실제 처리는 F5 MatchCardActions 가 하고 결과 글을 적는다.
+		effect.state = EffectState.DONE
 	elif effect.timing == CardCatalog.Timing.ROUND:
 		effect.state = EffectState.ACTIVE
 	elif effect.timing == CardCatalog.Timing.TURN and is_turn_of(target):
@@ -375,6 +426,8 @@ func use(seat: int, target: int, now: float) -> Dictionary:
 			previous.state = EffectState.DONE
 			previous.result = "%d인 협동 강화" % effect.contributors.size()
 	effects.append(effect)
+	if effect.kind != "nullify":
+		seats[seat].last_effect = effect
 	return result
 
 
@@ -438,13 +491,22 @@ func begin_turn(position: int) -> void:
 			effect.state = EffectState.ACTIVE
 
 
+## 카드 목록 "mod" 이름의 기본값(2026-11-21 새 카드). 숫자는 곱해서 합치고(배율), true/false 는 하나라도 걸리면 true.
+## 읽는 곳: 이동·몸·머리 = PlayerView, 목소리 = VoiceChat, 화면 = CardScreenEffects, 투척 = MatchController._solve,
+## 과녁 크기 = BoardChaos(shape.scale), 링 = BoardLayout.ring_scale.
+const MOD_DEFAULTS: Dictionary = {"move_scale": 1.0, "body_scale": 1.0, "head_scale": 1.0, "voice_pitch": 1.0,
+	"board_scale": 1.0, "ring_scale": 1.0, "mute": false, "repeat": false, "pierce": false, "rubber": false,
+	"card_throw": false, "blackout": false, "hiccup": false, "outbody": false, "telescope": false, "oneshot": false}
+
+
 ## 이 사람의 다음 다트에 걸린 조준·연출 효과(점수 연산은 resolve_dart).
 func dart_modifiers(seat: int) -> Dictionary:
 	# 과녁 형태는 F5 MatchCards와 F6 TurnEffects가 공용 BoardChaos로 표현·채점한다.
 	var mods := {"drop": 0.0, "push": 0.0, "power": false, "triple": false, "shuffle": false, "cover": false, "drowsy": false,
 		"spin": false, "split": false, "vertical": false, "horizontal": false, "move": false, "large": false,
 		"dizzy": 0.0, "reverse_axes": Vector2.ONE, "body_reward": false, "hit_penalty": 0,
-		"synergy_levels": {}, "drowsy_strength": 1.0, "reverse_sensitivity": 1.0}
+		"synergy_levels": {}, "drowsy_strength": 1.0, "reverse_sensitivity": 1.0, "marked_sector": -1}
+	mods.merge(MOD_DEFAULTS)
 	for effect in effects:
 		if effect.target != seat:
 			continue
@@ -468,16 +530,26 @@ func dart_modifiers(seat: int) -> Dictionary:
 				mods.reverse_axes *= effect.axes
 				mods.reverse_sensitivity = 1.35 if effect.contributors.size() >= 3 else 1.0
 			"hit_penalty": mods.hit_penalty = effect.choice
+			# 지목 카드가 노리는 구역(과녁에 표시, GameView → BoardView.show_choice).
+			"sector_bid", "double_target":
+				if int(mods.marked_sector) < 0: mods.marked_sector = effect.choice
+		var mod: String = str(data.get("mod", ""))
+		if not mod.is_empty():
+			if MOD_DEFAULTS.get(mod) is bool: mods[mod] = true
+			else: mods[mod] = float(mods[mod]) * effect.value
 	return mods
 
 
 ## 다트 한 발의 점수. 기본 점수에 "다음 다트" 연산을 카드 사용 순서대로 건다. 빗나가면(0점) 연산은 써 버린다.
-## 결과: {points, formula}
-func resolve_dart(seat: int, base: float, hit_sectors: Array[int] = [], layout: BoardLayout = null) -> Dictionary:
+## mine_hits = 지뢰 구역을 맞힌 수(F5 MatchCards 가 센다, 한 개마다 −15).
+## 결과: {points, formula, transfers} — transfers = [{seat, points}] 가로채기·반띵으로 다른 사람에게 가는 점수.
+const MINE_PENALTY: int = 15
+func resolve_dart(seat: int, base: float, hit_sectors: Array[int] = [], layout: BoardLayout = null, mine_hits: int = 0) -> Dictionary:
 	# 0.1점 정수 단위로 매 연산을 반올림하여 순서와 소수 한 자리를 보존한다.
 	var ticks: int = roundi(base * 10.0)
 	var parts := PackedStringArray(["%.1f" % base])
-	var bid_applied: bool = false
+	var bid_applied: bool = mine_hits > 0
+	var takers: Array[Effect] = []
 	for effect in effects:
 		if effect.target != seat or effect.state != EffectState.QUEUED or effect.timing != CardCatalog.Timing.NEXT_DART:
 			continue
@@ -493,13 +565,81 @@ func resolve_dart(seat: int, base: float, hit_sectors: Array[int] = [], layout: 
 			elif effect.kind == "double_target":
 				ticks = ticks * 2 if hit_sectors.has(effect.choice) else 0
 				parts.append("지목 ×2" if hit_sectors.has(effect.choice) else "지목 실패 ×0")
+		# 홀짝: 지금까지 계산된 점수(정수로 반올림)가 고른 쪽이면 ×2, 아니면 ÷2. 0점은 짝이다.
+		if effect.kind == "parity":
+			var even: bool = roundi(ticks / 10.0) % 2 == 0
+			var right: bool = even == (effect.choice == 1)
+			ticks = ticks * 2 if right else roundi(ticks / 2.0)
+			parts.append(("%s 맞음 ×2" if right else "%s 틀림 ÷2") % ("짝" if effect.choice == 1 else "홀"))
+		if effect.kind in ["steal", "half"]:
+			takers.append(effect)
 		effect.state = EffectState.DONE
+	if mine_hits > 0:
+		ticks -= MINE_PENALTY * 10 * mine_hits
+		parts.append("지뢰 −%d" % (MINE_PENALTY * mine_hits))
+	# 가로채기·반띵: 계산이 다 끝난 점수에서 카드 쓴 사람 몫을 뗀다(0점 이하는 뗄 것이 없다).
+	var transfers: Array[Dictionary] = []
+	for taker in takers:
+		if ticks <= 0 or taker.source == seat:
+			continue
+		var taken: int = ticks if taker.kind == "steal" else ticks / 2
+		ticks -= taken
+		transfers.append({"seat": taker.source, "points": taken / 10.0})
+		parts.append("%s %s %.1f" % ["가로채기" if taker.kind == "steal" else "반띵", seats[taker.source].name, taken / 10.0])
+		taker.result = "%.1f점 가져감" % (taken / 10.0)
 	var points: float = ticks / 10.0 if base > 0 or bid_applied else 0.0
 	for effect in effects:
 		if effect.target == seat and effect.state == EffectState.DONE and effect.result.is_empty():
-			effect.result = "%.1f점" % points if effect.kind in ["math", "random_math", "precision", "double_target", "sector_bid"] else "적용"
+			effect.result = "%.1f점" % points if effect.kind in ["math", "random_math", "precision", "double_target", "sector_bid", "parity"] else "적용"
 	var formula: String = " → ".join(parts) + (" = %.1f" % points if parts.size() > 1 else "")
-	return {"points": points, "formula": formula}
+	return {"points": points, "formula": formula, "transfers": transfers}
+
+
+## 던지지 않은 사람에게 점수를 준다(가로채기·반띵). 다트 수는 그대로다.
+## 500→0 모드에서 0 아래로 넘치면 받지 않는다(버스트처럼 되돌릴 차례가 없어서). 결과: {win}
+func give_points(seat: int, points: float) -> Dictionary:
+	if points <= 0.0 or finished:
+		return {"win": false}
+	var owner: Seat = seats[seat]
+	if win_mode == WinMode.COUNTDOWN:
+		var remaining: float = (roundi(owner.score * 10.0) - roundi(points * 10.0)) / 10.0
+		if remaining < 0:
+			return {"win": false}
+		owner.score = remaining
+		if remaining == 0:
+			_finish([seat])
+			return {"win": true}
+		return {"win": false}
+	owner.score = (roundi(owner.score * 10.0) + roundi(points * 10.0)) / 10.0
+	if win_mode == WinMode.TARGET_SCORE and owner.score >= target_score:
+		_finish([seat])
+		return {"win": true}
+	return {"win": false}
+
+
+## 소매치기: from 의 손패(테이블 7칸)에서 무작위 한 장을 to 의 빈 칸으로 옮긴다. 옮긴 카드(없으면 null).
+## 꺼내 든 카드도 훔칠 수 있다(들고 있던 사람 손에서 내려간다).
+func steal_card(from: int, to: int) -> Card:
+	var owned: Array[Card] = []
+	for card in seats[from].slots:
+		if card != null: owned.append(card)
+	var empty: Array[int] = empty_slots(to)
+	if owned.is_empty() or empty.is_empty():
+		return null
+	var card: Card = owned[random.randi_range(0, owned.size() - 1)]
+	_remove_card(from, card)
+	seats[to].slots[empty[0]] = card
+	return card
+
+
+## 다 쓴 "라운드 동안" 효과 하나를 끝낸다(카드 던지기는 한 번 던지면 끝난다). 끝냈으면 true.
+func consume_mod(seat: int, mod: String) -> bool:
+	for effect in effects:
+		if effect.target == seat and effect.state == EffectState.ACTIVE and str(CardCatalog.card(effect.card_type).get("mod", "")) == mod:
+			effect.state = EffectState.DONE
+			effect.result = "사용함"
+			return true
+	return false
 
 
 
@@ -535,6 +675,14 @@ func end_turn() -> void:
 			effect.state = EffectState.DONE
 			if effect.result.is_empty():
 				effect.result = "차례 끝"
+
+
+## 차례 바꾸기 카드(2026-11-21): 차례를 넘겨준 사람에게 켜져 있던 "차례 동안" 효과를 다시 대기로 돌린다.
+## 그 사람 차례가 다시 오면 begin_turn 이 또 켠다(쓴 카드가 허공에 사라지지 않게).
+func pause_turn(seat: int) -> void:
+	for effect in effects:
+		if effect.target == seat and effect.state == EffectState.ACTIVE and effect.timing == CardCatalog.Timing.TURN:
+			effect.state = EffectState.QUEUED
 
 
 ## 현재 차례 바로 뒤의 추가 차례를 한 번만 꺼낸다. 사용 횟수는 경기 내내 유지한다.

@@ -11,6 +11,8 @@ extends Node3D
 ## 과녁·다트에 가려지지 않게 깊이 검사를 끄고(no_depth_test) 늘 카메라를 본다(billboard).
 ##
 ## 쓰는 법: const ScorePopup = preload("res://art/fx/score_popup.gd") 후 ScorePopup.spawn(부모, 꽂힌 자리, 점수, 과녁 앞 방향)
+## 2026-11-21: 점수는 소수 그대로 보인다(홀짝 ÷2 = 3.5 → "+3.5" — 예전엔 반올림해서 판정과 글자가 달랐다).
+##   note = 한마디를 바꿔 끼운다(지뢰 "MINE!", 가로채기·반띵 "-20 TAKEN"). 글꼴이 영문 로고체라 영어로 쓴다.
 
 const BurstFx = preload("res://art/fx/burst_fx.gd")
 const LoungeStyle = preload("res://ui/lounge_style.gd")
@@ -46,26 +48,34 @@ var _last_rise: float = 0.0
 
 
 ## 꽂힌 자리(at)에 점수 하나를 띄운다. normal = 과녁 앞쪽(던진 사람 쪽) 방향. bust = 버스트(점수가 차례 시작으로 돌아감).
-static func spawn(parent: Node, at: Vector3, points: int, normal: Vector3, bust := false) -> Node3D:
+static func spawn(parent: Node, at: Vector3, points: float, normal: Vector3, bust := false, note := "") -> Node3D:
 	var popup := (load("res://art/fx/score_popup.gd") as GDScript).new() as Node3D
 	popup.name = "ScorePopup"
 	parent.add_child(popup)
 	popup.global_position = at + normal.normalized() * LIFT_FROM_BOARD + Vector3.UP * START_UP
-	popup.call("_build", points, bust)
+	popup.call("_build", points, bust, note)
 	if points >= 40 and not bust and DisplayServer.get_name() != "headless":
 		BurstFx.spawn(parent, "stars", at + normal.normalized() * 0.05, normal)
 	return popup
 
 
-func _build(points: int, bust: bool) -> void:
+## 점수 글자: 정수면 "20", 소수면 "3.5"(한 자리). 판정 점수(MatchState.last_hit.points)와 같은 값을 보인다.
+static func number_text(points: float) -> String:
+	var shown: String = str(roundi(points)) if is_equal_approx(points, roundf(points)) else "%.1f" % points
+	return ("+" + shown) if points > 0.0 else shown
+
+
+func _build(points: float, bust: bool, note: String = "") -> void:
 	var tier: Array = TIERS[TIERS.size() - 1]
 	for row: Array in TIERS:
-		if points >= int(row[0]):
+		if points >= float(row[0]) or (points > 0.0 and int(row[0]) == 1):
 			tier = row
 			break
 	var color := Color(str(tier[1]))
 	var word: String = str(tier[2])
-	var text: String = ("+%d" % points) if points > 0 else str(points)
+	var text: String = number_text(points)
+	if not note.is_empty():
+		word = note
 	if bust:
 		color = Color("ff4d4d")
 		word = "BUST"

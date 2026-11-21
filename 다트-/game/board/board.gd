@@ -66,7 +66,7 @@ func show_layout(data: BoardLayout) -> void:
 		elif not child.has_meta(PINNED_META):
 			_spin.remove_child(child)
 			child.queue_free()
-	BoardArt.build(_spin, layout.numbers, BoardLayout.RADIUS, GLOW, NUMBER_SCALE, _groups)
+	BoardArt.build(_spin, layout.numbers, BoardLayout.RADIUS, GLOW, NUMBER_SCALE, _groups, layout.ring_scale)
 	_selected_sector = -2
 	_choice_marks.clear()
 	_build_bulls()
@@ -80,6 +80,8 @@ func show_chaos(shape: Dictionary) -> void:
 	if _spin == null:
 		return
 	_spin.rotation.z = float(shape.get("angle", 0.0))
+	# 과녁 크기 변화 카드(2026-11-21): 조각·불·꽂힌 다트가 모두 Spin 아래라 같이 커진다(BoardChaos.locate 가 같은 배율로 되돌린다).
+	_spin.scale = Vector3.ONE * float(shape.get("scale", 1.0))
 	var movement: Vector2 = shape.get("move", Vector2.ZERO)
 	_spin.position = Vector3(movement.x, movement.y, 0) * BoardLayout.RADIUS
 	for fragment in range(_groups.size()):

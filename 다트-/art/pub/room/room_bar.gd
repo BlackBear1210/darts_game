@@ -78,7 +78,8 @@ static func build_bar(p: Node3D) -> void:
 	var foods := PackedStringArray(["plate+steak@1.15", "plate+pancakes@0.62", "plate+hotdog@0.72", "plate+burger_ready@0.7",
 		"plate+roast_chicken@0.75", "plate+eggs_ready@0.62", "dish_2@0.62", "dish_6@0.62"])
 	var customers: Array = []
-	for i: int in [1, 2]:
+	# 손님이 앉은 스툴 = 0 · 2번(2026-11-21: 모니터 앞 1번 손님을 0번으로 옮김 — room_guests.gd build_guests).
+	for i: int in [0, 2]:
 		var z: float = _bar_stool_z(i)
 		# [바텐더가 설 z, 음료 자리(손님 오른손 쪽 = −Z), 음식 자리] — 바 윗면 방 쪽 절반.
 		customers.append([z, Vector3(front - 0.22, top_y, z - 0.17), Vector3(front - 0.22, top_y, z + 0.15)])

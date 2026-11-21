@@ -25,8 +25,9 @@ const NUMBER_FONT_SIZE := 48
 ## number_scale: 숫자 글자 배율. 1 = 실제 다트판 비율. 멀리서 봐야 하는 경기장은 크게.
 ## sector_groups(2026-11-07 아수라장 머신): 노드를 주면(F5 = 5개) 섹터 i 의 칸·숫자를 sector_groups[i / 4] 아래에 만든다
 ##   (연속 4섹터 = 피자 한 조각). 조각 노드를 옮기면 숫자가 자기 칸과 함께 움직인다. 비우면 예전처럼 parent 하나에 만든다.
+## ring_scale(2026-11-21 링 확장 카드): 트리플·더블 두께 배율 — 판정과 같은 BoardLayout.ring_edges 로 그린다.
 static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, glow := 0.0, number_scale := 1.0,
-		sector_groups: Array[Node3D] = []) -> void:
+		sector_groups: Array[Node3D] = [], ring_scale := 1.0) -> void:
 	var k := scoring_radius / REAL_SCORING_RADIUS
 	var suffix := "_Glow" if glow > 0.0 else ""
 	var dark := MeshKit.material("BoardBacking", "172523")
@@ -40,9 +41,10 @@ static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, gl
 	var backing := MeshKit.cylinder(parent, "Backing", scoring_radius * BACKING_RATIO, 0.04, Vector3(0, 0, -0.022), dark, 64)
 	backing.rotation.x = PI / 2
 	var outer_bull := BoardLayout.OUTER_BULL * scoring_radius
-	var triple_in := BoardLayout.TRIPLE_INNER * scoring_radius
-	var triple_out := BoardLayout.TRIPLE_OUTER * scoring_radius
-	var double_in := BoardLayout.DOUBLE_INNER * scoring_radius
+	var edges: Vector3 = BoardLayout.ring_edges(ring_scale)
+	var triple_in := edges.x * scoring_radius
+	var triple_out := edges.y * scoring_radius
+	var double_in := edges.z * scoring_radius
 	for i in range(20):
 		var number: int = numbers[i]
 		# BoardLayout 규칙: 0번 칸이 12시, 시계 방향으로 증가.

@@ -85,7 +85,8 @@ func _check_lift_and_use() -> void:
 	_give(rules, 0, 1, "times_0")
 	_give(rules, 1, 3, "power_up")
 	_check(rules.lift(0, 0, 0.0), "카드 꺼내기")
-	_check(not rules.use_problem(0, 0, 0.5).is_empty(), "대기 시간 전에는 못 쓴다")
+	# 2026-11-21: 준비 대기 없음 — 꺼낸 그 순간에 쓸 수 있다.
+	_check(rules.use_problem(0, 0, 0.0).is_empty(), "꺼내면 바로 쓸 수 있다")
 	var used: Dictionary = rules.use(0, 0, 1.3)
 	_check(not used.is_empty() and used.slot == 0, "대기 후 사용")
 	_check(rules.seats[0].slots[0] == null and rules.seats[0].pending == null, "쓴 카드는 손·테이블 칸에서 빠진다")

@@ -110,14 +110,7 @@ const BAR_FRIDGE_SIZE := Vector3(0.95, 1.95, 1.44)
 ## decor_blocks() 에 넣어 사람이 막힌다. 크기 = 받침(폭 1.42) × 아치 꼭대기(2.08m) × 몸통 깊이. 앞 버튼(z +0.42)은 상자 밖에 둬 누를 수 있다.
 const JUKEBOX_AT := Vector3(8.6, 0, 0.5)
 const JUKEBOX_SIZE := Vector3(1.42, 2.1, 0.62)
-## 펍 뒤쪽 빈자리에 더한 둥근 비스트로 테이블 2개(2026-11-08 사용자 "펍에 테이블이 2개 더 설치할까? 너무 공간이 비어 보여").
-## 자리마다 손님 둘이 마주 앉아(의자는 ±BISTRO_CHAIR_OFFSET x) 랜덤 음식을 먹는다. 카드 테이블 안쪽 자리(z 5.8)·소파(x −4.4~−1.8)·
-## 짐(x 6.6~)·문(x 8.4) 사이 뒤쪽 띠(z 7.2~7.9)라 선수 동선(자리 ↔ 투척선)과 겹치지 않는다.
-## 충돌은 펍에서만 켠다(pub_only_blocks — 오락실은 그 자리가 오락기 앞이라 LoungeWorld 가 테마를 바꿀 때 끈다).
-const BISTRO_TABLES: Array[Vector3] = [Vector3(2.0, 0, 7.55), Vector3(4.6, 0, 7.55)]
-const BISTRO_TABLE_RADIUS: float = 0.42
-const BISTRO_TABLE_HEIGHT: float = 0.8
-const BISTRO_CHAIR_OFFSET: float = 0.74
+## (2026-11-08 에 더했던 뒤쪽 비스트로 테이블 2개 + 손님 4명은 2026-11-21 사용자 요청으로 지웠다 — 카드 테이블 뒤 벽쪽.)
 ## 바 스툴 3개 자리 z(2026-11-08): 바 위 집는 맥주잔(z 1.4·1.9·6.2·6.7)·병(3.1~5.02) 줄 사이 빈 곳 앞에 둔다 —
 ## 앉은 손님 앞에 바텐더가 잔·접시를 놓을 자리가 있어야 한다(art/pub/pub_service.gd). 예전 = 바 길이 3등분(1.3·3.7·6.1).
 const BAR_STOOLS_Z: Array[float] = [0.95, 2.5, 5.6]
@@ -145,15 +138,9 @@ static func decor_blocks() -> Array[AABB]:
 ## 바닥 기준 상자(x 7.4~9.4 · z 7.55~뒷벽 · 높이 2.95m). 그림 = art/pub/room/room_fitting.gd, F 자리 = lounge_world.WARDROBE_DOOR.
 const FITTING_ROOM_BOX := AABB(Vector3(7.4, 0, 7.55), Vector3(2.0, 2.95, 1.45))
 
-## 펍에서만 막는 가구(비스트로 테이블 + 의자 · 꾸미기 방 상자). 오락실에서는 그 자리에 오락기 앞 통로가 있어 끈다(rebuild_pub).
+## 펍에서만 막는 가구(꾸미기 방 상자 — 그림은 PubOnly 묶음). 오락실에서는 그 자리에 오락기 앞 통로가 있어 끈다(rebuild_pub).
 static func pub_only_blocks() -> Array[AABB]:
 	var blocks: Array[AABB] = [FITTING_ROOM_BOX]
-	for at: Vector3 in BISTRO_TABLES:
-		var r: float = BISTRO_TABLE_RADIUS
-		blocks.append(AABB(at - Vector3(r, 0, r), Vector3(r * 2.0, BISTRO_TABLE_HEIGHT, r * 2.0)))
-		for side: float in [-1.0, 1.0]:
-			var chair: Vector3 = at + Vector3(side * BISTRO_CHAIR_OFFSET, 0, 0)
-			blocks.append(AABB(chair - Vector3(0.27, 0, 0.27), Vector3(0.54, 0.9, 0.54)))
 	return blocks
 
 ## 정적 메시 묶기(그리기 호출 줄이기). class_name 이 없는 도구라 preload 로 부른다.
@@ -192,8 +179,8 @@ static func layout_signature() -> String:
 		BAR_TOP_Y, BAR_MUGS, BAR_BOTTLES_Z,
 		# 방 넓히기 v4(2026-10-31 늦은 밤): 바 끝 냉장고
 		BAR_FRIDGE_AT, BAR_FRIDGE_SIZE,
-		# 2026-11-08: 비스트로 테이블 2개 · 바 스툴 자리
-		BISTRO_TABLES, BISTRO_TABLE_RADIUS, BISTRO_TABLE_HEIGHT, BISTRO_CHAIR_OFFSET, BAR_STOOLS_Z,
+		# 2026-11-08: 바 스툴 자리(같은 날 더한 비스트로 테이블은 2026-11-21 에 지움)
+		BAR_STOOLS_Z,
 		# 2026-11-16: 꾸미기 방 상자
 		FITTING_ROOM_BOX])
 
@@ -321,7 +308,7 @@ func _ready() -> void:
 	# 도면 v3 장식 가구(소파·안락의자·짐·연습 과녁 등). 오락실 테마에서도 같은 자리에 남는다.
 	for block in decor_blocks():
 		_box(block.get_center(), block.size)
-	# 펍 전용 가구(비스트로 테이블). 테마가 바뀌면 rebuild_pub 가 켜고 끈다.
+	# 펍 전용 가구(꾸미기 방 상자). 테마가 바뀌면 rebuild_pub 가 켜고 끈다.
 	for block in pub_only_blocks():
 		_box(block.get_center(), block.size)
 		get_child(get_child_count() - 1).set_meta("pub_only", true)
@@ -371,10 +358,10 @@ func rebuild_pub(skip: Array[String], trim: Callable = Callable()) -> void:
 			pub.remove_child(group)
 			group.free()
 	pub.name = "Pub"
-	# 펍 전용 충돌(비스트로 테이블)은 그 그림이 빠지는 테마(오락실)에서 끈다.
+	# 펍 전용 충돌(꾸미기 방 상자)은 그 그림 묶음(PubOnly)이 빠지는 테마(오락실)에서 끈다.
 	for child in get_children():
 		if child is StaticBody3D and child.has_meta("pub_only"):
-			(child as StaticBody3D).collision_layer = 0 if skip.has("BistroTables") else 1
+			(child as StaticBody3D).collision_layer = 0 if skip.has("PubOnly") else 1
 	if trim.is_valid(): trim.call(pub)
 	add_child(pub)
 	move_child(pub, order)

@@ -80,7 +80,7 @@ func _run() -> void:
 	await process_frame
 	me = game.controller.state.players[0]
 	check(game.controller.state.phase == MatchState.Phase.AIMING, "card view leads straight to darts")
-	# 다트 턴 중 카드: 미등록 발신자 거부 → 꺼내 들고 1.2초 전 사용 거부 → 사용하면 던지는 사람에게 바로 걸린다.
+	# 다트 턴 중 카드: 미등록 발신자 거부 → 꺼내 들면 바로 쓸 수 있다(2026-11-21 준비 대기 없앰) → 던지는 사람에게 바로 걸린다.
 	var cards: RefCounted = game.controller.cards
 	var catalog = cards.Catalog
 	cards.rules.seats[0].slots[0] = cards.rules.new_card(catalog.type_of("number_shuffle"))
@@ -90,10 +90,7 @@ func _run() -> void:
 	check(me.pending_card == -1, "unregistered card sender rejected")
 	game.controller.request_card("select", 0)
 	game.controller.request_card("use", 1)
-	check(me.hand.size() == 7, "card needs the ready wait")
-	await create_timer(1.3).timeout
-	game.controller.request_card("use", 1)
-	check(me.hand.size() == 6 and me.layout.numbers != BoardLayout.DEFAULT_NUMBERS, "shuffle card applies to the thrower at once")
+	check(me.hand.size() == 6 and me.layout.numbers != BoardLayout.DEFAULT_NUMBERS, "lifted card is usable at once and shuffles the thrower's board")
 	game.actors[1].seated = false
 	game.actors[1].position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.6)
 	await physics_frame
@@ -107,7 +104,9 @@ func _run() -> void:
 	await create_timer(0.8).timeout
 	var first: int = game.controller.state.players[0].score
 	check(first < 50 and game.controller.state.phase == MatchState.Phase.AIMING, "redirected dart scores where it lands")
-	game.controller.submit_throw(Vector2.ZERO, 1.0)
+	# 무게 증가는 "이번 차례 끝까지"라 둘째 다트도 0.45 처진다 → 그만큼 위를 겨눠 불에 꽂는다.
+	var drop: float = float(game.controller.cards.modifiers(1).get("drop", 0.0))
+	game.controller.submit_throw(Vector2(0, drop), 1.0)
 	await create_timer(0.8).timeout
 	check(game.controller.state.phase == MatchState.Phase.FINISHED, "target score win ends game")
 	check(game.controller.state.players[0].score == first + 50, "bull score")

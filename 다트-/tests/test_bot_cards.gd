@@ -33,9 +33,11 @@ func _run() -> void:
 	controller._phase_end = controller._now()
 	await create_timer(0.2).timeout
 	assert(controller.state.phase == MatchState.Phase.AIMING and controller.state.active_player().peer_id == 1)
-	# 내 차례: 봇마다 방해 카드 한 장을 쥐여 주고 곧 쓰게 한다 → 효과는 모두 나(던지는 사람)에게.
+	# 내 차례: 봇마다 방해 카드(졸림 — 예전 빼기 카드는 지급 제외라 바꿈, 2026-11-21) 한 장을 쥐여 주고 곧 쓰게 한다 → 효과는 모두 나(던지는 사람)에게.
+	# 나머지 손패는 비운다 — 무작위 손패의 새 카드(점프·차례 바꾸기 등)가 차례 순서를 바꾸면 시험이 흔들린다.
 	for seat in range(1, 4):
-		cards.rules.seats[seat].slots[0] = cards.rules.new_card(catalog.type_of("minus_20"))
+		cards.rules.seats[seat].slots[0] = cards.rules.new_card(catalog.type_of("drowsy"))
+		for index in range(1, 7): cards.rules.seats[seat].slots[index] = null
 	cards._sync()
 	for peer in cards._bot_plans.keys(): cards._bot_plans[peer] = controller._now() + 0.1
 	await create_timer(Rules.READY_SECONDS + 0.8).timeout
@@ -44,9 +46,9 @@ func _run() -> void:
 	# 봇 1 차례: 봇 1은 나에게 거는 카드를 쓰고, 내가 꺼낸 카드는 봇 1의 무효로 막힌다.
 	controller._timeout_turn()
 	await create_timer(1.3).timeout
-	assert(controller.state.active_player().peer_id == -1)
+	assert(controller.state.active_player().peer_id == -1, "봇 1 차례: %s" % [controller.state.feed])
 	cards.rules.seats[1].slots[0] = cards.rules.new_card(catalog.type_of("times_0"))
-	cards.rules.seats[1].slots[1] = cards.rules.new_card(catalog.type_of("times_2"))
+	cards.rules.seats[1].slots[1] = cards.rules.new_card(catalog.type_of("power_up"))
 	for index in range(2, 7): cards.rules.seats[1].slots[index] = null
 	cards._sync()
 	cards._bot_plans[-1] = controller._now() + 0.1
@@ -54,8 +56,11 @@ func _run() -> void:
 	await create_timer(Rules.READY_SECONDS * 2 + 1.0).timeout
 	var me: MatchPlayer = controller.state.find_player(1)
 	assert(me.pending_card == -1 and me.hand.size() == 6, "내 카드가 무효로 막힘")
-	assert(controller.state.find_player(-1).hand.is_empty(), "봇 1이 무효와 ×2를 모두 씀: %s" % [controller.state.feed])
-	assert(controller.state.feed.any(func(line: String) -> bool: return line.begins_with("card\t1\t봇 1\t×2\t1\t봇 1")))
+	assert(controller.state.find_player(-1).hand.is_empty(), "봇 1이 무효와 힘 증가를 모두 씀: %s" % [controller.state.feed])
+	# 봇 이름은 별명(럭키세븐 등)이라 이름 대신 킬로그 한 줄을 MatchController.feed_entry 로 똑같이 만들어 비교한다.
+	var bot: MatchPlayer = controller.state.find_player(-1)
+	var line_power: String = MatchController.feed_entry("card", bot, str(catalog.card(catalog.type_of("power_up")).big), bot)
+	assert(controller.state.feed.has(line_power), "봇 1 힘 증가 킬로그: %s" % [controller.state.feed])
 	main.queue_free()
 	await process_frame
 	print("PASS: bots use disruption cards on other throwers, own-target cards on their turn, and counter a lifted card with ×0")

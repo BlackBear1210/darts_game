@@ -62,6 +62,10 @@ var _vad_until: float = 0.0
 var _speakers: Dictionary = {}
 ## (방장) 보낸 사람 → {"bytes", "at"}: 1초 예산.
 var _budgets: Dictionary = {}
+## 카드 효과(2026-11-21): 강제 음소거된 사람(peer → true) · 목소리 변조 높낮이(peer → 배율). GameView 가 경기 상태로 매 프레임 넣는다.
+## 음소거는 방장이 중계에서 버리고(_relay), 각 화면도 재생 전에 한 번 더 버린다(_play) — 방장 자신의 목소리도 막힌다.
+var _card_muted: Dictionary = {}
+var _card_pitch: Dictionary = {}
 static var _decode_table := PackedFloat32Array()
 
 
@@ -188,6 +192,8 @@ func _voice_up(data: PackedByteArray) -> void:
 
 ## 방장: 보낸 사람을 뺀 같은 방 사람에게 보낸다. 방장 자신이 선수면 바로 재생한다(전용 서버는 듣지 않는다).
 func _relay(sender: int, data: PackedByteArray) -> void:
+	if bool(_card_muted.get(sender, false)):
+		return
 	var connected: PackedInt32Array = multiplayer.get_peers()
 	for player in session.room.players:
 		if player.is_bot or player.peer_id == sender:
@@ -216,7 +222,7 @@ func _within_budget(sender: int, size: int) -> bool:
 
 ## 받은 목소리를 그 사람 재생기에 넣는다. 대기열이 비어 있으면 무음을 조금 깔고, 너무 밀렸으면 버린다.
 func _play(speaker: int, data: PackedByteArray) -> void:
-	if not Preferences.voice_enabled:
+	if not Preferences.voice_enabled or bool(_card_muted.get(speaker, false)):
 		return
 	var samples: PackedFloat32Array = decode(data)
 	var entry: Dictionary = _speaker(speaker)
@@ -241,7 +247,18 @@ func _play(speaker: int, data: PackedByteArray) -> void:
 ## 확정된 경기 상태에서만 호출한다. 사람별 재생 피치를 바꿔 다른 음성에는 영향을 주지 않는다.
 func set_warped(peer: int, enabled: bool) -> void:
 	if _speakers.has(peer):
-		(_speakers[peer].player as AudioStreamPlayer).pitch_scale = 0.72 if enabled else 1.0
+		(_speakers[peer].player as AudioStreamPlayer).pitch_scale = (0.72 if enabled else 1.0) * float(_card_pitch.get(peer, 1.0))
+
+
+## 카드 효과(목소리 변조·강제 음소거). pitch 1 = 원래 목소리. set_warped 보다 먼저 부른다(높낮이를 곱한다).
+func set_card_voice(peer: int, pitch: float, muted: bool) -> void:
+	_card_pitch[peer] = clampf(pitch, 0.5, 2.0)
+	_card_muted[peer] = muted
+
+
+## 카드로 마이크가 꺼진 사람인가(이름표 마이크 그림이 쓴다).
+func card_muted(peer: int) -> bool:
+	return bool(_card_muted.get(peer, false))
 
 
 func _speaker(peer: int) -> Dictionary:

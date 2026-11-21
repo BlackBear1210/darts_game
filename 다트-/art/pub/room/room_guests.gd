@@ -1,6 +1,7 @@
 extends "res://art/pub/room/room_kit.gd"
-## NPC 쪽: NPC 구석 자리 · 둥근 탁자 · 탁자 음식 · 재떨이 · 손님(앉은 NPC) · 비스트로 탁자 · 당구대.
-## 디자인 담당 소유(2026-11-17 game_room_builder.gd 에서 나눔). 장면 안 묶음 = NpcCorner · Guests · BistroTables · PoolTable.
+## NPC 쪽: NPC 구석 자리 · 둥근 탁자 · 탁자 음식 · 재떨이 · 손님(앉은 NPC) · 당구대.
+## 디자인 담당 소유(2026-11-17 game_room_builder.gd 에서 나눔). 장면 안 묶음 = NpcCorner · Guests · PoolTable.
+## 2026-11-21 사용자 요청: 카드 테이블 뒤 벽쪽 비스트로 테이블 2개 + 손님 4명을 지웠다(맵을 줄이기 전 정리).
 ## 손님 몸짓은 art/pub/npc_idle.gd, 탁자 음식 바꾸기는 art/pub/npc_table_food.gd 가 실행 때 한다.
 
 const RoomSeating = preload("res://art/pub/room/room_seating.gd")
@@ -59,7 +60,7 @@ static func _table_food(table: Node3D, diners: Array, height: float, inset: floa
 	return food
 
 
-## 재떨이(물레로 깎은 낮은 유리 그릇 + 재 한 줌). 시가 피우는 손님 앞(바 끝 · 비스트로 테이블).
+## 재떨이(물레로 깎은 낮은 유리 그릇 + 재 한 줌). 시가 피우는 손님 앞(바 끝).
 static func ashtray(p: Node3D, at: Vector3, node_name: String) -> void:
 	var dish := RoundKit.rounded_profile(PackedVector2Array([Vector2(0, 0), Vector2(0.068, 0), Vector2(0.072, 0.014), Vector2(0.068, 0.03),
 		Vector2(0.052, 0.032), Vector2(0.046, 0.012), Vector2(0, 0.012)]), 0.006, 2)
@@ -80,46 +81,18 @@ static func build_guests(p: Node3D) -> void:
 	# [자리, 바라볼 곳, 앉는가, 모자 색, 안경, 앉는 면 높이, 옷(NpcOutfit.Outfit), 몸짓(0 = 마시기, 4 = 시가)]
 	# 2026-11-08: 캐릭터가 Tripo 모델로 바뀌며 셔츠 색 바꾸기가 없어졌다 → 손님마다 비니·안경·야구 모자로 구분(선수와도 구분).
 	# 2026-11-08 저녁: 바 스툴 손님을 둘로(바텐더가 서빙하는 손님), 바 끝 손님은 재떨이 앞에서 시가를 피운다(사용자 요청).
+	# 2026-11-21 사용자 "모니터 바로 옆에 붙어있는 1명을 모니터를 가리지 않게 치워": 방장 모니터(LoungeWorld.MONITOR, z 2.0 · +Z 를 본다)
+	#   바로 앞 스툴(z 2.5) 손님을 모니터 뒤쪽 첫 스툴(z 0.95)로 옮겼다. 가운데 스툴은 빈자리로 둔다.
 	var spots: Array = [
 		[TableView.NPC_STOOLS[0], npc_look, true, "b8674a", false, TableView.STOOL_HEIGHT, NpcOutfit.Outfit.GUEST_BEANIE, 0],
 		[TableView.NPC_STOOLS[1], npc_look, true, "4f6d8f", true, TableView.STOOL_HEIGHT, NpcOutfit.Outfit.GUEST, 0],
 		[Vector3(bar.end.x + 0.42, 0, smoke_z), Vector3(bar.position.x, 0, smoke_z - 0.25), false, "7d8f4f", false, TableView.STOOL_HEIGHT, NpcOutfit.Outfit.GUEST_CAP, 4],
 		[Vector3(stool_x, 0, _bar_stool_z(2)), Vector3(bar.position.x, 0, _bar_stool_z(2)), true, "a8576b", false, BAR_STOOL_TOP, NpcOutfit.Outfit.GUEST_BEANIE, 0],
-		[Vector3(stool_x, 0, _bar_stool_z(1)), Vector3(bar.position.x, 0, _bar_stool_z(1)), true, "c79a45", true, BAR_STOOL_TOP, NpcOutfit.Outfit.GUEST_CAP, 0],
+		[Vector3(stool_x, 0, _bar_stool_z(0)), Vector3(bar.position.x, 0, _bar_stool_z(0)), true, "c79a45", true, BAR_STOOL_TOP, NpcOutfit.Outfit.GUEST_CAP, 0],
 	]
 	for i in range(spots.size()):
 		var spot: Array = spots[i]
 		NpcIdle.spawn(p, "Guest_%d" % (i + 1), spot[0], spot[1], Color(spot[3]), spot[2], int(spot[7]), i * 1.7, spot[5], spot[4], spot[6])
-
-
-## 펍 뒤쪽 둥근 비스트로 테이블 2개(TableView.BISTRO_TABLES, 2026-11-08 사용자 "펍에 테이블이 2개 더 설치할까? 너무 공간이 비어 보여").
-## 테이블마다 클럽 의자 둘(좌우) + 마주 앉은 손님 둘 + 랜덤 저녁 차림(art/pub/npc_table_food.gd) + 테이블 위 펜던트 하나.
-## 둘째 테이블 왼쪽 손님은 시가를 피운다(앞에 재떨이와 커피). 묶음째 오락실에서 빠지고 충돌도 꺼진다(TableView.pub_only_blocks).
-static func build_bistro_tables(p: Node3D) -> void:
-	var height: float = TableView.BISTRO_TABLE_HEIGHT
-	var top_r: float = TableView.BISTRO_TABLE_RADIUS - 0.02
-	# 손님 모습: [모자 색, 안경, 옷, 몸짓(0 = 마시기, 4 = 시가)]
-	var looks: Array = [["5d7f6a", false, NpcOutfit.Outfit.GUEST_CAP, 0], ["b0624f", true, NpcOutfit.Outfit.GUEST, 0],
-		["8a6fb0", false, NpcOutfit.Outfit.GUEST_BEANIE, 4], ["d0a050", false, NpcOutfit.Outfit.GUEST, 0]]
-	for t in range(TableView.BISTRO_TABLES.size()):
-		var at: Vector3 = TableView.BISTRO_TABLES[t]
-		var table := _round_table(p, "BistroTable_%d" % (t + 1), at, top_r, height)
-		var diners: Array = []
-		for s in range(2):
-			var side: float = -1.0 if s == 0 else 1.0
-			var chair_at: Vector3 = at + Vector3(side * TableView.BISTRO_CHAIR_OFFSET, 0, 0)
-			RoomSeating.club_chair(p, chair_at, _yaw(Vector2(side, 0)), "BistroChair_%d_%d" % [t + 1, s + 1], _brass())
-			var look: Array = looks[t * 2 + s]
-			NpcIdle.spawn(p, "BistroGuest_%d_%d" % [t + 1, s + 1], chair_at, at, Color(look[0]), true, int(look[3]), (t * 2 + s) * 2.3 + 0.8,
-				TableView.STOOL_HEIGHT, look[1], look[2])
-			if int(look[3]) == 4:
-				# 시가 손님: 접시 대신 재떨이 + 커피 한 잔(테이블 기준 좌표).
-				ashtray(table, Vector3(side * 0.2, height, 0.05), "TableAshtray")
-				PubParts.asset(table, "coffee_cup_b", Vector3(side * 0.17, height, -0.2), 0.6, Vector3.ONE * 0.62)
-			else:
-				diners.append(chair_at)
-		_table_food(table, diners, height, 0.19)
-		_pendant(p, Vector3(at.x, LOUNGE_PENDANT_Y, at.z), TableView.CEILING_HEIGHT, 0.5, 4.5, false, 0.9)
 
 
 ## 도면의 당구대(요청서 P08 "곡면 모서리"). 충돌은 TableView.POOL_TABLE_BOX.

@@ -69,6 +69,9 @@ var drink_pose: float = 0.0
 var knockback: Vector3 = Vector3.ZERO
 ## 가챠 "왕머리" 같은 장난 효과(보이기만). LoungeWorld 가 매 프레임 넣는다.
 var head_scale: float = 1.0
+## 카드 키 변화(2026-11-21): 지금 보이는 몸 배율(경기 상태 card_effects.body_scale 로 부드럽게 따라간다).
+## 겉모습·눈높이·이름표만 바뀐다. 충돌 캡슐·몸으로 막기 판정은 그대로(작아져도 막는 판정이 쉬워지지 않게).
+var body_scale: float = 1.0
 ## [쓰러지기 — 2026-11-15] 다트 두 번 · NPC 반격 · 싸대기에 맞으면 애니메이터를 끄고 래그돌(줄 끊긴 인형)을 켠다.
 ## 모든 화면이 GameView 의 "player_fall" 이벤트를 받고 각자 물리로 쓰러뜨린다(보이기만 — 위치는 방장 몸이 정한다).
 const Ragdoll = preload("res://art/characters/ragdoll.gd")
@@ -153,7 +156,13 @@ func _process(delta: float) -> void:
 	_rig.drinking = drink_pose
 	_shown_lean = lerpf(_shown_lean, seat_lean if seated else 0.0, 1.0 - exp(-18.0 * delta))
 	# 왕머리·엿보기는 시각 표현만 바꾼다. 충돌 캡슐은 움직이지 않는다.
-	_rig.head_scale = head_scale
+	# 오락실 캡슐 왕머리(head_scale)와 왕머리 카드(card_effects.head_scale) 중 큰 쪽.
+	_rig.head_scale = maxf(head_scale, _card_value("head_scale"))
+	var want_body: float = _card_value("body_scale")
+	if not is_equal_approx(body_scale, want_body):
+		body_scale = move_toward(body_scale, want_body, delta * 1.6)
+		_model.scale = Vector3.ONE * body_scale
+		_label.position.y = LABEL_HEIGHT * (LOW_LABEL_RATIO if crouched else 1.0) * body_scale
 	# 엿보기: 윗몸·팔·머리가 함께 기운다(eye_position 과 같은 각도).
 	var peek: float = peek_amount()
 	_rig.lean = peek * PEEK_ANGLE
@@ -298,6 +307,7 @@ func _dress(seat: int) -> void:
 	_model = PlayerLook.character(seat)
 	_model.name = "Model"
 	add_child(_model)
+	_model.scale = Vector3.ONE * body_scale
 	# 네 명이 같은 박자로 움직이지 않게 자리마다 시작 시각을 다르게 준다.
 	_rig = CharacterMotion.new(_model, seat * 0.9)
 	PlayerOutfit.dress(_model, look)
@@ -340,9 +350,15 @@ func eye_position() -> Vector3:
 		var peek: float = peek_amount()
 		var tilt: float = peek * PEEK_ANGLE
 		var torso: float = SEATED_EYE_HEIGHT - CharacterRig.HIP_HEIGHT
-		return global_position + Vector3.UP * (CharacterRig.HIP_HEIGHT + cos(tilt) * torso) \
-			+ basis.x * (sin(tilt) * torso + peek * PEEK_SLIDE)
-	return global_position + Vector3.UP * (0.95 if crouched else EYE_HEIGHT)
+		return global_position + Vector3.UP * (CharacterRig.HIP_HEIGHT + cos(tilt) * torso) * body_scale 			+ basis.x * (sin(tilt) * torso + peek * PEEK_SLIDE) * body_scale
+	return global_position + Vector3.UP * (0.95 if crouched else EYE_HEIGHT) * body_scale
+
+
+## 경기 카드가 건 배율(이동·몸·머리). 경기 밖이거나 카드가 없으면 1.
+func _card_value(key: String) -> float:
+	if identity == null:
+		return 1.0
+	return float(identity.card_effects.get(key, 1.0))
 
 
 ## 엿보기 정도(-1~1). 끝에서 천천히 멈추도록 부드럽게 꺾은 값이다(smoothstep).
@@ -379,7 +395,8 @@ func simulate(delta: float, controls: Dictionary) -> void:
 		var axis: Vector2 = controls.get("move", Vector2.ZERO)
 		var direction := Basis(Vector3.UP, rotation.y) * Vector3(axis.x, 0, axis.y)
 		# speed_scale: 테이블 집합 지각 페널티(슬로우). 방장 시뮬레이션에만 적용되고 위치로 모든 화면에 반영된다.
-		var speed := SPEED * (0.5 if crouched else 1.0) * identity.speed_scale
+		# move_scale: 이속 증가·감소 카드(2026-11-21). 방장만 돌리는 계산이라 위치로 모든 화면에 반영된다.
+		var speed := SPEED * (0.5 if crouched else 1.0) * identity.speed_scale * _card_value("move_scale")
 		velocity.x = direction.x * speed + knockback.x
 		velocity.z = direction.z * speed + knockback.z
 		knockback = knockback.move_toward(Vector3.ZERO, delta * 9.0)
@@ -400,7 +417,7 @@ func update_posture() -> void:
 	# 충돌 캡슐은 예전처럼 0.58배로 줄인다. 보이는 몸은 _process 의 몸짓이 따로 낮춘다.
 	var height_scale: float = 0.58 if crouched or seated else 1.0
 	# 앉아도 스툴 위라 머리 높이가 그대로다 → 숙일 때만 이름표를 내린다.
-	_label.position.y = LABEL_HEIGHT * (LOW_LABEL_RATIO if crouched else 1.0)
+	_label.position.y = LABEL_HEIGHT * (LOW_LABEL_RATIO if crouched else 1.0) * body_scale
 	var shape := _collision.shape as CapsuleShape3D
 	shape.height = 1.7 * height_scale
 	_collision.position.y = shape.height * 0.5

@@ -32,7 +32,7 @@ F5 경기 방 `art/pub/pub_game.tscn` 은 **생성물**이다. 코드가 방을 
 | 카드 테이블 · 의자 · 자리 매트/러그/번호 | `room_seating.gd` `build_table_and_seats` · `club_chair` · `bar_stool` | `TableAndSeats` |
 | 바 · 맥주 꼭지 · 뒤 선반 · 냉장고 · 바 스툴 · 바텐더 | `room_bar.gd` `build_bar` · `_back_bar` · `_bar_fridge` | `Bar` |
 | 바텐더가 꺼내는 것과 손님 자리 | `room_bar.gd` `build_bar` 의 `sources` · `customers` | `Bar` |
-| NPC 구석 자리 · 앉은 손님 · 비스트로 탁자 · 당구대 | `room_guests.gd` `build_npc_corner` · `build_guests` · `build_bistro_tables` · `build_pool_table` | `NpcCorner` · `Guests` · `BistroTables` · `PoolTable` |
+| NPC 구석 자리 · 앉은 손님 · 당구대 (비스트로 탁자는 2026-11-21 삭제) | `room_guests.gd` `build_npc_corner` · `build_guests` · `build_pool_table` | `NpcCorner` · `Guests` · `PoolTable` |
 | 창틀·커튼·유리 | `room_decor.gd` `_window` | `Windows` |
 | 문·간판·화분·벽 포스터 | `room_decor.gd` `build_decor` · `_wall_art` | `Decor` |
 | 가구 모델(소파·안락의자·축음기·연습 과녁·옷걸이…) | `room_decor.gd` `build_furnish` (GLB = `room_kit.gd` `_model`) | `Furnishings` |

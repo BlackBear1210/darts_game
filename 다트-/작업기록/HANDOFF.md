@@ -1,3 +1,15 @@
+# 최신 인수인계 — 카드 59장 · 쓰는 순간 카드 모듈 · 다트 머신 (2026-11-21)
+
+- **새 카드는 카드 목록(`card_catalog.gd` `CARDS`) 맨 뒤에만 붙인다.** 손패가 종류 번호로 오가서 순서를 바꾸면 저장·네트워크 손패가 다른 카드가 된다.
+  - 조준·몸·화면에 걸리는 값은 `"mod"` 이름 하나로(`RoundRules.dart_modifiers` 에 실림, 기본값은 `MOD_DEFAULTS`). 쓰는 순간 끝나는 카드는 `Timing.INSTANT` + `match_card_actions.gd` 의 `context_problem`/`apply` 에 한 칸.
+  - `"live"` 카드는 F5 펍 경기 전용(F6 단독 시연에서는 안 나눠 줌). `"solo"` 는 협동 강화 없음.
+- **카드를 쓸 수 있는지**는 방장(`match_card_actions.gd context_problem`)과 HUD(`lounge_hud.gd _blocked_card_reason`)가 같은 함수를 쓴다. 한쪽만 고치지 않는다.
+- **판 효과는 그림과 판정이 같은 함수**(`BoardChaos` shape · `BoardLayout.ring_edges`). 새 판 효과도 여기에. 남은 머신 오류와 고칠 순서는 바탕화면 `다트머신_디자인/03`·`05`.
+- **시험에 `--fixed-fps` 를 붙이지 않는다**(타이머 시험이 실패). 팀 공용 시험 22개는 APPDATA 를 임시 폴더로 돌려서 돌린다.
+- 상세: `작업기록/2026-11-21_새카드28장_N키_맵정리_다트머신문서.md`.
+
+---
+
 # 2026-11-19 모션 검수 후 인수인계
 
 현재 배포용 플레이어는 `art/characters/rigged/approved_character.glb`다. 다시 내보낼 때 생성기 옆의 `motion_review_patch.py`와 `reviewed_clips.npz`를 함께 사용한다. [검사 범위·게임 캡처·재현 절차](2026-11-19_전체모션_외형검수.md).

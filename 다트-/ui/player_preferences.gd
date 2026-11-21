@@ -33,6 +33,8 @@ static var output_device: String = "Default"
 static var voice_people: Dictionary = {}
 ## 내 꾸미기 차림(2026-11-15 꾸미기 방). 다음 판에도 그대로 입고 들어간다. 값 검사는 art/characters/player_outfit.gd sanitize.
 static var look: Dictionary = {}
+## 아래 가운데 키 안내 칩·카드 쓰는 법 한 줄을 보일지(2026-11-21 사용자 요청 — 배그처럼 N 키로 숨기기). 저장된다.
+static var show_key_hints: bool = true
 static var loaded: bool = false
 const KEYS: Array[String] = ["master", "music", "sfx", "ui_scale", "sensitivity", "visual_effects", "reduced_motion", "fullscreen", "quality", "interact_key",
 	"voice_enabled", "voice_mode", "voice_key", "voice_gain", "voice_sensitivity", "voice_volume", "input_device", "output_device"]
@@ -66,6 +68,7 @@ static func load_saved() -> void:
 		if people is Dictionary: voice_people = people
 		var saved_look: Variant = file.get_value("outfit", "look", {})
 		if saved_look is Dictionary: look = saved_look
+		show_key_hints = bool(file.get_value("display", "key_hints", true))
 	apply()
 
 static func apply() -> void:
@@ -101,6 +104,7 @@ static func save() -> void:
 	file.set_value("display", "reduced_motion", reduced_motion)
 	file.set_value("display", "fullscreen", fullscreen)
 	file.set_value("display", "quality", quality)
+	file.set_value("display", "key_hints", show_key_hints)
 	file.set_value("keys", "interact", interact_key)
 	file.set_value("voice", "enabled", voice_enabled)
 	file.set_value("voice", "mode", voice_mode)

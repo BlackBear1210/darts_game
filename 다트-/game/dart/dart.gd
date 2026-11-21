@@ -71,6 +71,9 @@ var _hit_board: bool = true
 var _release_offset: Vector3 = Vector3.ZERO
 ## 꽂힌 뒤 지난 시간(음수 = 아직 날아가는 중).
 var _stuck_age: float = -1.0
+## 고무 다트(2026-11-21): 처음 닿은 뒤 이어 갈 구간들 [[도착점, 초], ...]. 비어 있으면 닿는 곳에 바로 꽂힌다.
+var _hops: Array = []
+var _bounced: bool = false
 
 
 func _ready() -> void:
@@ -125,13 +128,32 @@ func redirect(target: Vector3, remaining: float) -> void:
 	_duration = landing
 
 
+## 고무 다트: fly 의 도착점에 닿으면 꽂히지 않고 바깥(via)으로 튕겨 나왔다가 seconds 뒤 target 에 꽂힌다.
+## fly 다음에 부른다. 판정은 방장이 이미 끝냈다 — 겉모습만 두 구간 포물선으로 잇는다.
+func bounce_via(via: Vector3, target: Vector3, seconds: float) -> void:
+	var half: float = maxf(seconds * 0.5, 0.05)
+	_hops = [[via, half], [target, half]]
+
+
+func _next_hop() -> void:
+	var hop: Array = _hops.pop_front()
+	_bounced = true
+	_start = global_position
+	_target = hop[0]
+	_duration = float(hop[1])
+	_elapsed = 0.0
+	_initial_velocity = config.initial_velocity(_start, _target, _duration)
+	velocity = _initial_velocity
+	_release_offset = Vector3.ZERO
+
+
 func _physics_process(delta: float) -> void:
 	_elapsed += delta
 	var flight_time: float = minf(_elapsed, _duration) if _hit_board else _elapsed
 	global_position = config.position_at(_start, _initial_velocity, flight_time)
 	velocity = _initial_velocity + Vector3.DOWN * config.gravity * flight_time
 	look_at(global_position + velocity, Vector3.UP)
-	var progress := minf(flight_time / _duration, 1.0)
+	var progress := 1.0 if _bounced else minf(flight_time / _duration, 1.0)
 	_visual.global_position = global_position + _release_offset * (1.0 - progress)
 	_visual.scale = Vector3.ONE * lerpf(1.0, LANDED_SCALE, progress) * size_multiplier
 	# 깃이 공기를 타며 몸통 축으로 돈다(손을 떠난 직후 빠르고 점점 느려진다).
@@ -139,6 +161,9 @@ func _physics_process(delta: float) -> void:
 	# 바람 줄기: 손을 떠나며 바로 켜지고, 빗나가 계속 날아가면 멈춘 뒤처럼 사라진다.
 	_set_wind(minf(_elapsed / 0.06, 1.0) * clampf(1.0 - maxf(_elapsed - _duration, 0.0) / WIND_FADE_SECONDS, 0.0, 1.0))
 	if _elapsed >= _duration:
+		if _hit_board and not _hops.is_empty():
+			_next_hop()
+			return
 		if _hit_board:
 			global_position = _target
 			velocity = Vector3.ZERO
