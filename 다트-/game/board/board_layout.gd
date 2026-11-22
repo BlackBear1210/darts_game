@@ -47,26 +47,34 @@ func apply_card_change(kind: String, choice: int, random: RandomNumberGenerator)
 		"shuffle":
 			shuffle_with(random)
 		"random_scores":
+			# 2026-11-22: 링 배수까지 무작위로 바꾸면 가장 넓은 싱글 링이 평균 ×2 가 되어
+			# "방해" 카드인데 맞는 사람 점수가 오히려 44% 올라갔다(실측). 링은 그대로 두고 숫자와 불만 바꾼다.
 			for index in range(20): numbers[index] = random.randi_range(1, 20)
-			for index in range(3): ring_multipliers[index] = random.randi_range(1, 3)
-			inner_bull_score = random.randi_range(25, 60)
-			outer_bull_score = random.randi_range(10, 40)
+			inner_bull_score = random.randi_range(15, 45)
+			outer_bull_score = random.randi_range(5, 25)
 		"lock_scores":
 			var regions: Array[int] = []
 			for region in range(82):
 				if not overrides.has(region): regions.append(region)
-			var value: int = random.randi_range(1, 20)
+			# 2026-11-22: 1~20 중 하나로 고정하면 높은 값이 걸릴 때 맞는 사람 점수가 오히려 올랐다(실측).
+			# 방해 카드이므로 낮은 값으로만 고정한다.
+			var value: int = random.randi_range(1, 6)
 			for index in range(mini(regions.size(), random.randi_range(5, 20))):
 				var selected: int = random.randi_range(0, regions.size() - 1)
 				overrides[regions[selected]] = value
 				regions.remove_at(selected)
 		"block_sector":
-			if choice >= 0 and choice not in blocked_sectors: blocked_sectors.append(choice)
+			# 2026-11-22 협동 시너지를 없애며 예전 3인 단계(고른 칸 + 양옆)를 기본으로 올렸다.
+			if choice < 0: return
+			for offset: int in [0, 1, -1]:
+				var selected: int = posmod(choice + offset, 20)
+				if selected not in blocked_sectors: blocked_sectors.append(selected)
 		"ink_board":
 			var sectors: Array[int] = []
 			for index in range(20):
 				if index not in hidden_sectors: sectors.append(index)
-			while hidden_sectors.size() < 5 and not sectors.is_empty():
+			# 2026-11-22 협동 시너지를 없애며 예전 2인 단계(8칸)를 기본으로 올렸다.
+			while hidden_sectors.size() < 8 and not sectors.is_empty():
 				var selected: int = random.randi_range(0, sectors.size() - 1)
 				hidden_sectors.append(sectors[selected])
 				sectors.remove_at(selected)
