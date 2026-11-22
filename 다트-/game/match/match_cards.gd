@@ -10,7 +10,7 @@ const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 ## 카드를 나눠 준 뒤 받은 카드를 확인하는 시간(초). 이 동안에는 카드를 쓰지 않는다.
 const VIEW_SECONDS: float = 5.0
 ## 날아가는 다트에 쓰면 꽂히는 자리가 바뀌는 효과(궤적 카드).
-const FLIGHT_KINDS: Array[String] = ["heavy", "wind", "power", "triple", "drowsy", "large", "pierce", "rubber"]
+const FLIGHT_KINDS: Array[String] = ["heavy", "wind", "power", "triple", "drowsy", "large", "pierce", "rubber", "repeat_spot", "cover", "board_zoom", "spin", "split", "vertical", "horizontal", "move"]
 ## 봇 카드(2026-10-31 사용자 요청): 다트 턴마다 봇마다 이 확률로 한 장을 쓴다. 시연값.
 ## 효과는 늘 던지는 사람에게 걸리므로 자기 차례면 나에게 거는 카드(×2·+10 등), 남의 차례면 방해 카드를 고른다.
 ## 자기 차례에 남이 카드를 꺼내 들면 가진 무효(×0)로 막는다.
@@ -33,6 +33,7 @@ var _chaos_from: Dictionary = {}
 ## 회전 방향(+1 = 앞에서 볼 때 반시계). 카드를 쓸 때마다 번갈아 정해 같은 방향만 외우지 못하게 한다.
 var _spin_direction: float = 1.0
 var _cover_side: int = -1
+var _seams := Vector2i.ONE
 var _move_direction := Vector2.RIGHT
 var _round_overrides: Dictionary = {}
 ## 쓰는 순간 끝나는 카드·사용 조건(2026-11-21).
@@ -225,8 +226,8 @@ func _apply_now(effect) -> void:
 	if effect.kind == "lock_scores":
 		_round_overrides = thrower.layout.overrides.duplicate()
 		for player in controller.state.players: player.layout.overrides = _round_overrides.duplicate()
-	if effect.kind in FLIGHT_KINDS and controller.state.phase == MatchState.Phase.FLIGHT: controller.redirect_flight()
 	if effect.kind in CHAOS_KINDS: _start_chaos(effect.kind)
+	if effect.kind in FLIGHT_KINDS and controller.state.phase == MatchState.Phase.FLIGHT: controller.redirect_flight()
 
 ## 머신 효과 하나를 켠다. 이미 켜진 효과를 또 쓰면 시작 시각은 그대로(모양이 덜컥 튀지 않게) 두고 카드만 소모된다.
 func _start_chaos(kind: String) -> void:
@@ -234,6 +235,9 @@ func _start_chaos(kind: String) -> void:
 	_chaos_from[kind] = controller._now()
 	if kind == "spin": _spin_direction = -_spin_direction
 	if kind == "cover": _cover_side = -1 if _random.randf() < 0.5 else 1
+	# 방장이 시전마다 한 번 결정한다. 클라이언트와 비행 중 예측은 같은 경계를 쓴다.
+	if kind == "vertical": _seams.x = -1 if _random.randf() < 0.5 else 1
+	if kind == "horizontal": _seams.y = -1 if _random.randf() < 0.5 else 1
 	if kind == "move": _move_direction = Vector2.from_angle(_random.randf_range(0, TAU))
 
 ## 카드가 걸리거나 무효(×0)로 풀린 뒤 "지금 걸린 효과"에 머신·링을 맞춘다: 풀린 머신 효과는 끄고, 링 두께는 던지는 사람 효과대로.
@@ -243,27 +247,27 @@ func _refresh_live() -> void:
 	var mods: Dictionary = modifiers(thrower.peer_id)
 	for kind: String in CHAOS_KINDS:
 		if _chaos_from.has(kind) and not bool(mods.get(kind, false)): _chaos_from.erase(kind)
+	if not is_equal_approx(float(mods.get("board_scale", 1.0)), 1.0):
+		_start_chaos("board_zoom")
+	else:
+		_chaos_from.erase("board_zoom")
 	thrower.layout.ring_scale = float(mods.get("ring_scale", 1.0))
 
 
 ## 공개용: 켜진 머신 효과마다 "걸린 지 몇 초"(방장 시계) + 회전 방향. MatchController._publish 가 스냅샷에 싣는다.
 func chaos_ages() -> Dictionary:
 	var now: float = controller._now()
-	var active_mods: Dictionary = modifiers(controller.state.active_player().peer_id)
-	var ages: Dictionary = {"dir": _spin_direction, "cover_side": _cover_side, "move_dir": _move_direction, "scale": float(active_mods.get("board_scale", 1.0))}
+	var active := controller.state.active_player()
+	var active_mods: Dictionary = modifiers(active.peer_id) if active != null else {}
+	var ages: Dictionary = {"vertical_sign": _seams.x, "horizontal_sign": _seams.y, "dir": _spin_direction, "cover_side": _cover_side, "move_dir": _move_direction, "scale": float(active_mods.get("board_scale", 1.0))}
 	for kind: String in _chaos_from:
 		ages[kind] = now - float(_chaos_from[kind])
 	return ages
 
 ## 방장이 보는 지금 과녁 모양(BoardChaos.pose). 점수 판정과 방장 화면이 같이 쓴다.
-func shape_now() -> Dictionary:
-	var now: float = controller._now()
-	var age := func(kind: String) -> float:
-		return now - float(_chaos_from[kind]) if _chaos_from.has(kind) else -1.0
-	var mods: Dictionary = modifiers(controller.state.active_player().peer_id)
-	var shape: Dictionary = BoardChaos.pose(age.call("spin"), _spin_direction, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_direction, _cover_side)
-	shape["scale"] = float(mods.get("board_scale", 1.0))
-	return shape
+func shape_now(elapsed: float = 0.0) -> Dictionary:
+	return BoardChaos.from_ages(chaos_ages(), elapsed)
+
 
 func begin_dart_turn() -> void:
 	var active: MatchPlayer = controller.state.active_player()
@@ -277,6 +281,7 @@ func begin_dart_turn() -> void:
 	if mods.shuffle: active.layout.numbers.shuffle()
 	# 머신은 차례마다 제자리에서 시작한다. 차례 시작에 켜지는 효과(미리 걸어 둔 "차례 동안" 카드)는 지금부터 움직인다.
 	_chaos_from.clear()
+	if not is_equal_approx(float(mods.get("board_scale", 1.0)), 1.0): _start_chaos("board_zoom")
 	for kind in CHAOS_KINDS:
 		if bool(mods.get(kind, false)): _start_chaos(kind)
 	for player in controller.state.players:
@@ -456,6 +461,8 @@ func landing_points(hit: Dictionary) -> int:
 	var mine_hits: int = 0
 	for flight: Dictionary in hit.get("flights", [hit]):
 		var aim := Vector2(float(flight.x), float(flight.y))
+		# 방장이 날개에 실제로 부딪힌 발은 착탄면 전체가 셔터다. 큰 다트의 면적 표본도 그 뒤로 새지 않는다.
+		if bool(flight.get("shutter_hit", false)) or bool(flight.get("infill_hit", false)): continue
 		var region: int = BoardScorer.region_at(BoardChaos.locate(aim, shape), player.layout.ring_scale)
 		if bool(mods.get("large", false)):
 			var area: Dictionary = BoardChaos.area_result(aim, shape, player.layout, _random)

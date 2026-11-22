@@ -118,7 +118,10 @@ func _run() -> void:
 	await _drive(Vector2(0, -1), 4.0)
 	assert(local.position.z < TableView.NO_ENTRY_Z and local.position.y >= 0)
 	assert(local.position.z >= TableView.DART_HALL.position.y + TableView.BODY_MARGIN - 0.01)
-	# 거기서 레인 쪽으로 밀어도 레인 벽에 막혀 안으로 못 들어간다.
+	# 캐비닛 뒤 정비 공간에서 몸체를 가로지르지 않도록 먼저 빈 레인으로 나온다.
+	for step in range(24):
+		if local.position.z >= -8.5: break
+		await _drive(Vector2(0, 1), 0.10)
 	await _drive(Vector2(1, 0), 1.5)
 	assert(local.position.x > -TableView.LANE_HALF, "중앙 펜스가 없어 레인을 가로질러 걸을 수 있다")
 	_game.request_seat()
@@ -136,7 +139,10 @@ func _run() -> void:
 	await _wait_until(func() -> bool: return bots.all(func(bot: PlayerView) -> bool: return bot.seated), 8.0, "봇이 모두 자리로 돌아오지 않았습니다.")
 	for bot in bots:
 		assert(bot.position == TableView.SEATS[bot.identity.seat])
-	# 아래 탄도 검사는 투척선 뒤에서 한다(라운지 구석에서는 단차 벽이 경로를 가린다).
+	# 아래 탄도 검사는 투척선 뒤에서 한다. 직전 라운드의 자동 착석이 끝났다면 먼저 일어난다.
+	if local.seated:
+		_game.request_seat()
+	assert(not local.seated)
 	local.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.5)
 	await physics_frame
 	var result: Dictionary = _game.solve_dart(Vector2.ZERO, 1)

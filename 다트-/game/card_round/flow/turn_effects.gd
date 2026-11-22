@@ -25,6 +25,7 @@ var _warp_talk_at: float = 0.0
 var _motion_started: Dictionary = {}
 var _applied: Dictionary = {}
 var _cover_side: int = -1
+var _seams := Vector2i.ONE
 var _move_dir := Vector2.RIGHT
 var _round_overrides: Dictionary = {}
 var _lock_applied: Dictionary = {}
@@ -38,7 +39,7 @@ func setup(ctx: Context) -> void:
 
 ## 과녁 소품을 한 번 만든다: 가림판(다트 머신이 없을 때만 쓰는 예비 판자)과 바람 표시. 평소에는 숨겨 둔다.
 ## 2026-11-08 사용자 요청 "판때기로 가리지 말고 가게 셔터처럼 옆에서 촤라락" → 가림판은 다트 머신의 롤 셔터
-## (art/dart_machine/roll_shutter.gd, F5 본 게임과 같은 그림)로 닫는다. 판자는 머신이 없는 장면을 위한 예비다.
+## (art/dart_machine/flip_guard.gd, F5 본 게임과 같은 그림)로 닫는다. 판자는 머신이 없는 장면을 위한 예비다.
 func build_props() -> void:
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	_cover = MeshInstance3D.new()
@@ -92,8 +93,10 @@ func apply(seat: int) -> void:
 		if effect.target != seat or effect.state != _ctx.rules.EffectState.ACTIVE or _applied.has(effect.uid): continue
 		_applied[effect.uid] = true
 		if effect.kind != "lock_scores": layout.apply_card_change(effect.kind, effect.choice, _ctx.random)
-		if effect.kind in ["spin", "split", "vertical", "horizontal", "move", "cover"] and not _motion_started.has(effect.kind):
+		if effect.kind in ["spin", "split", "vertical", "horizontal", "move", "cover", "board_zoom"] and not _motion_started.has(effect.kind):
 			_motion_started[effect.kind] = _ctx.now
+			if effect.kind == "vertical": _seams.x = -1 if _ctx.random.randf() < 0.5 else 1
+			if effect.kind == "horizontal": _seams.y = -1 if _ctx.random.randf() < 0.5 else 1
 			if effect.kind == "cover": _cover_side = -1 if _ctx.random.randf() < 0.5 else 1
 			if effect.kind == "move": _move_dir = Vector2.from_angle(_ctx.random.randf_range(0, TAU))
 	_ctx.table.board.show_layout(layout)
@@ -164,6 +167,10 @@ func process() -> void:
 
 
 func shape_now() -> Dictionary:
-	var age := func(kind: String) -> float:
-		return _ctx.now - float(_motion_started[kind]) if _motion_started.has(kind) else -1.0
-	return Chaos.pose(age.call("spin"), 1, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_dir, _cover_side)
+	# F6도 실제 경기와 같은 역변환·도킹 순서를 사용한다.
+	var mods: Dictionary = _ctx.rules.dart_modifiers(_ctx.rules.active_seat())
+	var ages := {"move_dir": _move_dir, "cover_side": _cover_side, "vertical_sign": _seams.x,
+		"horizontal_sign": _seams.y, "scale": float(mods.get("board_scale", 1))}
+	for kind: String in _motion_started:
+		ages[kind] = _ctx.now - float(_motion_started[kind])
+	return Chaos.from_ages(ages)

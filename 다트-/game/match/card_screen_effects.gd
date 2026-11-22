@@ -8,7 +8,7 @@ extends CanvasLayer
 
 const Preferences = preload("res://ui/player_preferences.gd")
 ## 정전: 과녁만 희미하게 보이는 둥근 빛(화면 높이 비율)과 켜지고 꺼지는 빠르기(초당).
-const BLACKOUT_HOLE: float = 0.11
+const BLACKOUT_MARGIN := 1.10
 const FADE_RATE: float = 3.0
 ## 딸꾹질: 다음 딸꾹까지(초)와 위로 튀는 각도(라디안).
 const HICCUP_GAP := Vector2(1.4, 2.6)
@@ -83,7 +83,7 @@ func _cover(code: String, title: String) -> ColorRect:
 
 ## 내 카메라에 화면 카드를 건다. local = 내 캐릭터, active = 지금 던지는 사람(없으면 null), board = 과녁 가운데(월드).
 ## 정전은 던지는 사람에게 걸리면 모두의 화면이 어두워진다(펍 불이 나간다). 나머지는 내게 걸린 것만 보인다.
-func apply(camera: Camera3D, local: PlayerView, active: MatchPlayer, board: Vector3, delta: float) -> void:
+func apply(camera: Camera3D, local: PlayerView, active: MatchPlayer, delta: float) -> void:
 	if _base_fov < 0.0:
 		_base_fov = camera.fov
 	var mine: Dictionary = local.identity.card_effects
@@ -95,15 +95,6 @@ func apply(camera: Camera3D, local: PlayerView, active: MatchPlayer, board: Vect
 	var dark: bool = active != null and bool(active.card_effects.get("blackout", false))
 	_dark = move_toward(_dark, 1.0 if dark else 0.0, delta * FADE_RATE)
 	_blackout.visible = _dark > 0.0
-	if _blackout.visible:
-		var material := _blackout.material as ShaderMaterial
-		var hole := Vector2(-1, -1)
-		if not camera.is_position_behind(board):
-			hole = camera.unproject_position(board) / size
-		material.set_shader_parameter("hole", hole)
-		material.set_shader_parameter("radius", BLACKOUT_HOLE)
-		material.set_shader_parameter("strength", _dark)
-		material.set_shader_parameter("aspect", aspect)
 	# 딸꾹질: 가끔 화면(조준)이 위로 툭 튀었다가 돌아온다.
 	if bool(mine.get("hiccup", false)):
 		if time >= _next_hiccup:
@@ -138,3 +129,22 @@ func apply(camera: Camera3D, local: PlayerView, active: MatchPlayer, board: Vect
 			want = (wall.position as Vector3) + (eye - (wall.position as Vector3)).normalized() * 0.25
 		camera.position = want
 		camera.cull_mask = 0xfffff
+
+
+## 모든 카메라 흔들림·FOV·과녁 이동을 적용한 다음 실제 숫자 띠의 화면 크기로 조명을 잡는다.
+func light_board(camera: Camera3D, board: BoardView) -> void:
+	if not _blackout.visible: return
+	var viewport_size := camera.get_viewport().get_visible_rect().size
+	var center := board.sight_center()
+	var material := _blackout.material as ShaderMaterial
+	var hole := Vector2(-4, -4)
+	var radius := 0.0
+	if not camera.is_position_behind(center):
+		var projected := camera.unproject_position(center)
+		var rim := camera.unproject_position(center + camera.global_basis.y * board.sight_radius())
+		hole = projected / viewport_size
+		radius = projected.distance_to(rim) / maxf(viewport_size.y, 1) * BLACKOUT_MARGIN
+	material.set_shader_parameter("hole", hole)
+	material.set_shader_parameter("radius", maxf(0.001, radius))
+	material.set_shader_parameter("strength", _dark)
+	material.set_shader_parameter("aspect", viewport_size.x / maxf(viewport_size.y, 1))

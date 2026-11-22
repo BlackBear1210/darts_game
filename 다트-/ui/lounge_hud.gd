@@ -27,7 +27,8 @@ const HINT_TOAST_SECONDS: float = 1.6
 ## 자리 표식(색약이어도 모양으로 구분 — 기획 2-4).
 const SEAT_GLYPHS: Array[String] = ["●", "▲", "■", "◆"]
 ## 킬로그 한 줄이 떠 있는 시간(초)과 사라지는 시간.
-const FEED_LIFE: float = 8.0
+const FEED_LIFE: float = 5.0
+const FEED_ROWS := 2
 const FEED_FADE: float = 0.8
 
 var game: GameView
@@ -49,7 +50,7 @@ var _prompt_box: HBoxContainer
 var _prompt_key: String = ""
 var _ready_box: HBoxContainer
 var _ready_key: String = ""
-var _card_hint: Label
+var _phase_panel: PanelContainer
 var _card_panel: PanelContainer
 var _card_art: TextureRect
 var _card_name: Label
@@ -127,6 +128,7 @@ func _build_scoreboard() -> void:
 	column.add_child(_score_box)
 	# 단계 카드(점수판 아래 붙은 띠).
 	var phase := PanelContainer.new()
+	_phase_panel = phase
 	phase.add_theme_stylebox_override("panel", Style.flat(Color(Style.INK, 0.6), Color(0, 0, 0, 0), 0, 10, 12, 8))
 	column.add_child(phase)
 	var phase_column := VBoxContainer.new()
@@ -176,9 +178,6 @@ func _build_bottom() -> void:
 	_charge.custom_minimum_size = Vector2(180, 10)
 	_charge.size = Vector2(180, 10)
 	_root.add_child(_charge)
-	_card_hint = Style.label(_root, "", 18, Style.INK)
-	_card_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_card_hint.add_theme_stylebox_override("normal", Style.card(Style.GOLD, Style.INK, Vector2(0, 4), 3, 14, 16))
 	_build_card_panel()
 	_hint_toast = Style.label(_root, "", 18, Style.INK)
 	_hint_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -308,6 +307,13 @@ func _process(delta: float) -> void:
 	_update_feed(state)
 	_update_cards(state, waiting, finished)
 	_update_effects(state, waiting or finished)
+	# 라운드와 남은 시간은 위 배너 한 곳에 둔다. 효과와 상태 경고는 조준 중에도 남긴다.
+	_phase_title.visible = waiting
+	_phase_detail.visible = waiting
+	_phase_panel.visible = waiting or _effects.visible
+	_room.visible = waiting
+	_feed_box.visible = not game.throw_input.charging and not finished
+	if not waiting: _feed_box.position.y = 26
 	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
 	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
@@ -316,9 +322,6 @@ func _process(delta: float) -> void:
 	var fan_open: bool = me != null and not me.hand.is_empty() and not waiting
 	var prompt_center: float = maxf(width * 0.5, 900.0 + _prompt_box.size.x * 0.5) if fan_open else width * 0.5
 	_prompt_box.position = Vector2(clampf(prompt_center - _prompt_box.size.x / 2, 28, maxf(28, width - 28 - _prompt_box.size.x)), height - 92)
-	# 카드 한 줄 안내는 위 가운데(라운드 표시 자리)에서 키 안내 칩 바로 위로 옮겼다. 부채가 열리면 같이 오른쪽으로 비킨다.
-	var hint_center: float = maxf(width * 0.5, 900.0 + _card_hint.size.x * 0.5) if fan_open else width * 0.5
-	_card_hint.position = Vector2(clampf(hint_center - _card_hint.size.x / 2, 28, maxf(28, width - 28 - _card_hint.size.x)), height - 150)
 	_update_ready(room, waiting)
 	_ready_box.position = Vector2((width - _ready_box.size.x) / 2, height - 170)
 	_hint_toast.visible = _time < _hint_toast_until
@@ -448,6 +451,8 @@ func _update_feed(state: MatchState) -> void:
 	var shown := PackedStringArray()
 	for entry in state.feed:
 		if now - float(_feed_seen[entry]) < FEED_LIFE: shown.append(entry)
+	if shown.size() > FEED_ROWS:
+		shown = shown.slice(shown.size() - FEED_ROWS)
 	var joined := "\n".join(shown)
 	if joined != _feed_key:
 		_feed_key = joined
@@ -496,15 +501,11 @@ static func _seat_color(seat: int) -> Color:
 
 func _update_cards(state: MatchState, waiting: bool, finished: bool) -> void:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
-	_card_hint.visible = false
 	_card_panel.visible = false
 	if waiting or finished or me == null or not _card_phase(state): return
 	if me.pending_card >= 0:
 		# 카드를 꺼내 들면 오른쪽 아래 카드 패널이 이름·대상·"F 로 쓰기"를 다 보여 준다 → 아래 한 줄 안내는 숨긴다(겹침 방지).
 		_show_card_panel(me, _target_name(state, me))
-	elif not game.controller.card_test_active:
-		_card_hint.text = "Q·E 로 카드 꺼내기 (1–7 바로) → %s 로 쓰기 · 효과는 지금 던지는 사람에게" % OS.get_keycode_string(Preferences.interact_key)
-		_card_hint.visible = Preferences.show_key_hints
 
 
 ## 카드를 쓸 수 있는 때 = 다트 턴(조준·비행). 2026-10-31부터 따로 카드 턴은 없다.
@@ -632,15 +633,18 @@ func _blocked_card_reason(me: MatchPlayer) -> String:
 func _update_prompt() -> void:
 	var pairs: Array = _prompt_for(game.lounge.focus(game.controller.local_peer_id) if game.lounge != null else {})
 	var room: RoomState = game.session.room
-	if game.throw_input.charging:
-		pairs = [["놓기", "다트 발사 %d%%" % roundi(game.throw_input.timing * 100)], ["우클릭", "취소"]]
-	if room.phase == RoomState.Phase.LOBBY and game.is_seated(game.controller.local_peer_id):
+	if not game.controller.card_test_active and room.phase == RoomState.Phase.LOBBY and game.is_seated(game.controller.local_peer_id):
 		pairs = [["Enter", "게임 참여"], ["A / D", "훔쳐보기"], ["S", "빙글빙글"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
-	if game.lounge != null and game.lounge.is_stunned(game.controller.local_peer_id):
+	var stunned: bool = game.lounge != null and game.lounge.is_stunned(game.controller.local_peer_id)
+	if stunned:
 		pairs = [["✦", "잠깐 어질어질…"]]
+	# 행동 후보는 실행 가능한 순서다. 충전 중에는 고정 문구와 충전 막대만 갱신한다.
+	if game.throw_input.charging and not stunned:
+		pairs = [["놓기", "다트 발사"], ["우클릭", "취소"]]
+	if pairs.size() > 2: pairs = pairs.slice(0, 2)
 	var key := str(pairs)
-	# N 키(2026-11-21): 키 안내 칩을 숨긴다(배그 "키 안내 숨기기"). 충전 중 "놓기"·기절 표시도 같이 숨는다.
-	_prompt_box.visible = Preferences.show_key_hints
+	# N으로 조작 안내를 숨겨도 기절 등 행동을 막는 상태는 표시한다.
+	_prompt_box.visible = stunned or (Preferences.show_key_hints and not pairs.is_empty() and _time >= _hint_toast_until)
 	if key == _prompt_key: return
 	_prompt_key = key
 	for child in _prompt_box.get_children():
@@ -794,7 +798,9 @@ func _prompt_for(focus: Dictionary) -> Array:
 	var interact: Array = [] if me != null and me.pending_card >= 0 and _card_phase(state) else [[key, "착석 · 기계"]]
 	# 라운드당 다트(2026-11-15): 손에 든 다트 수를 함께 보여 준다(차례 밖에서 던지면 그만큼 줄고 다음 라운드에 다시 찬다).
 	var darts: Array = [["좌클릭 꾹", "다트 %d개" % me.darts]] if me != null and me.darts > 0 else []
-	return card_keys + [["WASD", "이동"]] + interact + darts + [["T", "감정표현"]] + _voice_keys()
+	if game.can_throw_from(game.controller.local_peer_id) and not darts.is_empty():
+		return darts + card_keys
+	return card_keys + interact
 
 
 ## 음성 채팅 칩(2026-11-01): 눌러서 말하기면 그 키, 말하는 중이면 "말하는 중". 함께하는 사람이 없으면(싱글) 뺀다.

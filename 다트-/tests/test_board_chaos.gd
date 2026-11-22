@@ -22,6 +22,23 @@ func _check(condition: bool, message: String) -> void:
 func _run() -> void:
 	var layout := BoardLayout.new()
 	# 1) 제자리: 모양이 그대로면 점수도 그대로다.
+	# 각 카드의 두 스냅샷 및 복합 상태에서 같은 칸 양끝이 같은 조각을 따르는지 검사한다.
+	for vs in [-1, 1]:
+		for hs in [-1, 1]:
+			for zoom in [0.7, 1.0, 1.35]:
+				var posed := BoardChaos.from_ages({"vertical": 1.8, "horizontal": 1.8, "vertical_sign": vs, "horizontal_sign": hs, "scale": zoom, "split": 0.8, "spin": 0.9})
+				for sector in range(20):
+					var center := BoardChaos.sector_direction(sector)
+					for length in [0.045, 0.46, 0.61, 0.98]:
+						var a := center.rotated(-PI / 23) * float(length)
+						var b := center.rotated(PI / 23) * float(length)
+						var offset := BoardChaos.offset_at(a, posed)
+						_check(offset.is_equal_approx(BoardChaos.offset_at(b, posed)), "숫자 구역 양끝의 이동량")
+						var projected: Vector2 = (a + offset).rotated(posed.angle) * float(posed.scale)
+						_check(BoardChaos.locate(projected, posed).distance_to(a) < 0.0001, "분리·확대 역변환")
+	var before := BoardChaos.from_ages({"board_zoom": 0.3, "scale": 1.35})
+	var after := BoardChaos.from_ages({"board_zoom": 1.2, "scale": 1.35})
+	_check(float(before.insert) == 0 and float(after.insert) == 1 and float(after.petal) > 0, "확장 후 보조판 도킹")
 	var rest: Dictionary = BoardChaos.rest()
 	for point: Vector2 in [Vector2.ZERO, Vector2(0, 0.3), Vector2(0.3, 0), Vector2(-0.45, -0.2), Vector2(0, 0.6)]:
 		_check(BoardChaos.score(point, rest, layout) == BoardScorer.score(point, layout), "제자리 점수 %s" % point)
@@ -62,7 +79,9 @@ func _run() -> void:
 	# 4) 셔터: 왼쪽 절반 0점, 오른쪽은 그대로. 회전·분리와 겹쳐도 셔터가 먼저다(머신에 고정).
 	var all_on: Dictionary = BoardChaos.pose(2.0, 1.0, 2.0, 0.1)
 	_check(bool(all_on.cover) and float(all_on.shutter) > 0.0 and float(all_on.shutter) < 1.0, "셔터 닫히는 중")
-	_check(BoardChaos.score(Vector2(-0.3, 0.1), all_on, layout) == 0, "셔터 쪽 0점")
+	_check(not BoardChaos.covered(Vector2(-0.3, 0.1), all_on), "이동 중 날개가 닿기 전에는 득점면이 열린다")
+	all_on.shutter = 1.0
+	_check(BoardChaos.covered(Vector2(-0.3, 0.1), all_on), "닫힌 셔터 쪽 0점")
 	_check(BoardChaos.score(Vector2(-0.3, 0.1), rest, layout) > 0, "셔터 없으면 왼쪽도 점수")
 	_check(is_equal_approx(BoardChaos.shutter_amount(BoardChaos.SHUTTER_CLOSE), 1.0), "셔터 다 닫힘")
 	# 5) 과녁 그림: 회전각·조각 자리가 pose 와 같고, 다트는 맞은 조각에 붙는다.
@@ -94,6 +113,29 @@ func _run() -> void:
 	board.show_layout(shuffled)
 	await process_frame
 	_check(is_instance_valid(dart) and dart.get_parent() == group0, "숫자 섞기 뒤에도 다트가 남는다")
+	var original_size := dart.global_basis.get_scale()
+	for zoom: float in [1.35, 0.7, 1.0]:
+		both.scale = zoom
+		board.show_chaos(both)
+		_check(dart.global_basis.get_scale().is_equal_approx(original_size), "판이 변해도 다트 크기는 일정")
+	shuffled.overrides[0] = 37
+	board.show_layout(shuffled)
+	board.show_chaos(BoardChaos.rest())
+	var mark := group0.get_node("FixedScore0") as Label3D
+	_check(mark.visible and spin_root.find_child("SplitFixedScore0", true, false) == null, "구역마다 고정 점수 하나")
+	var split_state := BoardChaos.from_ages({"vertical": 1.5, "spin": 0.8, "scale": 1.35})
+	board.show_chaos(split_state)
+	var point := Vector2(mark.global_position.x, mark.global_position.y) / BoardLayout.RADIUS
+	_check(mark.visible and mark.text == "37" and BoardChaos.score(point, split_state, shuffled) == 37, "표시된 글자의 조각에서 실제 고정 점수")
+	_check(mark.global_basis.y.normalized().is_equal_approx(Vector3.UP), "고정 점수 글자가 회전 중에도 바로 선다")
+	_check(spin_root.find_child("SplitNumber_*", true, false) == null, "갈라져도 복제 숫자 없음")
+	_check(BoardChaos.score(Vector2.ZERO, split_state, shuffled) == 0 and BoardChaos.on_infill(Vector2.ZERO, split_state), "갈라진 틈의 보조판은 0점")
+	for zoom in [0.7, 1.0, 1.35]:
+		var deploy := BoardChaos.from_ages({"split": 0.8, "vertical": 1.5, "horizontal": 1.5, "move": 0.75, "scale": zoom})
+		_check(BoardChaos.infill_radius(deploy) + Vector2(deploy.move).length() <= BoardChaos.WINDOW_RADIUS + 0.0001, "보조판의 가동 범위")
+	shuffled.hidden_sectors.append(0)
+	board.show_layout(shuffled)
+	_check(board.find_child("FixedScore0", true, false) == null, "먹물로 가린 구역의 고정 점수도 숨긴다")
 	board.clear_pins()
 	await process_frame
 	_check(not is_instance_valid(dart), "차례가 바뀌면 붙은 다트를 지운다")

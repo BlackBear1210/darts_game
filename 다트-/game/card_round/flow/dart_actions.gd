@@ -93,14 +93,26 @@ func throw(seat: int, aim: Vector2, charge: float) -> void:
 	for one in aims:
 		var aim_point: Vector3 = TableView.BOARD_CENTER + Vector3(one.x * radius, one.y * radius, 0)
 		var flight: Dictionary = DartSolver.solve(_ctx.root.get_world_3d().direct_space_state, start, aim_point, charge, TableView.BOARD_CENTER.z, bodies, speed_multiplier)
+		var shape: Dictionary = _effects.shape_now()
+		var hit := Vector2.INF
+		var blocked := false
+		if str(flight.kind) == "board":
+			var point: Vector3 = flight.point
+			hit = Vector2(point.x - TableView.BOARD_CENTER.x, point.y - TableView.BOARD_CENTER.y) / radius
+			var covered := not bool(mods.get("pierce", false)) and BoardChaos.covered(hit, shape)
+			shape.cover = false
+			var behind := not BoardChaos.locate(hit, shape, BoardView.BoardArt.BACKING_RATIO).is_finite() and BoardChaos.on_infill(hit, shape)
+			blocked = covered or behind
+			if blocked:
+				flight.point = point + Vector3.BACK * (BoardChaos.shutter_depth(hit, shape, radius) if covered else BoardChaos.INFILL_FRONT)
 		_spawn_dart(seat, flight)
 		longest = maxf(longest, float(flight.time))
 		match str(flight.kind):
 			"board":
-				var point: Vector3 = flight.point
-				var hit := Vector2(point.x - TableView.BOARD_CENTER.x, point.y - TableView.BOARD_CENTER.y) / radius
-				var shape: Dictionary = _effects.shape_now()
-				var region: int = BoardScorer.region_at(BoardChaos.locate(hit, shape))
+				if blocked:
+					reason = "가림판·보조판에 맞음" if base == 0 else reason
+					continue
+				var region: int = BoardScorer.region_at(BoardChaos.locate(hit, shape), _effects.layout.ring_scale)
 				if bool(mods.get("large", false)): region = int(BoardChaos.area_result(hit, shape, _effects.layout, _ctx.random).region)
 				var points: int = _effects.layout.region_score(region)
 				base += points

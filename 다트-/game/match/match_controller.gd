@@ -20,6 +20,7 @@ var session: NetworkSession
 var state := MatchState.new()
 var local_peer_id: int = 0
 var solve_throw: Callable
+var rebound_contact: Callable
 ## 테이블 집합 판정용 GameView 함수. check_seated(peer_id) -> bool, force_seat(peer_id). 없으면 집합을 바로 끝낸다.
 var check_seated: Callable
 ## 투척 위치 판정용 GameView 함수. in_throw_zone(peer_id) -> bool. 없으면 위치를 보지 않는다(씬 없는 시험).
@@ -338,16 +339,14 @@ func _launch(peer_id: int, aim: Vector2, charge: float, request_id: int) -> void
 func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 	var mods: Dictionary = cards.modifiers(peer_id) if cards != null else {}
 	var pierce: bool = bool(mods.get("pierce", false))
-	if bool(mods.get("repeat", false)) and cards != null and cards.last_landing.is_finite():
-		var fixed: Dictionary = _call_solve(cards.last_landing, 1.0, peer_id, 1.0, pierce)
-		var single: Dictionary = fixed.duplicate()
-		single["flights"] = [fixed]
-		return single
-	var adjusted: Vector2 = aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
-	if mods.get("drowsy", false):
-		# 방장이 한 발에 한 번만 정한다. 비행 중 다른 카드로 재계산해도 오차를 다시 뽑지 않는다.
+	var fixed: bool = bool(mods.get("repeat", false)) and cards != null and cards.last_landing.is_finite()
+	var adjusted := aim + Vector2(float(mods.get("push", 0)), -float(mods.get("drop", 0)))
+	if fixed:
+		adjusted = cards.last_landing
+		charge = 1.0
+	elif mods.get("drowsy", false):
 		if not _flight_input.has("drowsy_offset"):
-			var spread: float = CardCatalog.DROWSY_AIM_SPREAD
+			var spread := CardCatalog.DROWSY_AIM_SPREAD
 			_flight_input.drowsy_offset = Vector2(_random.randf_range(-spread, spread), _random.randf_range(-spread, spread))
 		adjusted += Vector2(_flight_input.drowsy_offset)
 	var offsets: Array[Vector2] = [Vector2.ZERO]
@@ -358,14 +357,14 @@ func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 	for index in range(offsets.size()):
 		var offset: Vector2 = offsets[index]
 		var one: Dictionary = _call_solve(adjusted + offset, charge, peer_id, CardCatalog.POWER_SPEED_MULTIPLIER if mods.get("power", false) else 1.0, pierce)
+		var arrival := float(one.duration)
+		if state.phase == MatchState.Phase.FLIGHT: arrival = maxf(0, _phase_end - _now())
+		if absf(float(one.x)) < 50 and not bool(one.get("infill_hit", false)) and not _shutter_stops(one, pierce, arrival):
+			if bool(mods.get("rubber", false)):
+				one = _bounce(one, peer_id, index, pierce, arrival)
 		one["large"] = bool(mods.get("large", false))
-		# 힘 증가: 날아가는 다트 뒤 바람 줄기 연출용(GameView._show_throw → DartView.powered). 빠르기는 위 배율.
 		one["power"] = bool(mods.get("power", false))
-		var shape: Dictionary = cards.shape_now() if cards != null else BoardChaos.rest()
-		if not pierce and BoardChaos.covered(Vector2(float(one.x), float(one.y)), shape) and absf(float(one.x)) < 50:
-			one.target = (one.target as Vector3) + Vector3(0, 0, BoardChaos.SHUTTER_FRONT)
-		elif bool(mods.get("rubber", false)) and absf(float(one.x)) < 50:
-			one = _bounce(one, peer_id, index)
+		one["pierce"] = pierce
 		flights.append(one)
 	var data: Dictionary = flights[0].duplicate()
 	data["flights"] = flights
@@ -386,18 +385,58 @@ func _call_solve(aim: Vector2, charge: float, peer_id: int, speed: float, pierce
 
 ## 고무 다트: 처음 닿은 자리(bounce_at · bounce_time)에서 무작위 방향으로 튕겨 RUBBER_SECONDS 뒤 새 자리에 꽂힌다.
 ## 튕길 방향·거리는 한 발에 한 번만 뽑는다(비행 중 다른 카드로 다시 계산해도 같은 자리). 판정은 새 자리(x, y)다.
-func _bounce(first: Dictionary, peer_id: int, index: int) -> Dictionary:
+func _bounce(first: Dictionary, peer_id: int, index: int, pierce: bool, arrival: float) -> Dictionary:
 	var key: String = "bounce_%d" % index
 	if not _flight_input.has(key):
 		_flight_input[key] = Vector2.from_angle(_random.randf_range(0, TAU)) * _random.randf_range(RUBBER_REACH.x, RUBBER_REACH.y)
 	var landing: Vector2 = Vector2(float(first.x), float(first.y)) + Vector2(_flight_input[key])
-	var second: Dictionary = _call_solve(landing, 1.0, peer_id, 1.0, true)
+	var second := first.duplicate()
+	var offset := Vector2(_flight_input[key]) * TableView.BOARD_SCALE * BoardLayout.RADIUS
+	var start: Vector3 = first.target
+	var via := start + Vector3(0, 0.20, 0.55)
+	second.x = landing.x
+	second.y = landing.y
+	second.target = start + Vector3(offset.x, offset.y, 0)
+	second["shutter_hit"] = false
+	var final_age := arrival + (0.0 if state.phase == MatchState.Phase.FLIGHT else RUBBER_SECONDS)
+	if not _shutter_stops(second, pierce, final_age):
+		var shape: Dictionary = cards.shape_now(final_age) if cards != null else BoardChaos.rest()
+		shape.cover = false
+		if BoardChaos.on_infill(landing, shape) and not BoardChaos.locate(landing, shape, BoardView.BoardArt.BACKING_RATIO).is_finite():
+			second.target = Vector3(second.target) + Vector3.BACK * BoardChaos.INFILL_FRONT
+			second["infill_hit"] = true
+			second.points = 0
+	var hops: Array = []
+	var from := start
+	var elapsed := 0.0
+	for to: Vector3 in [via, second.target]:
+		var duration := RUBBER_SECONDS * 0.5
+		var contact: Dictionary = rebound_contact.call(from, to, duration, peer_id, pierce) if rebound_contact.is_valid() else {}
+		if not contact.is_empty():
+			second.merge(contact, true)
+			to = second.target
+			duration = float(contact.duration)
+		hops.append([to, duration])
+		elapsed += duration
+		if not contact.is_empty(): break
+		from = to
 	second["start"] = first.start
-	second["bounce_at"] = first.target
+	second["bounce_at"] = start
 	second["bounce_time"] = float(first.duration)
-	second["duration"] = float(first.duration) + RUBBER_SECONDS
+	second["hops"] = hops
+	second["duration"] = float(first.duration) + elapsed
 	second["reason"] = "고무 다트 튕김 · " + str(second.get("reason", ""))
 	return second
+
+
+func _shutter_stops(flight: Dictionary, pierce: bool, arrival: float) -> bool:
+	var shape: Dictionary = cards.shape_now(arrival) if cards != null else BoardChaos.rest()
+	var stopped := not pierce and BoardChaos.covered(Vector2(flight.x, flight.y), shape)
+	flight["shutter_hit"] = stopped
+	if stopped:
+		flight.target = Vector3(flight.target) + Vector3.BACK * BoardChaos.shutter_depth(Vector2(flight.x, flight.y), shape, BoardLayout.RADIUS * TableView.BOARD_SCALE)
+		flight.points = 0
+	return stopped
 
 
 ## 날아가는 다트에 궤적 카드가 걸렸다(2026-10-31 사용자 결정: 비행 중에 써도 적용). 같은 조준으로 다시 계산해
@@ -855,10 +894,7 @@ func chaos_shape() -> Dictionary:
 		return BoardChaos.rest()
 	if multiplayer.is_server() or session == null:
 		return cards.shape_now() if cards != null else BoardChaos.rest()
-	var passed: float = _now() - _received_at
-	var age := func(kind: String) -> float:
-		return float(_chaos_ages[kind]) + passed if _chaos_ages.has(kind) else -1.0
-	return BoardChaos.pose(age.call("spin"), float(_chaos_ages.get("dir", 1.0)), age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _chaos_ages.get("move_dir", Vector2.RIGHT), int(_chaos_ages.get("cover_side", -1)))
+	return BoardChaos.from_ages(_chaos_ages, _now() - _received_at)
 
 
 func _now() -> float:

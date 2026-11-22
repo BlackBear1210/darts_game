@@ -45,15 +45,20 @@ var _age: float = 0.0
 var _peak: float = 1.0
 ## 지난 프레임까지 떠오른 높이(이번 프레임에 더 오를 만큼만 옮긴다).
 var _last_rise: float = 0.0
+var _travel: float = RISE
 
 
 ## 꽂힌 자리(at)에 점수 하나를 띄운다. normal = 과녁 앞쪽(던진 사람 쪽) 방향. bust = 버스트(점수가 차례 시작으로 돌아감).
-static func spawn(parent: Node, at: Vector3, points: float, normal: Vector3, bust := false, note := "") -> Node3D:
+static func spawn(parent: Node, at: Vector3, points: float, normal: Vector3, bust := false, note := "", ceiling := INF) -> Node3D:
 	var popup := (load("res://art/fx/score_popup.gd") as GDScript).new() as Node3D
 	popup.name = "ScorePopup"
 	parent.add_child(popup)
 	popup.global_position = at + normal.normalized() * LIFT_FROM_BOARD + Vector3.UP * START_UP
 	popup.call("_build", points, bust, note)
+	# 머리 여백이 좁으면 점수 글자가 아래로 흘러 천장 안에 남는다.
+	if popup.global_position.y + RISE + 0.48 > ceiling:
+		popup.global_position.y = minf(popup.global_position.y, ceiling - 0.48)
+		popup.set("_travel", -RISE)
 	if points >= 40 and not bust and DisplayServer.get_name() != "headless":
 		BurstFx.spawn(parent, "stars", at + normal.normalized() * 0.05, normal)
 	return popup
@@ -131,7 +136,7 @@ func _process(delta: float) -> void:
 	scale = Vector3(squash.x, squash.y, 1.0) * pop * _peak
 	# 떠오르기: 처음 빠르게, 끝에 느리게(ease-out).
 	var rise_t: float = _age / LIFE
-	var rise: float = RISE * (1.0 - pow(1.0 - rise_t, 3.0))
+	var rise: float = _travel * (1.0 - pow(1.0 - rise_t, 3.0))
 	position.y += rise - _last_rise
 	_last_rise = rise
 	# 사라지기.

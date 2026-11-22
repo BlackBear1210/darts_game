@@ -1,4 +1,6 @@
 extends SceneTree
+
+const BoardChaos = preload("res://game/board/board_chaos.gd")
 ## F5 실제 경기에 디자인(펍 방·다트판·캐릭터·다트)이 제대로 붙었는지 화면 없이 검사한다.
 ##   & $godot --headless --path . --script res://tests/test_game_look.gd
 ## 실패하면 대개 "규칙 좌표(TableView)를 바꾸고 생성기를 다시 안 돌렸다"는 뜻이다:
@@ -52,7 +54,7 @@ func _check_table_scene() -> void:
 	root.add_child(table)
 	await process_frame
 	assert(table.get_node_or_null("Pub") != null)
-	assert(table.board.position == TableView.BOARD_CENTER and table.board.scale.is_equal_approx(Vector3.ONE * TableView.BOARD_SCALE))
+	assert(table.board.global_position == TableView.BOARD_CENTER and table.board.scale.is_equal_approx(Vector3.ONE * TableView.BOARD_SCALE))
 	# TableView 가 만든 충돌 몸체에는 보이는 메시가 붙지 않는다(그림은 Pub 담당).
 	var bodies := 0
 	for child in table.get_children():
@@ -65,10 +67,17 @@ func _check_table_scene() -> void:
 	# + 도면 v3 가구 상자(TableView.decor_blocks: 생맥주 통·뒤 조리대·연습 과녁·양동이·소파·안락의자·낮은 탁자·상자·자루·냉장고)
 	# + 다트 머신 몸체 1(2026-11-07 — 과녁 면 0.12m 뒤부터 과녁 벽까지)
 	# + 펍 전용 가구(꾸미기 방 상자, TableView.pub_only_blocks — 오락실 테마에서는 꺼진다. 비스트로 테이블은 2026-11-21 삭제)
-	assert(bodies == 27 + TableView.decor_blocks().size() + TableView.pub_only_blocks().size(), "충돌 몸체 수 %d" % bodies)
-	# 다트 머신 그림: 롤 셔터 양쪽(2026-11-08 — 앞 바 1 + 좁은 날개 13장이 "Curtain" 아래) + 상태 화면. 보이기만 하므로 충돌 몸체가 아니다.
-	var shutter: Node = table.machine.find_child("ShutterLeft", true, false) if table.machine != null else null
-	assert(shutter != null and shutter.get_node("Curtain").get_child_count() == 14 and int(shutter.call("slat_count")) == 13)
+	assert(bodies == 28 + TableView.decor_blocks().size() + TableView.pub_only_blocks().size(), "충돌 몸체 수 %d" % bodies)
+	# 고정 몸체 안에 움직이는 캐리지와 전자 가림판이 있다.
+	assert(table.machine.find_child("HorizontalCarriage", true, false) != null)
+	assert(table.machine.find_child("ContinuousCatchPan", true, false) is MeshInstance3D)
+	var hatch := table.machine.find_child("LeftHatch", true, false) as Node3D
+	assert(hatch != null and is_zero_approx(hatch.rotation.y))
+	table.machine.show_chaos(BoardChaos.from_ages({"cover": BoardChaos.SHUTTER_CLOSE}), 0.0)
+	assert(absf(hatch.rotation.y) > 1.0)
+	var leaves := table.machine.find_child("LeftConcertina", true, false) as Node3D
+	assert(leaves.visible and leaves.get_child_count() == BoardChaos.SHUTTER_LEAVES)
+	table.machine.show_chaos(BoardChaos.rest(), 0.0)
 	assert(table.machine.find_child("StatusText", true, false) is Label3D)
 	table.set_chalk_scores("점 수\n\n● 시험  42")
 	assert((table.find_child("ChalkScores", true, false) as Label3D).text.contains("42"))

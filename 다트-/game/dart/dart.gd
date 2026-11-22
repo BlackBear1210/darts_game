@@ -73,6 +73,7 @@ var _release_offset: Vector3 = Vector3.ZERO
 var _stuck_age: float = -1.0
 ## 고무 다트(2026-11-21): 처음 닿은 뒤 이어 갈 구간들 [[도착점, 초], ...]. 비어 있으면 닿는 곳에 바로 꽂힌다.
 var _hops: Array = []
+var pierced := false
 var _bounced: bool = false
 
 
@@ -117,6 +118,7 @@ func fly(start: Vector3, target: Vector3, duration: float, hit_board: bool = tru
 func redirect(target: Vector3, remaining: float) -> void:
 	if not is_physics_processing() or not _hit_board:
 		return
+	_hops.clear()
 	var now: float = _elapsed
 	var landing: float = now + remaining
 	var gravity := Vector3.DOWN * config.gravity
@@ -133,6 +135,10 @@ func redirect(target: Vector3, remaining: float) -> void:
 func bounce_via(via: Vector3, target: Vector3, seconds: float) -> void:
 	var half: float = maxf(seconds * 0.5, 0.05)
 	_hops = [[via, half], [target, half]]
+
+
+func queue_hops(hops: Array) -> void:
+	_hops = hops.duplicate(true)
 
 
 func _next_hop() -> void:

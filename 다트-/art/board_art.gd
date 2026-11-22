@@ -19,6 +19,21 @@ const WIRE_GAP := 0.0017
 const NUMBER_FONT_SIZE := 48
 
 
+## 전자 과녁의 작은 구멍을 반복하는 내부 생성 재질. 거리에 따라 밉맵을 사용해 투척선에서 깜박이지 않는다.
+static var _socket_texture: ImageTexture
+static func _socket_tile() -> ImageTexture:
+	if _socket_texture != null: return _socket_texture
+	var tile := Image.create_empty(32, 32, false, Image.FORMAT_RGB8)
+	for y in range(32):
+		for x in range(32):
+			var radius := Vector2(x - 15.5, y - 15.5).length()
+			var level := lerpf(0.79, 1.0, smoothstep(3.0, 6.8, radius))
+			tile.set_pixel(x, y, Color(level, level, level))
+	tile.generate_mipmaps()
+	_socket_texture = ImageTexture.create_from_image(tile)
+	return _socket_texture
+
+
 ## parent 아래에 다트판을 만든다.
 ## scoring_radius: 더블 링 바깥 반지름(판정 반지름 1). 쇼케이스 = 0.17(실제), F5 = BoardLayout.RADIUS(0.30, 노드 배율 2.5 별도).
 ## glow: 0 보다 크면 칸 색이 스스로 조금 빛난다(어두운 경기장에서 다트판이 가장 밝게 보이도록 — 기획 2-6 가독성 위계).
@@ -37,9 +52,16 @@ static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, gl
 		MeshKit.material("BoardRed" + suffix, "bc4d42", 0.0, glow),
 		MeshKit.material("BoardGreen" + suffix, "38806a", 0.0, glow),
 	]
+	if sector_groups.size() == 40:
+		for material in mats:
+			material.albedo_texture = _socket_tile()
+			material.uv1_triplanar = true
+			material.uv1_scale = Vector3.ONE * 123.0
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	# 뒤판(숫자 띠 포함). 두께는 배율과 무관하게 4cm.
-	var backing := MeshKit.cylinder(parent, "Backing", scoring_radius * BACKING_RATIO, 0.04, Vector3(0, 0, -0.022), dark, 64)
-	backing.rotation.x = PI / 2
+	if sector_groups.size() != 40:
+		var backing := MeshKit.cylinder(parent, "Backing", scoring_radius * BACKING_RATIO, 0.04, Vector3(0, 0, -0.022), dark, 64)
+		backing.rotation.x = PI / 2
 	var outer_bull := BoardLayout.OUTER_BULL * scoring_radius
 	var edges: Vector3 = BoardLayout.ring_edges(ring_scale)
 	var triple_in := edges.x * scoring_radius
@@ -58,16 +80,59 @@ static func build(parent: Node3D, numbers: Array[int], scoring_radius: float, gl
 			var holder: Node3D = sector_groups[i * pieces + piece] if pieces == 2 else (sector_groups[i * sector_groups.size() / 20] if not sector_groups.is_empty() else parent)
 			var from_angle: float = start if piece == 0 else angle
 			var to_angle: float = end if piece == pieces - 1 else angle
+			if pieces == 2:
+				_carrier(holder, outer_bull, scoring_radius * BACKING_RATIO, from_angle, to_angle, dark)
+				MeshKit.sector(holder, "BeveledRim", scoring_radius * 1.276, scoring_radius * 1.322, from_angle + 0.002, to_angle - 0.002, -0.0014, MeshKit.material("BoardRim", "8b6a48", 0.33))
+				# 득점 면 밖의 월계색 인레이와 황동 인덱스로 교체식 타일을 읽게 한다.
+				MeshKit.sector(holder, "OuterInlay", scoring_radius * 1.242, scoring_radius * 1.270, from_angle + 0.006, to_angle - 0.006, -0.0011, MeshKit.material("OuterBottleGreen", "396658", 0.22))
+				if piece == 0:
+					MeshKit.sector(holder, "BrassIndex", scoring_radius * 1.252, scoring_radius * 1.319, angle - 0.009, angle + 0.009, -0.0008, MeshKit.material("BoardIndexBrass", "cba471", 0.42))
+
 			MeshKit.sector(holder, "SingleInner_%s" % number, outer_bull, triple_in, from_angle, to_angle, 0, single)
 			MeshKit.sector(holder, "Triple_%s" % number, triple_in, triple_out, from_angle, to_angle, 0.0003 * k, special)
 			MeshKit.sector(holder, "SingleOuter_%s" % number, triple_out, double_in, from_angle, to_angle, 0, single)
 			MeshKit.sector(holder, "Double_%s" % number, double_in, scoring_radius, from_angle, to_angle, 0.0003 * k, special)
-		var holder: Node3D = sector_groups[i * sector_groups.size() / 20] if not sector_groups.is_empty() else parent
-		var label := MeshKit.label(holder, "Number_%s" % number, str(number),
-			Vector3(sin(angle), cos(angle), 0) * scoring_radius * NUMBER_RATIO + Vector3(0, 0, 0.003 * k),
-			NUMBER_FONT_SIZE, Color("f0e6cd"), 0.00055 * k * 34.0 / NUMBER_FONT_SIZE * number_scale)
-		label.double_sided = false
+		if sector_groups.size() != 40:
+			var holder: Node3D = sector_groups[i * sector_groups.size() / 20] if not sector_groups.is_empty() else parent
+			var label := MeshKit.label(holder, "Number_%s" % number, str(number),
+				Vector3(sin(angle), cos(angle), 0) * scoring_radius * NUMBER_RATIO + Vector3(0, 0, 0.003 * k),
+				NUMBER_FONT_SIZE, Color("f0e6cd"), 0.00055 * k * 34.0 / NUMBER_FONT_SIZE * number_scale)
+			label.double_sided = false
 	var bull := MeshKit.cylinder(parent, "OuterBull", outer_bull, 0.001 * k, Vector3(0, 0, 0.001 * k), mats[3], 48)
 	bull.rotation.x = PI / 2
 	var inner := MeshKit.cylinder(parent, "InnerBull", BoardLayout.INNER_BULL * scoring_radius, 0.001 * k, Vector3(0, 0, 0.002 * k), mats[2], 48)
 	inner.rotation.x = PI / 2
+
+
+## 두께가 있는 교체식 점수 타일. 같은 칸의 두 하위 메시가 경첩 기준선 양쪽에서 같은 타일로 움직인다.
+static func _carrier(parent: Node3D, inner: float, outer: float, start: float, end: float, material: StandardMaterial3D) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var step := (end - start) / 5.0
+	var z_front := -0.0028
+	var z_rear := -0.026
+	for i in range(5):
+		var a := start + step*i
+		var b := a+step
+		var va := Vector3(sin(a), cos(a), 0)
+		var vb := Vector3(sin(b), cos(b), 0)
+		var p := va*inner
+		var q := va*outer
+		var r := vb*outer
+		var s := vb*inner
+		for face: Array in [[p,q,r,s,z_front,Vector3.BACK],[s,r,q,p,z_rear,Vector3.FORWARD]]:
+			for j: int in [0,1,2,0,2,3]:
+				st.set_normal(face[5])
+				st.add_vertex(Vector3(face[j])+Vector3.BACK*float(face[4]))
+		var walls: Array = [[q,r],[s,p]]
+		if i == 0: walls.append([p,q])
+		if i == 4: walls.append([r,s])
+		for wall: Array in walls:
+			var u: Vector3 = wall[0]
+			var v: Vector3 = wall[1]
+			var n := Vector3(-(v.y-u.y),v.x-u.x,0).normalized()
+			for vertex: Vector3 in [v+Vector3.BACK*z_front,u+Vector3.BACK*z_front,u+Vector3.BACK*z_rear,v+Vector3.BACK*z_front,u+Vector3.BACK*z_rear,v+Vector3.BACK*z_rear]:
+				st.set_normal(n)
+				st.add_vertex(vertex)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	MeshKit.mesh_node(parent,"TileCarrier",st.commit(),Vector3.ZERO,material)

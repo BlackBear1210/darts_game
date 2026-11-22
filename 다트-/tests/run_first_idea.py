@@ -108,13 +108,22 @@ def run_match(engine, folder, count):
         # 실제 원격 입력은 해당 발신자의 캐릭터만 움직인다.
         before_host = pose(ss[0], ids[0])["position"]
         before_client = pose(ss[0], ids[1])["position"]
-        peers[1].command("move", [-1, 0, 0, True, True])
+        # 접속 순서에 따라 오른쪽 의자에 선 참가자도 테이블 바깥으로 점프한다.
+        outward_x = 1 if before_client[0] > 0.1 else -1
+        peers[1].command("move", [outward_x, 0, 0, True, True])
         wait_for(peers, lambda ss: all(pose(s, ids[1])["crouched"] and pose(s, ids[1])["position"][1] > 0.1 for s in ss), "remote jump+crouch")
         time.sleep(0.25)
         peers[1].command("stop")
         done(peers)
-        time.sleep(0.5)
-        ss = states(peers)
+        # 점프가 끝나고 원격 위치가 방장 위치에 수렴한 실제 스냅샷을 비교한다.
+        def jump_has_settled(snapshots):
+            authoritative = pose(snapshots[0], ids[1])["position"]
+            return (abs(pose(snapshots[0], ids[1])["velocity"][1]) < 0.01
+                    and not pose(snapshots[0], ids[1])["crouched"]
+                    and all(math.dist(pose(s, ids[1])["position"], authoritative) < 0.12
+                            for s in snapshots[1:]))
+
+        ss = wait_for(peers, jump_has_settled, "remote landing and movement replication", timeout=3)
         client_pos = pose(ss[0], ids[1])["position"]
         assert abs(client_pos[0] - before_client[0]) > 0.15
         assert math.dist(pose(ss[0], ids[0])["position"], before_host) < 0.1

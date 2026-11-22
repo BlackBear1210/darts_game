@@ -171,6 +171,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		session.game_action.connect(_receive_action)
 		session.game_event.connect(_receive_game_event)
 	controller.solve_throw = solve_dart
+	controller.rebound_contact = _rebound_contact
 	controller.check_seated = is_seated
 	controller.force_seat = force_seat
 	controller.in_throw_zone = can_throw_from
@@ -797,7 +798,7 @@ func _animate_hand(delta: float) -> void:
 	if arm != null:
 		arm.hold_large(large)
 	camera.rotation.x += FirstPersonThrow.recoil(_throw_kick) * 0.02 * motion
-	table.board.position = TableView.BOARD_CENTER + Vector3(sin(now * 70.0) * 0.006, 0.0, -0.012) * _board_shake
+	table.board.position = Vector3.UP * TableView.BOARD_CENTER.y + Vector3.FORWARD * 0.003 * _board_shake
 
 
 ## 내가 던졌다는 응답이 오면 1인칭 던지기 몸짓을 시작한다(놓을 때 당긴 자세에서 출발).
@@ -840,7 +841,7 @@ func _process(delta: float) -> void:
 		camera.h_offset = sin(time * 1.13) * 0.12 * strength
 	# 화면 카드(정전·딸꾹질·유체이탈·망원경·원샷). 조준(아래 aim_at)보다 먼저 — 카메라가 흔들리면 조준도 흔들린다.
 	if _card_screen != null:
-		_card_screen.apply(camera, local, state.active_player(), TableView.BOARD_CENTER, delta)
+		_card_screen.apply(camera, local, state.active_player(), delta)
 	if seat_cards != null:
 		seat_cards.show_peek(local, delta)
 	if lounge != null:
@@ -881,6 +882,7 @@ func _process(delta: float) -> void:
 	throw_input.enabled = (can_aim or can_stray) and not local.fallen and hands_free and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	throw_input.free_aim = true
 	_animate_hand(delta)
+	if _card_screen != null: _card_screen.light_board(camera, table.board)
 	# 머리 위 이름표 왼쪽 마이크(보이기만, 화면마다 따로): 조용 · 말하는 중 · 내가 음소거한 사람. 봇은 목소리가 없어 숨긴다.
 	var voice: VoiceChat = session.voice if session != null else null
 	for id: int in actors:
@@ -927,6 +929,9 @@ func _apply_state() -> void:
 	if held_cards != null:
 		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
 	table.set_chalk_scores(_chalk_text())
+	var shooter := controller.state.active_player()
+	if table.machine != null and shooter != null:
+		table.machine.set_readout(shooter.display_name, shooter.score)
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id
 		_clear_darts()
@@ -963,7 +968,7 @@ func _show_score_popup(hit: Dictionary) -> void:
 	var note: String = ""
 	if int(hit.get("mine_hits", 0)) > 0: note = "MINE!"
 	elif float(hit.get("taken", 0.0)) > 0.0: note = "%s TAKEN" % ScorePopup.number_text(-float(hit.taken))
-	ScorePopup.spawn(self, hit.target, float(hit.get("points", 0)), table.board.global_basis.z, bust, note)
+	ScorePopup.spawn(self, hit.target, float(hit.get("points", 0)), table.board.global_basis.z, bust, note, TableView.CEILING_HEIGHT)
 
 
 ## [개발자 모드] 나를 투척선 뒤로 옮긴다. 방장이 자리를 소유하므로 방장 화면에서만 뜻이 있다.
@@ -1254,12 +1259,12 @@ func _show_throw(data: Dictionary) -> void:
 		dart.size_multiplier = DartView.LARGE_SIZE if bool(flight.get("large", false)) else 1.0
 		# 힘 증가 카드: 다트 뒤로 바람 줄기가 빨려 들어가듯 흐른다(겉모습 — 빠르기는 방장 계산 그대로).
 		dart.powered = bool(flight.get("power", false))
+		dart.pierced = bool(flight.get("pierce", false))
 		if flight.has("bounce_at"):
 			# 고무 다트: 처음 닿는 곳까지 날아가 판에서 튕겨 나왔다가 새 자리에 꽂힌다(방장 계산 그대로 보이기만).
 			var bounce_at: Vector3 = flight.bounce_at
 			dart.fly(flight.start, bounce_at, float(flight.bounce_time), true, $Camera/Hand.position)
-			var rest: float = float(flight.duration) - float(flight.bounce_time)
-			dart.bounce_via(bounce_at + table.board.global_basis.z * 0.45 + Vector3.UP * 0.2, flight.target, rest)
+			dart.queue_hops(flight.hops)
 		else:
 			dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
 		dart.paint(color)
@@ -1300,17 +1305,32 @@ func _redirect_throw(data: Dictionary) -> void:
 		var dart: DartView = _flying_darts[index]
 		if is_instance_valid(dart):
 			dart.size_multiplier = DartView.LARGE_SIZE if bool(flight.get("large", false)) else 1.0
-			dart.redirect(flight.target, float(data.remaining))
+			dart.pierced = bool(flight.get("pierce", false))
+			var remaining := float(data.remaining)
+			if flight.has("hops"):
+				var elapsed := maxf(float(flight.duration) - remaining, 0.0)
+				var segments: Array = [[flight.bounce_at, flight.bounce_time]]
+				segments.append_array(flight.hops)
+				while segments.size() > 1 and elapsed >= float(segments[0][1]):
+					elapsed -= float(segments.pop_front()[1])
+				var next: Array = segments.pop_front()
+				dart.redirect(next[0], maxf(0.01, float(next[1]) - elapsed))
+				dart.queue_hops(segments)
+			else:
+				dart.redirect(flight.target, remaining)
+	while _flying_darts.size() > flights.size():
+		var extra: DartView = _flying_darts.pop_back()
+		if is_instance_valid(extra): extra.queue_free()
 
 
 
 ## 다트가 멈춘 순간의 손맛: 과녁이 움찔하고 코르크 가루가 튀며 "턱" 소리가 난다. 판정과 무관하다.
 ## 2026-11-07: 과녁 면에 꽂힌 다트는 맞은 조각에 붙인다(BoardView.pin) — 판이 돌거나 벌어지면 다트도 같이 움직인다.
 ## 셔터 앞면·머신 몸체·벽에 박힌 다트는 과녁 면(z)에서 떨어져 있으므로 붙이지 않는다.
-func _on_dart_landed(at: Vector3, hit_board: bool, dart: Node3D = null) -> void:
+func _on_dart_landed(at: Vector3, hit_board: bool, dart: DartView = null) -> void:
 	if dart != null and is_instance_valid(dart) and absf(at.z - TableView.BOARD_CENTER.z) < 0.03:
 		var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
-		table.board.pin(dart, Vector2(at.x - TableView.BOARD_CENTER.x, at.y - TableView.BOARD_CENTER.y) / radius)
+		table.board.pin(dart, Vector2(at.x - TableView.BOARD_CENTER.x, at.y - TableView.BOARD_CENTER.y) / radius, dart.pierced)
 	if hit_board:
 		_board_shake = 1.0
 		BurstFx.spawn(self, "cork", at, table.board.global_basis.z)
@@ -1344,7 +1364,7 @@ func _clear_darts() -> void:
 func _show_chaos(delta: float) -> void:
 	var target: Dictionary = controller.chaos_shape()
 	var active: bool = absf(float(target.angle)) > 0.0 or float(target.split) > 0.0 or float(target.shutter) > 0.0 or float(target.get("vertical", 0)) > 0 or float(target.get("horizontal", 0)) > 0 or Vector2(target.get("move", Vector2.ZERO)).length() > 0 or not is_equal_approx(float(target.get("scale", 1.0)), 1.0)
-	if active or _shown_chaos.is_empty():
+	if active or _shown_chaos.is_empty() or controller.state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]:
 		_shown_chaos = target.duplicate()
 	else:
 		var weight: float = 1.0 - exp(-CHAOS_SETTLE_RATE * delta)
@@ -1356,6 +1376,9 @@ func _show_chaos(delta: float) -> void:
 		_shown_chaos.horizontal = lerpf(float(_shown_chaos.get("horizontal", 0)), 0, weight)
 		_shown_chaos.move = Vector2(_shown_chaos.get("move", Vector2.ZERO)).lerp(Vector2.ZERO, weight)
 		_shown_chaos.scale = lerpf(float(_shown_chaos.get("scale", 1.0)), 1.0, weight)
+		# 턴 종료 때 타일 사이 간격과 후면 보조판도 같은 속도로 접는다.
+		_shown_chaos["petal"] = lerpf(float(_shown_chaos.get("petal", 0.0)), 0.0, weight)
+		_shown_chaos["insert"] = lerpf(float(_shown_chaos.get("insert", 0.0)), 0.0, weight)
 	table.board.show_chaos(_shown_chaos)
 	if table.machine != null:
 		table.machine.show_chaos(_shown_chaos, delta)
@@ -1374,22 +1397,22 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0, speed_multiplier:
 	var speed: float = lerpf(config.minimum_speed, config.maximum_speed, charge) * speed_multiplier
 	var direction: Vector3 = (aim_target - start).normalized()
 	var nominal_time: float = start.distance_to(aim_target) / config.maximum_speed
+	if controller.cards != null and bool(controller.cards.modifiers(thrower_id).get("repeat", false)) and controller.cards.last_landing.is_finite():
+		nominal_time = start.distance_to(aim_target) / speed
 	var initial: Vector3 = direction * speed + Vector3.UP * config.gravity * nominal_time * 0.5
 	var board_time: float = (TableView.BOARD_CENTER.z - start.z) / initial.z
-	# 피자 분리(2026-11-07): 조각이 바깥으로 벌어지면 판 밖(반지름 1 너머)에도 조각이 있다 → 과녁 평면에서 받아 둔다.
-	# 꽂히는 순간 조각에 맞았는지 틈인지는 MatchCards.landing_points 가 그 시각 모양으로 센다(틈 = 0점).
-	var mods: Dictionary = controller.cards.modifiers(thrower_id) if controller.cards != null else {}
-	var reach: float = 1.0 + 2.0 * ((BoardChaos.SPLIT_MAX if mods.get("split", false) else 0.0) + (0.18 if mods.get("vertical", false) else 0.0) + (0.18 if mods.get("horizontal", false) else 0.0) + (0.25 if mods.get("move", false) else 0.0) + (BoardChaos.LARGE_RADIUS if mods.get("large", false) else 0.0))
-	# 과녁 크기 변화 카드: 커지면 판 끝도 그만큼 멀어진다.
-	reach *= maxf(float(mods.get("board_scale", 1.0)), 1.0)
+	var infill_time: float = board_time + BoardChaos.INFILL_FRONT / initial.z
 	var previous: Vector3 = start
 	var previous_time: float = 0
 	var step: float = 1.0 / 120.0
 	while previous_time < config.flight_limit:
 		var time: float = minf(previous_time + step, config.flight_limit)
 		var crosses_board: bool = board_time > previous_time and board_time <= time
+		var crosses_infill := not crosses_board and infill_time > previous_time and infill_time <= time
 		if crosses_board:
 			time = board_time
+		elif crosses_infill:
+			time = infill_time
 		var point: Vector3 = config.position_at(start, initial, time)
 		# 몸이 먼저다: 벽보다 앞에 있는 사람에게 맞으면 거기서 끝난다.
 		var body: Dictionary = BodyHit.first(previous, point, bodies)
@@ -1404,14 +1427,48 @@ func solve_dart(aim: Vector2, charge: float, peer_id: int = 0, speed_multiplier:
 			var hit_time: float = lerpf(previous_time, time, ratio)
 			var reason: String = "바닥 · 실패" if collision.normal.y > 0.5 else "벽 · 실패"
 			return _flight_result(start, collision.position, maxf(hit_time, 0.01), Vector2.INF, 0, reason)
-		if crosses_board:
+		if crosses_board or crosses_infill:
 			var hit := Vector2(point.x - TableView.BOARD_CENTER.x, point.y - TableView.BOARD_CENTER.y) / radius
-			if hit.length() <= reach + BoardScorer.BOUNDARY_EPSILON:
-				var points: int = BoardScorer.score(hit, actor.identity.layout)
-				return _flight_result(start, point, time, hit, points, "%d점 적중" % points)
+			var shape: Dictionary = controller.cards.shape_now(time) if controller.cards != null and controller.state.active_player() != null else BoardChaos.rest()
+			if crosses_board:
+				var guarded := not pierce and BoardChaos.covered(hit, shape)
+				shape.cover = false
+				var on_tile := BoardChaos.locate(hit, shape, BoardView.BoardArt.BACKING_RATIO).is_finite()
+				if guarded or on_tile:
+					var points: int = 0 if guarded else BoardChaos.score(hit, shape, actor.identity.layout)
+					return _flight_result(start, point, time, hit, points, "%d점 적중" % points)
+			elif BoardChaos.on_infill(hit, shape):
+				var stop := _flight_result(start, point, time, hit, 0, "보조판 · 0점")
+				stop["infill_hit"] = true
+				return stop
 		previous = point
 		previous_time = time
 	return _flight_result(start, previous, config.flight_limit, Vector2.INF, 0, "비행 제한시간 · 실패")
+
+
+## 튕겨 나온 두 구간을 실제 그리는 포물선 위에서 검사한다. 관통 카드도 벽·바닥에는 막힌다.
+func _rebound_contact(start: Vector3, end: Vector3, duration: float, peer: int, pierce: bool) -> Dictionary:
+	var config := throw_input.config
+	var velocity := config.initial_velocity(start, end, duration)
+	var bodies: Array = [] if pierce else _dart_bodies(peer)
+	var previous := start
+	var time := 0.0
+	while time < duration:
+		var next := minf(time + 1.0 / 120.0, duration)
+		var point := config.position_at(start, velocity, next)
+		var body := BodyHit.first(previous, point, bodies)
+		var ray := PhysicsRayQueryParameters3D.create(previous, point, 1)
+		var wall := get_world_3d().direct_space_state.intersect_ray(ray)
+		var wall_ratio := INF
+		if not wall.is_empty(): wall_ratio = previous.distance_to(wall.position) / maxf(previous.distance_to(point), 0.00001)
+		if not body.is_empty() and float(body.ratio) <= wall_ratio:
+			var victim: MatchPlayer = bodies[int(body.index)].player
+			return _flight_result(start, body.point, maxf(0.001, lerpf(time, next, body.ratio)), Vector2.INF, 0, "몸에 맞음", victim.peer_id)
+		if not wall.is_empty():
+			return _flight_result(start, wall.position, maxf(0.001, lerpf(time, next, wall_ratio)), Vector2.INF, 0, "벽에 맞음")
+		time = next
+		previous = point
+	return {}
 
 
 ## 투척선 앞 다트 홀에 선 사람들. 펜스 제거 후 앞 공간 전체에서 실제 몸과 교차하면 막힌다.

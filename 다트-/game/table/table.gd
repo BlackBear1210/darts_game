@@ -28,8 +28,8 @@ const DART_HALL := Rect2(-6.6, -12.5, 13.2, 12.5)
 const LOUNGE := Rect2(-8.4, 0.0, 22.0, 9.0)
 
 ## 과녁은 다트 홀 끝 벽 가운데에 건다. 높이·크기는 바꾸지 않았다(팀 확정 대기).
-const BOARD_CENTER := Vector3(0, 2.9, -10.8)
-const BOARD_SCALE: float = 2.5
+const BOARD_CENTER := Vector3(0, DartMachine.BOARD_Y, -10.8)
+const BOARD_SCALE: float = DartMachine.BOARD_SCALE
 ## 투척선 위치(z)와 그 앞 보호 레인의 경계. 투척선에서 과녁 면까지 7.2m다
 ## (2026-11-02 "두 배는 늘리자" — 3.6m 의 두 배. 투척선을 두는 대신 다트 홀을 그만큼 늘려 과녁 벽을 물렸다:
 ##  투척선을 라운지 쪽으로 밀면 던지는 칸이 사라지고 카드 라운드 시연의 방해 구역과 겹친다).
@@ -151,17 +151,17 @@ const DartMachine = preload("res://art/dart_machine/dart_machine.gd")
 ## 머신 충돌 상자의 폭·높이(m). 그림 치수(어깨 포함 폭 약 2.7m, 아치 꼭대기 4.2m)에 맞췄다.
 ## 앞면은 과녁 면보다 0.12m 뒤라서 다트 판정(과녁 평면 통과)을 가로막지 않는다 — 판 밖으로 빗나간 다트만 몸체에 박힌다.
 ## 뒤는 과녁 벽까지 막는다(머신 뒤 틈으로 들어가 끼이지 않게).
-const MACHINE_WIDTH: float = 2.7
-const MACHINE_HEIGHT: float = 4.2
-const MACHINE_FACE_GAP: float = 0.12
+const MACHINE_WIDTH: float = DartMachine.HALF_WIDTH * 2.0
+const MACHINE_HEIGHT: float = DartMachine.HEIGHT
+const MACHINE_FACE_GAP: float = -DartMachine.FACE_Z
 
-@onready var board: BoardView = $Board
+@onready var board: BoardView = $DartMachine/Board
 var is_ready: bool = true
 ## true 면 정적 메시 묶기를 여러 프레임에 나눠 한다(StaticBatch.optimize_spread). 트리에 넣기 전에 정한다.
 ## 타이틀 뒤 펍(lobby/lobby_backdrop.gd)만 켠다 — 경기 방은 묶은 뒤 테마 색을 바꾸므로 한 번에 묶는다.
 var spread_batching: bool = false
 ## 다트 머신 그림(_ready 에서 만든다). 테마가 바뀌면 set_machine_skin 으로 다시 칠한다.
-var machine: DartMachine
+@onready var machine: DartMachine = $DartMachine
 ## 지금 깔아 둔 자리 번호(0~3). 방 인원수에 맞춰 GameView.sync_room 이 정한다(기본 = 4자리 전부).
 ## 방 그림을 다시 만들면(_prepare_pub) 이 값으로 다시 숨긴다.
 var _shown_seats: Array[int] = [0, 1, 2, 3]
@@ -275,8 +275,7 @@ static func clamp_floor(point: Vector3) -> Vector3:
 
 
 func _ready() -> void:
-	board.position = BOARD_CENTER
-	board.scale = Vector3.ONE * BOARD_SCALE
+	machine.position = Vector3(BOARD_CENTER.x, 0, BOARD_CENTER.z)
 	var half_wall := WALL_THICKNESS / 2.0
 	var wall_height := CEILING_HEIGHT + 0.25
 	var wall_y := CEILING_HEIGHT - wall_height / 2.0
@@ -312,20 +311,23 @@ func _ready() -> void:
 	for block in pub_only_blocks():
 		_box(block.get_center(), block.size)
 		get_child(get_child_count() - 1).set_meta("pub_only", true)
-	# 다트 머신 충돌: 과녁 면 0.12m 뒤부터 과녁 벽까지(사람·다트 레이어 1).
-	var machine_front: float = BOARD_CENTER.z - MACHINE_FACE_GAP
-	var machine_depth: float = machine_front - DART_HALL.position.y
-	_box(Vector3(BOARD_CENTER.x, MACHINE_HEIGHT / 2.0, machine_front - machine_depth / 2.0), Vector3(MACHINE_WIDTH, MACHINE_HEIGHT, machine_depth))
-	# 다트 머신 그림: 원점 = 과녁 바로 아래 바닥. 기본은 펍 스킨이고 오락실 테마면 LoungeWorld 가 바꾼다.
-	machine = DartMachine.new()
-	machine.name = "DartMachine"
-	machine.position = Vector3(BOARD_CENTER.x, 0, BOARD_CENTER.z)
-	add_child(machine)
-	machine.build(false)
+	# 고정 하부와 월넛 뒷판을 막는다. 앞쪽 가동면은 실제 과녁 모양에 맞춰 다트를 판정한다.
+	var base := Vector3(BOARD_CENTER.x, 0.0, BOARD_CENTER.z)
+	var cabinet := _body(base, 1)
+	var lower := ConvexPolygonShape3D.new()
+	var hull := PackedVector3Array()
+	for side: float in [-1.0, 1.0]:
+		for point: Vector2 in DartMachine.Pedestal.lower_profile():
+			hull.append(Vector3(side * DartMachine.HALF_WIDTH, point.x, point.y))
+	lower.points = hull
+	var collision := CollisionShape3D.new()
+	collision.shape = lower
+	cabinet.add_child(collision)
+	_box(base + Vector3(0, 2.86, -0.91), Vector3(MACHINE_WIDTH, 3.40, 0.40))
 	_prepare_pub()
 
 
-## 다트 머신 스킨(false = 펍 월넛, true = 오락실 크림·시안/마젠타). 같은 스킨이면 다시 만들지 않는다.
+## 두 방의 월넛 캐비닛은 조명 색으로 구분한다.
 func set_machine_skin(arcade: bool) -> void:
 	if machine != null and machine.arcade != arcade:
 		machine.build(arcade)
