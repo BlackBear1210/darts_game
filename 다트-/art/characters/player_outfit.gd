@@ -26,10 +26,12 @@ const SLOTS: Array = [
 	["cigar", "시가", ["없음", "시가 물기"]],
 	["watch", "시계", ["없음", "금시계", "은시계", "전자시계"]],
 	["shirt", "옷 색", ["기본 자주", "빨강", "주황", "노랑", "초록", "하늘", "남색", "흰색", "검정", "분홍"]],
+	["pants", "바지 스타일", ["남색 기본", "차콜 일자", "올리브 와이드"]],
 ]
 ## 옷 색(위 "shirt" 이름과 같은 순서). 0 = 원래 그림 색(다시 칠하지 않음).
 const SHIRT_COLORS: Array[Color] = [Color("3d2738"), Color("b8343a"), Color("dd7a2c"), Color("e3c043"), Color("3f9a55"),
 	Color("62b4dd"), Color("2c3f7a"), Color("ece6da"), Color("1f1d22"), Color("e48aae")]
+const PANTS_COLORS: Array[Color] = [Color("41404d"), Color("34363d"), Color("777047")]
 ## 모자 색(야구 모자·비니). 자리 색과 헷갈리지 않게 차분한 색.
 const CAP_COLOR := Color("2f5f8f")
 const BEANIE_COLOR := Color("c8643c")
@@ -44,6 +46,7 @@ const WATCH_RADIUS: float = 0.036
 
 static var _shirt_materials: Dictionary = {}
 static var _modular_shirt_materials: Dictionary = {}
+static var _pants_variants: Dictionary = {}
 
 
 ## 빈 값·옛 값·남이 보낸 이상한 값을 목록 안으로 맞춘다(방장이 받은 값도 이것을 거친다).
@@ -79,24 +82,69 @@ static func choice_name(key: String, index: int) -> String:
 static func dress(model: Node3D, look: Dictionary) -> void:
 	var clean := sanitize(look)
 	tint_shirt(model, int(clean.shirt))
+	_fit_pants(model, int(clean.pants))
 	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
 	if skeleton == null:
 		return
 	var head: Node3D = NpcOutfit.on_bone(skeleton, "head")
 	hat(_fitted_head(model, head, "hat"), int(clean.hat))
+	var approved: bool = model.has_meta("face_anchors")
+	if approved:
+		_approved_face_outfit(head, clean)
+	else:
+		_legacy_face_outfit(model, head, clean)
+	var mouth: Node3D = _fitted_head(model, head, "mouth")
+	match int(clean.mustache):
+		1: NpcOutfit.mustache(mouth)
+		2: _thick_mustache(mouth)
+	if int(clean.watch) > 0:
+		_watch(skeleton, int(clean.watch), 0.75 if model.find_child("Top_01", true, false) != null else 1.0)
+
+
+static func _legacy_face_outfit(model: Node3D, head: Node3D, clean: Dictionary) -> void:
 	var eyes: Node3D = _fitted_head(model, head, "eyes")
 	match int(clean.eyes):
 		1: NpcOutfit.glasses(eyes)
 		2: _sunglasses(eyes, "15151a", "1b1b1f", 0.12)
 		3: _sunglasses(eyes, "e08a2e", "c9a24f", 0.25)
-	var mouth: Node3D = _fitted_head(model, head, "mouth")
-	match int(clean.mustache):
-		1: NpcOutfit.mustache(mouth)
-		2: _thick_mustache(mouth)
 	if int(clean.cigar) == 1:
 		_cigar(_fitted_head(model, head, "cigar"))
-	if int(clean.watch) > 0:
-		_watch(skeleton, int(clean.watch), 0.75 if model.find_child("Top_01", true, false) != null else 1.0)
+
+
+## 승인 모델의 앞면(-Z) 표면을 기준으로 맞춘 안경과 입 주변 소품.
+static func _approved_face_outfit(head: Node3D, look: Dictionary) -> void:
+	var glasses: int = int(look.eyes)
+	if glasses > 0:
+		var rim_color: String = "a8712c" if glasses == 3 else "29242a"
+		var frame := RoundKit.clay("approved_eyewear_" + rim_color, rim_color, 0.45, 0.25)
+		var radius: float = 0.042 if glasses == 1 else 0.047
+		var y: float = 1.590
+		var z: float = -0.239 if glasses == 1 else -0.248
+		var frame_mesh := RoundKit.ring_mesh("approved_eyewear_%s" % radius, radius, RoundKit.circle_profile(0.0045, 8), 32)
+		for side: float in [-1.0, 1.0]:
+			var lens_center := Vector3(side * 0.068, y, z)
+			var rim := MeshKit.mesh_node(head, "GlassesRim", frame_mesh, lens_center, frame)
+			rim.rotation.x = PI / 2.0
+			if glasses > 1:
+				var color: String = "a24d23" if glasses == 3 else "272331"
+				var disc := RoundKit.lathe_mesh(PackedVector2Array([Vector2(0, -0.003), Vector2(radius, -0.003),
+					Vector2(radius, 0.003), Vector2(0, 0.003)]), 32)
+				var lens := MeshKit.mesh_node(head, "GlassesLens", disc, lens_center, RoundKit.clay("approved_lens_" + color, color, 0.27))
+				lens.rotation.x = PI / 2.0
+			var corner: Vector3 = lens_center + Vector3(side * radius, 0, 0)
+			var temple := Vector3(side * 0.168, y, -0.128)
+			RoundKit.rod(head, "GlassesHinge", corner, temple, 0.004, frame, -1.0, 8)
+			RoundKit.rod(head, "GlassesTemple", temple, Vector3(side * 0.170, y - 0.014, -0.052), 0.004, frame, -1.0, 8)
+		var inner: float = 0.068 - radius * cos(PI / 12.0)
+		var bridge_y: float = y + radius * sin(PI / 12.0)
+		var bridge_left := Vector3(-0.012, bridge_y, -0.252)
+		var bridge_right := Vector3(0.012, bridge_y, -0.252)
+		RoundKit.rod(head, "GlassesBridgeLeft", Vector3(-inner, bridge_y, z), bridge_left, 0.0045, frame)
+		RoundKit.rod(head, "GlassesBridge", bridge_left, bridge_right, 0.0045, frame)
+		RoundKit.rod(head, "GlassesBridgeRight", bridge_right, Vector3(inner, bridge_y, z), 0.0045, frame)
+	if int(look.cigar) == 1:
+		# 오른쪽 입 가장자리에서 앞·바깥으로 뻗게 한다.
+		_cigar(head, Vector3(0.028, 1.435, -0.221), 0.8)
 
 
 ## 새 모델의 눈·머리·입 위치로 기존 꾸미기 부품의 받침만 맞춘다. NPC용 원본 치수는 유지한다.
@@ -160,6 +208,7 @@ static func _fitted_head(model: Node3D, head: Node3D, kind: String) -> Node3D:
 ## → 손에 붙은 카드 부채·래그돌·몸짓 상태가 그대로 남는다. 받침은 바로 떼어 낸다(지우는 중인 받침을 다시 쓰지 않게).
 static func undress(model: Node3D) -> void:
 	tint_shirt(model, 0)
+	_fit_pants(model, 0)
 	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
 	if skeleton == null:
 		return
@@ -167,6 +216,50 @@ static func undress(model: Node3D) -> void:
 		if child is BoneAttachment3D and String(child.name).begins_with("Outfit_"):
 			skeleton.remove_child(child)
 			child.queue_free()
+
+
+## 허리·신발에 겹치는 단과 스킨 가중치는 원본 그대로 두고 가운데 바짓단 폭을 바꾼다.
+static func _fit_pants(model: Node3D, index: int) -> void:
+	var pants := model.find_child("Bottom_01", true, false) as MeshInstance3D
+	if pants == null or not pants.mesh is ArrayMesh:
+		return
+	if not pants.has_meta("wardrobe_base_mesh"):
+		pants.set_meta("wardrobe_base_mesh", pants.mesh)
+	var base: ArrayMesh = pants.get_meta("wardrobe_base_mesh")
+	if index == 0:
+		pants.mesh = base
+		return
+	var key := Vector2i(base.get_instance_id(), index)
+	if not _pants_variants.has(key):
+		_pants_variants[key] = _build_pants_variant(base, index)
+	pants.mesh = _pants_variants[key]
+
+
+static func _build_pants_variant(base: ArrayMesh, index: int) -> ArrayMesh:
+	var result := ArrayMesh.new()
+	for surface in range(base.get_surface_count()):
+		var arrays: Array = base.surface_get_arrays(surface)
+		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		for i in range(points.size()):
+			var p: Vector3 = points[i]
+			var width: float = 0.20 * smoothstep(0.17, 0.30, p.y) * (1.0 - smoothstep(0.50, 0.66, p.y))
+			if index == 2:
+				# 착석 모션에서 손이 닿는 무릎 쪽은 일자 바지와 같은 폭으로 둔다.
+				width += 0.34 * smoothstep(0.17, 0.24, p.y) * (1.0 - smoothstep(0.28, 0.39, p.y))
+			var axis_x: float = signf(p.x) * lerpf(0.147, 0.095, inverse_lerp(0.17, 0.61, clampf(p.y, 0.17, 0.61)))
+			var axis_z: float = lerpf(0.035, 0.0, inverse_lerp(0.17, 0.61, clampf(p.y, 0.17, 0.61)))
+			points[i] = p + Vector3((p.x - axis_x) * width, 0, (p.z - axis_z) * width * 0.55)
+			var n: Vector3 = normals[i]
+			normals[i] = Vector3(n.x / (1.0 + width), n.y, n.z / (1.0 + width * 0.55)).normalized()
+		arrays[Mesh.ARRAY_VERTEX] = points
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		var flags: int = base.surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
+		result.add_surface_from_arrays(base.surface_get_primitive_type(surface), arrays, [], {}, flags)
+		var material := base.surface_get_material(surface).duplicate() as BaseMaterial3D
+		material.albedo_color = PANTS_COLORS[index]
+		result.surface_set_material(surface, material)
+	return result
 
 
 ## 몸통 그림의 티셔츠 칸만 다시 칠한다(index 0 = 원래 그림). 1인칭 팔(art/characters/first_person_arm.gd)도 같은 함수를 쓴다.
@@ -310,13 +403,13 @@ static func _thick_mustache(head: Node3D) -> void:
 
 
 ## 시가: 오른쪽 입꼬리에 물고 앞·아래·바깥으로 내민다. 끝에 불씨 + 가는 연기(art/pub/cigar_smoke.gd 의 wisp).
-static func _cigar(head: Node3D) -> void:
+static func _cigar(head: Node3D, bite: Vector3 = CIGAR_MOUTH, size: float = 1.0) -> void:
 	var holder := Node3D.new()
 	holder.name = "MouthCigar"
 	head.add_child(holder)
 	# 홀더의 +Z = 시가가 뻗는 쪽(RG Poly 시가는 원점 = 꽁무니, 불 붙은 끝 = +Z).
 	var out := Vector3(0.35, -0.35, -1.0).normalized()
-	holder.transform = Transform3D(Basis.looking_at(-out, Vector3.UP), CIGAR_MOUTH)
+	holder.transform = Transform3D(Basis.looking_at(-out, Vector3.UP).scaled(Vector3.ONE * size), bite)
 	var body := PubParts.asset(holder, "cigar", Vector3.ZERO, 0.0, Vector3.ONE * CIGAR_SCALE, "CigarBody", false)
 	if body == null:
 		var stick := MeshInstance3D.new()
@@ -344,7 +437,11 @@ static func _cigar(head: Node3D) -> void:
 	ember.position = Vector3(0, 0, CIGAR_LENGTH)
 	holder.add_child(ember)
 	var wisp := CigarSmoke.wisp()
-	wisp.amount = 26
+	wisp.amount = 16 if size < 1.0 else 26
+	if size < 1.0:
+		wisp.scale_amount_min *= 0.65
+		wisp.scale_amount_max *= 0.65
+		wisp.color = Color(1.0, 1.0, 1.0, 0.65)
 	wisp.position = ember.position
 	holder.add_child(wisp)
 

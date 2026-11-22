@@ -103,6 +103,16 @@ func _check_characters_and_rig() -> void:
 		assert(top.get_surface_override_material(0) != null and body.get_surface_override_material(0) == null)
 		Outfit.tint_shirt(worn, 0)
 		assert(top.get_surface_override_material(0) == null)
+		if seat == 0:
+			var pants := worn.find_child("Bottom_01", true, false) as MeshInstance3D
+			var base_mesh: Mesh = pants.mesh
+			var skin: Skin = pants.skin
+			var base_vertices: PackedVector3Array = base_mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+			for style in range(1, Outfit.PANTS_COLORS.size()):
+				Outfit.dress(worn, {"pants": style})
+				assert(pants.skin == skin and pants.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] != base_vertices)
+			Outfit.undress(worn)
+			assert(pants.mesh == base_mesh and Outfit.sanitize({}).pants == 0)
 		worn.free()
 	var model := PlayerLook.character(0)
 	root.add_child(model)

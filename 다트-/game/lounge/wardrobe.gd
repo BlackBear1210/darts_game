@@ -46,14 +46,14 @@ const ICON_PIXELS: int = 176
 const ICON_WARMUP_FRAMES: int = 8
 ## 칸마다 사진 구도: [뼈 이름, 겨눌 점(뼈대 공간, 앞 = −Z), 카메라가 있는 쪽, 거리(m)].
 ## 겨눌 점·쪽은 뼈를 따라 움직인다(숨 쉬는 몸짓이 있어도 얼굴·손목이 화면 가운데).
-## 치수 근거: 눈 높이 1.57 · 콧수염 1.37 · 시가 입꼬리(0.03, 1.343) · 모자 밑면 1.70(art/characters/player_outfit.gd 와 같은 측정값).
 const ICON_SHOTS: Dictionary = {
 	"hat": ["head", Vector3(-0.025, 1.76, -0.02), Vector3(0.35, 0.45, -1.0), 1.4],
-	"eyes": ["head", Vector3(-0.025, 1.56, -0.2), Vector3(0.3, 0.12, -1.0), 0.92],
+	"eyes": ["head", Vector3(0.0, 1.59, -0.23), Vector3(0.25, 0.12, -1.0), 0.88],
 	"mustache": ["head", Vector3(-0.012, 1.4, -0.2), Vector3(0.35, 0.05, -1.0), 0.72],
-	"cigar": ["head", Vector3(0.05, 1.32, -0.26), Vector3(0.6, 0.15, -1.0), 0.55],
+	"cigar": ["head", Vector3(0.06, 1.425, -0.25), Vector3(0.6, 0.15, -1.0), 0.55],
 	"watch": ["forearm.L", Vector3.ZERO, Vector3(-1.0, 0.2, -0.45), 0.42],
 	"shirt": ["", Vector3(-0.02, 1.0, 0.0), Vector3(0.3, 0.1, -1.0), 1.6],
+	"pants": ["", Vector3(0.0, 0.45, 0.0), Vector3(0.15, 0.07, -1.0), 1.56],
 }
 
 ## 찍은 카드 그림(칸:번호 → 그림). 게임이 꺼질 때까지 남아 다음에 방을 열면 바로 보인다.
@@ -322,6 +322,8 @@ func _card(parent: Control, key: String, index: int, title: String) -> Button:
 	var back := Color("1b141e")
 	if key == "shirt":
 		back = PlayerOutfit.SHIRT_COLORS[index].lerp(back, 0.35)
+	elif key == "pants":
+		back = PlayerOutfit.PANTS_COLORS[index].lerp(back, 0.35)
 	frame.add_theme_stylebox_override("panel", Style.flat(back, Color(Style.INK, 0.0), 0, 8, 0))
 	stack.add_child(frame)
 	var icon := TextureRect.new()

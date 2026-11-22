@@ -663,7 +663,7 @@ func _prompt_for(focus: Dictionary) -> Array:
 		"volume": return [[key, "주크박스 볼륨 %d%% · 누를 때마다 한 단계" % roundi(float(lounge.music.volume) * 100)]]
 		"link": return [[key, "YouTube 링크 넣기"], ["B", "음악 플레이어 열기"]]
 		"prop": return [[key, "%s 잡기" % lounge.prop_name(int(focus.get("index", 0)))]]
-		"wardrobe": return [[key, "꾸미기 방 들어가기 · 모자·안경·옷 색"]]
+		"wardrobe": return [[key, "꾸미기 방 들어가기 · 장신구·상의 색·바지"]]
 		"claw", "gacha", "hoop": return [[key, lounge.machine_prompt(game.controller.local_peer_id, str(focus.kind))]]
 		# 도면 v3 건드리기(종·통·과녁·축음기): 소리 + 흔들림.
 		"touch": return [[key, str(lounge.touch_spots()[int(focus.get("index", 0))].text)]]
