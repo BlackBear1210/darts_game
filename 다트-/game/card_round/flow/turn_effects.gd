@@ -84,14 +84,14 @@ func apply(seat: int) -> void:
 		if effect.kind != "lock_scores" or effect.state != _ctx.rules.EffectState.ACTIVE or _lock_applied.has(effect.uid): continue
 		_lock_applied[effect.uid] = true
 		layout.overrides = _round_overrides.duplicate()
-		layout.apply_card_change("lock_scores", -1, effect.contributors.size(), _ctx.random)
+		layout.apply_card_change("lock_scores", -1, _ctx.random)
 		_round_overrides = layout.overrides.duplicate()
 	layout.overrides = _round_overrides.duplicate()
 	var mods: Dictionary = _ctx.rules.dart_modifiers(seat)
 	for effect in _ctx.rules.effects:
 		if effect.target != seat or effect.state != _ctx.rules.EffectState.ACTIVE or _applied.has(effect.uid): continue
 		_applied[effect.uid] = true
-		if effect.kind != "lock_scores": layout.apply_card_change(effect.kind, effect.choice, effect.contributors.size(), _ctx.random)
+		if effect.kind != "lock_scores": layout.apply_card_change(effect.kind, effect.choice, _ctx.random)
 		if effect.kind in ["spin", "split", "vertical", "horizontal", "move", "cover"] and not _motion_started.has(effect.kind):
 			_motion_started[effect.kind] = _ctx.now
 			if effect.kind == "cover": _cover_side = -1 if _ctx.random.randf() < 0.5 else 1
@@ -166,4 +166,4 @@ func process() -> void:
 func shape_now() -> Dictionary:
 	var age := func(kind: String) -> float:
 		return _ctx.now - float(_motion_started[kind]) if _motion_started.has(kind) else -1.0
-	return Chaos.boost(Chaos.pose(age.call("spin"), 1, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_dir, _cover_side), _ctx.rules.dart_modifiers(_ctx.rules.active_seat()).get("synergy_levels", {}))
+	return Chaos.pose(age.call("spin"), 1, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_dir, _cover_side)

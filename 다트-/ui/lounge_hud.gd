@@ -588,11 +588,6 @@ func _show_card_panel(me: MatchPlayer, target: String) -> void:
 	var ratio: float = 1.0 if Rules.READY_SECONDS <= 0.0 else clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
 	_card_bar.value = ratio * 100.0
 	_card_status.text = "준비 중…" if ratio < 1.0 else "%s 로 쓰기" % OS.get_keycode_string(Preferences.interact_key)
-	var active: MatchPlayer = game.controller.state.active_player()
-	if ratio >= 1.0 and active != null and Catalog.supports_synergy(type):
-		var together: Dictionary = active.card_effects.get("synergies", {}).get(str(Catalog.card(type).effect), {})
-		if not together.is_empty() and me.peer_id not in together.contributors and int(together.players) < Catalog.SYNERGY_MAX_PLAYERS:
-			_card_status.text = "%s · %d인 시너지 강화" % [OS.get_keycode_string(Preferences.interact_key), int(together.players) + 1]
 	_card_status.add_theme_color_override("font_color", Style.GOLD if ratio < 1.0 else Style.MINT)
 	var blocked: String = _blocked_card_reason(me)
 	_card_bar.visible = blocked.is_empty()
@@ -702,7 +697,7 @@ func _draw_drowsy_range() -> void:
 	var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 	var aim: Vector2 = game.throw_input.aim
 	var at: Vector3 = TableView.BOARD_CENTER + Vector3(aim.x, aim.y, 0) * radius
-	var spread: float = Catalog.DROWSY_AIM_SPREAD * radius * float(game.controller.state.find_player(game.controller.local_peer_id).card_effects.get("drowsy_strength", 1.0))
+	var spread: float = Catalog.DROWSY_AIM_SPREAD * radius
 	var scale_value: float = _root.scale.x
 	var center: Vector2 = game.camera.unproject_position(at) / scale_value
 	var right: Vector2 = game.camera.unproject_position(at + Vector3.RIGHT * spread) / scale_value

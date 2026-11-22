@@ -40,7 +40,6 @@ func setup(ctx: Context) -> void:
 func turn(relative: Vector2) -> void:
 	var sensitivity: float = MOUSE_SENSITIVITY * _ctx.debuff.mouse_factor
 	var axes: Vector2 = _ctx.rules.dart_modifiers(Context.LOCAL_SEAT).get("reverse_axes", Vector2.ONE)
-	sensitivity *= float(_ctx.rules.dart_modifiers(Context.LOCAL_SEAT).get("reverse_sensitivity", 1.0))
 	yaw -= relative.x * sensitivity * axes.x
 	pitch = clampf(pitch - relative.y * sensitivity * axes.y, -1.25, 1.25)
 

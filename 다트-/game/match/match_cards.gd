@@ -135,7 +135,6 @@ func _after_use(player: MatchPlayer, seat: int, result: Dictionary, value: int) 
 	var effect = result.effect
 	var data: Dictionary = Catalog.card(result.card.type)
 	var card_text: String = str(data.big)
-	if effect.contributors.size() >= 2: card_text += " · %d인 시너지" % effect.contributors.size()
 	if int(data.timing) == Catalog.Timing.INSTANT and str(data.effect) != "random_card":
 		var said: String = actions.apply(effect, player.peer_id, peers[effect.target] if effect.target >= 0 else 0)
 		if not said.is_empty(): card_text += " · " + said
@@ -204,18 +203,13 @@ func _use(seat: int, type: int, value: int) -> Dictionary:
 
 
 ## 화면 안내와 방장 검증이 같은 중복 조건을 쓴다. 거절해도 손패는 소모하지 않는다.
-static func duplicate_reason(type: int, effects: Dictionary, source_peer: int = 0) -> String:
+## 2026-11-22 협동 시너지를 없앴다: 같은 효과는 대상에게 한 번만 걸린다 — 누가 쓰든 두 번째는 여기서 막힌다.
+## 셋째 인자는 예전에 "내가 이미 참여했나"를 가렸다. 지금은 보지 않지만 부르는 쪽을 바꾸지 않으려고 남겨 둔다.
+static func duplicate_reason(type: int, effects: Dictionary, _source_peer: int = 0) -> String:
 	var kind: String = str(Catalog.card(type).effect)
-	var together: Dictionary = effects.get("synergies", {}).get(kind, {})
-	if Catalog.supports_synergy(type) and not together.is_empty():
-		if source_peer == 0 or source_peer in together.contributors: return "이미 참여한 방해카드 · 다른 카드를 선택하세요"
-		if int(together.players) >= Catalog.SYNERGY_MAX_PLAYERS: return "시너지 최대 단계 · 다른 카드를 선택하세요"
-		return ""
-	# 2026-11-21 새 카드: 협동 강화가 없는 카드(solo)는 같은 효과·같은 "mod" 가 걸려 있으면 막는다(이속 증가·감소는 한 번에 하나).
-	if bool(Catalog.card(type).get("solo", false)):
-		var mod: String = str(Catalog.card(type).get("mod", ""))
-		if kind in effects.get("active_kinds", []) or (not mod.is_empty() and mod in effects.get("active_mods", [])):
-			return "이미 적용 중 · 다른 카드를 선택하세요"
+	var mod: String = str(Catalog.card(type).get("mod", ""))
+	if kind in effects.get("active_kinds", []) or (not mod.is_empty() and mod in effects.get("active_mods", [])):
+		return "이미 적용 중 · 다른 카드를 선택하세요"
 	if kind == "reverse" and effects.get("reverse_axes", Vector2.ONE) != Vector2.ONE:
 		return "이미 적용 중 · 다른 카드를 선택하세요"
 	return "이미 적용 중 · 다른 카드를 선택하세요" if kind in NON_STACKING_KINDS and bool(effects.get(kind, false)) else ""
@@ -226,7 +220,7 @@ static func duplicate_reason(type: int, effects: Dictionary, source_peer: int = 
 func _apply_now(effect) -> void:
 	var thrower: MatchPlayer = controller.state.active_player()
 	if thrower == null: return
-	thrower.layout.apply_card_change(effect.kind, effect.choice, effect.contributors.size(), _random)
+	thrower.layout.apply_card_change(effect.kind, effect.choice, _random)
 	_refresh_live()
 	if effect.kind == "lock_scores":
 		_round_overrides = thrower.layout.overrides.duplicate()
@@ -256,7 +250,7 @@ func _refresh_live() -> void:
 func chaos_ages() -> Dictionary:
 	var now: float = controller._now()
 	var active_mods: Dictionary = modifiers(controller.state.active_player().peer_id)
-	var ages: Dictionary = {"dir": _spin_direction, "cover_side": _cover_side, "move_dir": _move_direction, "levels": active_mods.get("synergy_levels", {}), "scale": float(active_mods.get("board_scale", 1.0))}
+	var ages: Dictionary = {"dir": _spin_direction, "cover_side": _cover_side, "move_dir": _move_direction, "scale": float(active_mods.get("board_scale", 1.0))}
 	for kind: String in _chaos_from:
 		ages[kind] = now - float(_chaos_from[kind])
 	return ages
@@ -267,7 +261,7 @@ func shape_now() -> Dictionary:
 	var age := func(kind: String) -> float:
 		return now - float(_chaos_from[kind]) if _chaos_from.has(kind) else -1.0
 	var mods: Dictionary = modifiers(controller.state.active_player().peer_id)
-	var shape: Dictionary = BoardChaos.boost(BoardChaos.pose(age.call("spin"), _spin_direction, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_direction, _cover_side), mods.get("synergy_levels", {}))
+	var shape: Dictionary = BoardChaos.pose(age.call("spin"), _spin_direction, age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _move_direction, _cover_side)
 	shape["scale"] = float(mods.get("board_scale", 1.0))
 	return shape
 
@@ -384,11 +378,58 @@ func disrupt(peer_id: int) -> String:
 	var mark: String = "+"
 	return " · 방해 성공 %s%d점" % [mark, int(reward.amount)]
 
+## [개발자 모드] 손패와 상관없이 카드 한 장을 바로 쓴다(방장 전용 치트, ui/settings_panel.gd 의 카드 시험대).
+## 진짜 사용 경로(_use → _after_use)를 그대로 지나므로 시험대에서 본 것이 경기에서 보는 것과 같다.
+## 돌려주는 글자: 빈 글자 = 썼음, 아니면 못 쓴 이유.
+func developer_play(peer_id: int, type: int, target_peer: int) -> String:
+	var seat: int = peers.find(peer_id)
+	var player: MatchPlayer = controller.state.find_player(peer_id)
+	if seat < 0 or player == null:
+		return "그 사람이 경기에 없습니다"
+	if controller.state.phase not in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT]:
+		return "다트 턴(조준·비행) 중에만 쓸 수 있습니다"
+	var free: Array[int] = rules.empty_slots(seat)
+	if free.is_empty():
+		rules._remove_card(seat, rules.seats[seat].slots[0])
+		free = rules.empty_slots(seat)
+	var card = rules.new_card(type)
+	rules.place(seat, free[0], card)
+	rules.lift(seat, free[0], controller._now())
+	var result: Dictionary = _use(seat, type, target_peer)
+	if result.is_empty():
+		rules._remove_card(seat, card)
+		_sync()
+		controller._publish()
+		return "지금은 조건이 안 맞습니다(차례·대상·이미 적용 중)"
+	_after_use(player, seat, result, target_peer)
+	_sync()
+	controller._publish()
+	return ""
+
+
+## [개발자 모드] 점수를 직접 바꾼다. 규칙 쪽 점수판도 같이 맞춘다.
+func developer_set_score(peer_id: int, points: int) -> void:
+	var seat: int = peers.find(peer_id)
+	var player: MatchPlayer = controller.state.find_player(peer_id)
+	if seat < 0 or player == null:
+		return
+	rules.seats[seat].score = points
+	player.score = points
+
+
+## [개발자 모드] 지금 걸려 있는 카드 효과를 전부 지운다(과녁 모양도 기본으로).
+func developer_clear_effects() -> void:
+	rules.effects.clear()
+	for player in controller.state.players:
+		player.layout.reset()
+	_chaos_from.clear()
+	_sync()
+
+
 func modifiers(peer_id: int) -> Dictionary:
 	var seat: int = peers.find(peer_id)
 	if seat < 0: return {}
 	var mods: Dictionary = rules.dart_modifiers(seat)
-	mods["synergies"] = _synergy_details(seat)
 	# 중복 검사(duplicate_reason)용: 지금 이 사람에게 걸린 효과 이름·"mod" 이름.
 	var kinds: Array[String] = []
 	var mod_names: Array[String] = []
@@ -401,15 +442,6 @@ func modifiers(peer_id: int) -> Dictionary:
 	mods["active_mods"] = mod_names
 	return mods
 
-
-func _synergy_details(seat: int) -> Dictionary:
-	var groups: Dictionary = {}
-	for effect in rules.effects:
-		if effect.target != seat or effect.contributors.is_empty() or effect.state not in [Rules.EffectState.QUEUED, Rules.EffectState.ACTIVE]: continue
-		var contributors: Array[int] = []
-		for source: int in effect.contributors: contributors.append(peers[source])
-		groups[effect.kind] = {"contributors": contributors, "players": contributors.size(), "factor": Catalog.synergy_factor(contributors.size())}
-	return groups
 
 ## 꽂히는 순간의 과녁(숫자 섞기·셔터·회전·분리)으로 기본 점수를 다시 센다. 날아가는 중에 쓴 과녁 카드도 그 다트에 걸린다.
 ## 벽·바닥(정규화 좌표 99)은 과녁 밖이라 0점이다. 판정 순서는 BoardChaos.locate(셔터 → 회전 → 조각).
@@ -507,7 +539,6 @@ func _effect_details(seat: int) -> Array[String]:
 			continue
 		var labelled: bool = effect.kind in ["math", "random_math", "precision", "wind", "body_dizzy", "hit_penalty", "parity"] or (effect.card_type >= 0 and Catalog.card(effect.card_type).has("value_names"))
 		var name: String = str(effect.label) if labelled else str(Catalog.card(effect.card_type).name)
-		if effect.contributors.size() >= 2: name += " · %d인 시너지 ×%.1f" % [effect.contributors.size(), Catalog.synergy_factor(effect.contributors.size())]
 		var key: String = "%s · %s" % [name, "다음 한 발" if next_dart else ("이번 라운드 끝까지" if effect.timing == Catalog.Timing.ROUND else "이번 차례 끝까지")]
 		counts[key] = int(counts.get(key, 0)) + 1
 	var lines: Array[String] = []

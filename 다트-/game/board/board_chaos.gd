@@ -60,18 +60,6 @@ static func half_split_amount(age: float) -> float:
 	return HALF_SPLIT_MAX * lerpf(SPLIT_LOW, 1.0, 0.5 + 0.5 * cos(TAU * (age - HALF_SPLIT_OPEN) / SPLIT_PERIOD))
 
 
-## 같은 강화식을 방장 판정·원격 그림·F6가 함께 쓴다. 셔터는 닫는 면적 대신 교대 속도를 강화한다.
-static func boost(shape: Dictionary, levels: Dictionary) -> Dictionary:
-	var shown: Dictionary = shape.duplicate()
-	for pair: Array in [["spin", "angle"], ["split", "split"], ["vertical", "vertical"], ["horizontal", "horizontal"], ["move", "move"]]:
-		shown[pair[1]] *= Catalog.synergy_factor(int(levels.get(pair[0], 1)))
-	var cover_players: int = int(levels.get("cover", 1))
-	if bool(shown.cover) and cover_players >= 2:
-		var interval: float = 1.2 if cover_players == 2 else 0.6
-		if int(maxf(0, float(shown.cover_age)) / interval) % 2 == 1: shown.cover_side = -int(shown.cover_side)
-	return shown
-
-
 
 ## 아무 효과도 없는 모양.
 static func rest() -> Dictionary:

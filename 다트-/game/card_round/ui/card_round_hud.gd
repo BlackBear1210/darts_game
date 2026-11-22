@@ -177,7 +177,7 @@ func _effect_value(effect: Rules.Effect) -> String:
 			return effect.label
 		"lost":
 			return "✕ " + effect.label
-	return "「%s」%s" % [effect.label, " · %d인 시너지" % effect.contributors.size() if effect.contributors.size() >= 2 else ""]
+	return "「%s」" % effect.label
 
 
 ## 자리 이름표(자리 색 글자). bracket = [1번 이름] 꼴, 아니면 모양 기호 + 이름.

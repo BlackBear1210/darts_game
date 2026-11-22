@@ -345,7 +345,7 @@ func _solve(peer_id: int, aim: Vector2, charge: float) -> Dictionary:
 		if not _flight_input.has("drowsy_offset"):
 			var spread: float = CardCatalog.DROWSY_AIM_SPREAD
 			_flight_input.drowsy_offset = Vector2(_random.randf_range(-spread, spread), _random.randf_range(-spread, spread))
-		adjusted += Vector2(_flight_input.drowsy_offset) * float(mods.get("drowsy_strength", 1.0))
+		adjusted += Vector2(_flight_input.drowsy_offset)
 	var offsets: Array[Vector2] = [Vector2.ZERO]
 	if mods.get("triple", false):
 		if not _flight_input.has("pattern"): _flight_input.pattern = CardCatalog.special_offsets(_random)
@@ -708,6 +708,38 @@ func developer_skip() -> void:
 		_timeout_turn()
 
 
+## [개발자 모드] 카드 시험대: 손패와 상관없이 카드 한 장을 바로 쓴다. 못 쓰면 이유를 돌려준다.
+## 방장 화면에서만 부른다(ui/settings_panel.gd) — 클라이언트는 이 길로 들어올 수 없다.
+func developer_card(peer_id: int, type: int, target_peer: int) -> String:
+	if not multiplayer.is_server() or not developer_enabled:
+		return "방장의 개발자 모드에서만 쓸 수 있습니다"
+	if cards == null:
+		return "이 방은 카드를 쓰지 않습니다"
+	return cards.developer_play(peer_id, type, target_peer)
+
+
+## [개발자 모드] 점수를 직접 넣는다.
+func developer_set_score(peer_id: int, points: int) -> void:
+	if not multiplayer.is_server() or not developer_enabled:
+		return
+	var player: MatchPlayer = state.find_player(peer_id)
+	if player == null:
+		return
+	player.score = maxi(0, points)
+	if cards != null:
+		cards.developer_set_score(peer_id, player.score)
+	_publish()
+
+
+## [개발자 모드] 걸려 있는 카드 효과를 전부 지운다.
+func developer_clear_effects() -> void:
+	if not multiplayer.is_server() or not developer_enabled or cards == null:
+		return
+	cards.developer_clear_effects()
+	notice = "개발자: 카드 효과를 모두 지웠습니다."
+	_publish()
+
+
 func developer_bot_turn(bot_id: int) -> void:
 	if not multiplayer.is_server() or not developer_enabled or state.phase != MatchState.Phase.AIMING:
 		return
@@ -784,7 +816,7 @@ func chaos_shape() -> Dictionary:
 	var passed: float = _now() - _received_at
 	var age := func(kind: String) -> float:
 		return float(_chaos_ages[kind]) + passed if _chaos_ages.has(kind) else -1.0
-	return BoardChaos.boost(BoardChaos.pose(age.call("spin"), float(_chaos_ages.get("dir", 1.0)), age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _chaos_ages.get("move_dir", Vector2.RIGHT), int(_chaos_ages.get("cover_side", -1))), _chaos_ages.get("levels", {}))
+	return BoardChaos.pose(age.call("spin"), float(_chaos_ages.get("dir", 1.0)), age.call("split"), age.call("cover"), age.call("vertical"), age.call("horizontal"), age.call("move"), _chaos_ages.get("move_dir", Vector2.RIGHT), int(_chaos_ages.get("cover_side", -1)))
 
 
 func _now() -> float:

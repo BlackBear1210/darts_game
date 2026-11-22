@@ -11,19 +11,10 @@ enum Timing { NEXT_DART, TURN, ROUND, INSTANT }
 ## 졸림의 발사 오차. 과녁 반지름 기준 각 축 최대값(F5 경기·F6 시연 공용).
 const DROWSY_AIM_SPREAD: float = 0.3
 const POWER_SPEED_MULTIPLIER: float = 1.3
-const SYNERGY_MAX_PLAYERS: int = 3
 
 
-## 서로 다른 사용자의 같은 방해카드만 협동 강화한다. 수치는 밸런스 기본안이다.
-## 2026-11-21 새 카드("solo")는 협동 강화가 없다 — 같은 카드가 이미 걸려 있으면 "이미 적용 중"으로 막는다.
-static func supports_synergy(type: int) -> bool:
-	# 쓰는 순간 끝나는 카드(INSTANT — 타이머 감소 등)는 쌓을 효과가 없어서 협동 강화도 없다.
-	return is_available(type) and int(CARDS[type].target) == Target.OPPONENT and not bool(CARDS[type].get("solo", false)) and int(CARDS[type].timing) != Timing.INSTANT
-
-
-static func synergy_factor(players: int) -> float:
-	return 1.0 + 0.5 * (clampi(players, 1, SYNERGY_MAX_PLAYERS) - 1)
-
+## 2026-11-22 사용자 결정: 협동 시너지(같은 방해카드를 여러 명이 쓰면 1.5~2배)를 없앴다.
+## 같은 효과는 한 번만 걸린다 — 이미 걸려 있으면 "이미 적용 중"으로 막고 손패도 안 쓴다(MatchCards.duplicate_reason).
 ## 종류별 바탕색. 팀 카드 그림(연산=남색, 다트=겨자색, 과녁=청록, 물리=보라)에서 골랐다. CardHandRules.Category 순서.
 const CATEGORY_COLORS: Array[Color] = [Color("1f4c7e"), Color("c4901f"), Color("1d5e56"), Color("5d3a5e"), Color("9b463d")]
 
@@ -103,41 +94,40 @@ const CARDS: Array[Dictionary] = [
 	# 읽는 곳: 점수 = RoundRules.resolve_dart, 조준·몸·화면 = RoundRules.dart_modifiers 의 "mod" 이름,
 	#          쓰는 순간 처리(차례 바꾸기·속박 같은 INSTANT) = game/match/match_card_actions.gd.
 	# "mod": dart_modifiers 에 그대로 실리는 이름. "value" 한 값 또는 "values" 중 무작위 하나(Effect.value)가 실린다.
-	# "solo": 협동 강화 없음 — 같은 효과가 이미 걸려 있으면 "이미 적용 중"으로 막는다.
 	# "aim": 쓰는 사람이 바라보는 쪽의 첫 사람에게 건다(빗나가면 카드만 사라진다).
 	# "live": F5 펍 경기 전용(사람 몸·목소리·차례가 필요하다). F6 단독 시연은 나눠 주지 않는다.
 	# 연산
-	{"id": "steal", "name": "가로채기", "category": CardHandRules.Category.OPERATION, "target": Target.OPPONENT, "timing": Timing.NEXT_DART, "effect": "steal", "solo": true, "live": true, "weight": 0.8, "art": "", "big": "뺏기", "text": "던지는 사람의 다음 다트 점수를 내가 가져간다. 내 차례에는 못 쓴다."},
-	{"id": "half", "name": "반띵", "category": CardHandRules.Category.OPERATION, "target": Target.OPPONENT, "timing": Timing.NEXT_DART, "effect": "half", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "½", "text": "던지는 사람의 다음 다트 점수를 반으로 나눠 절반을 내가 가져간다. 내 차례에는 못 쓴다."},
+	{"id": "steal", "name": "가로채기", "category": CardHandRules.Category.OPERATION, "target": Target.OPPONENT, "timing": Timing.NEXT_DART, "effect": "steal", "live": true, "weight": 0.8, "art": "", "big": "뺏기", "text": "던지는 사람의 다음 다트 점수를 내가 가져간다. 내 차례에는 못 쓴다."},
+	{"id": "half", "name": "반띵", "category": CardHandRules.Category.OPERATION, "target": Target.OPPONENT, "timing": Timing.NEXT_DART, "effect": "half", "live": true, "weight": 1.0, "art": "", "big": "½", "text": "던지는 사람의 다음 다트 점수를 반으로 나눠 절반을 내가 가져간다. 내 차례에는 못 쓴다."},
 	{"id": "parity", "name": "홀짝", "category": CardHandRules.Category.OPERATION, "target": Target.SELF, "timing": Timing.NEXT_DART, "effect": "parity", "live": true, "weight": 1.0, "art": "", "big": "홀짝", "text": "홀 또는 짝을 고른다(Z·X). 다음 다트 점수가 맞으면 ×2, 틀리면 ÷2. 0점은 짝.", "choice": "parity"},
 	# 다트
-	{"id": "repeat_spot", "name": "좌표 고정", "category": CardHandRules.Category.DART, "target": Target.SELF, "timing": Timing.NEXT_DART, "effect": "repeat_spot", "mod": "repeat", "solo": true, "live": true, "weight": 0.8, "art": "", "big": "고정", "text": "다음 다트가 이번 라운드에 마지막으로 꽂힌 자리로 똑같이 날아간다. 꽂힌 다트가 없으면 못 쓴다."},
-	{"id": "pierce", "name": "관통 다트", "category": CardHandRules.Category.DART, "target": Target.SELF, "timing": Timing.NEXT_DART, "effect": "pierce", "mod": "pierce", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "관통", "text": "다음 다트가 몸으로 막는 사람과 셔터를 뚫고 과녁에 꽂힌다."},
-	{"id": "rubber", "name": "고무 다트", "category": CardHandRules.Category.DART, "target": Target.OPPONENT, "timing": Timing.NEXT_DART, "effect": "rubber", "mod": "rubber", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "통", "text": "다음 다트가 과녁에 맞고 한 번 튕겨 근처 무작위 자리에 꽂힌다."},
-	{"id": "card_throw", "name": "카드 던지기", "category": CardHandRules.Category.DART, "target": Target.CASTER, "timing": Timing.ROUND, "effect": "card_throw", "mod": "card_throw", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "슝", "text": "다음 투척은 다트 대신 카드가 먼저 날아간다(다트는 그대로). 사람을 맞히면 1.5초 기절, 병·잔은 깨진다."},
+	{"id": "repeat_spot", "name": "좌표 고정", "category": CardHandRules.Category.DART, "target": Target.SELF, "timing": Timing.NEXT_DART, "effect": "repeat_spot", "mod": "repeat", "live": true, "weight": 0.8, "art": "", "big": "고정", "text": "다음 다트가 이번 라운드에 마지막으로 꽂힌 자리로 똑같이 날아간다. 꽂힌 다트가 없으면 못 쓴다."},
+	{"id": "pierce", "name": "관통 다트", "category": CardHandRules.Category.DART, "target": Target.SELF, "timing": Timing.NEXT_DART, "effect": "pierce", "mod": "pierce", "live": true, "weight": 1.0, "art": "", "big": "관통", "text": "다음 다트가 몸으로 막는 사람과 셔터를 뚫고 과녁에 꽂힌다."},
+	{"id": "rubber", "name": "고무 다트", "category": CardHandRules.Category.DART, "target": Target.OPPONENT, "timing": Timing.NEXT_DART, "effect": "rubber", "mod": "rubber", "live": true, "weight": 1.0, "art": "", "big": "통", "text": "다음 다트가 과녁에 맞고 한 번 튕겨 근처 무작위 자리에 꽂힌다."},
+	{"id": "card_throw", "name": "카드 던지기", "category": CardHandRules.Category.DART, "target": Target.CASTER, "timing": Timing.ROUND, "effect": "card_throw", "mod": "card_throw", "live": true, "weight": 1.0, "art": "", "big": "슝", "text": "다음 투척은 다트 대신 카드가 먼저 날아간다(다트는 그대로). 사람을 맞히면 1.5초 기절, 병·잔은 깨진다."},
 	# 과녁
-	{"id": "board_zoom", "name": "과녁 크기 변화", "category": CardHandRules.Category.BOARD, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "board_zoom", "mod": "board_scale", "values": [0.7, 1.35], "value_names": ["과녁 작게", "과녁 크게"], "solo": true, "live": true, "weight": 1.0, "art": "", "big": "줌", "text": "차례 동안 과녁이 무작위로 작아지거나(×0.7) 커진다(×1.35). 숫자·링이 같이 커진다."},
-	{"id": "ring_wide", "name": "링 확장", "category": CardHandRules.Category.BOARD, "target": Target.SELF, "timing": Timing.TURN, "effect": "ring_wide", "mod": "ring_scale", "value": 2.5, "solo": true, "live": true, "weight": 1.0, "art": "", "big": "링", "text": "차례 동안 트리플·더블 링이 2.5배 두꺼워진다."},
+	{"id": "board_zoom", "name": "과녁 크기 변화", "category": CardHandRules.Category.BOARD, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "board_zoom", "mod": "board_scale", "values": [0.7, 1.35], "value_names": ["과녁 작게", "과녁 크게"], "live": true, "weight": 1.0, "art": "", "big": "줌", "text": "차례 동안 과녁이 무작위로 작아지거나(×0.7) 커진다(×1.35). 숫자·링이 같이 커진다."},
+	{"id": "ring_wide", "name": "링 확장", "category": CardHandRules.Category.BOARD, "target": Target.SELF, "timing": Timing.TURN, "effect": "ring_wide", "mod": "ring_scale", "value": 2.5, "live": true, "weight": 1.0, "art": "", "big": "링", "text": "차례 동안 트리플·더블 링이 2.5배 두꺼워진다."},
 	{"id": "mine", "name": "지뢰 심기", "category": CardHandRules.Category.BOARD, "target": Target.CASTER, "timing": Timing.INSTANT, "effect": "mine", "live": true, "weight": 0.8, "art": "", "big": "지뢰", "text": "보이지 않는 지뢰를 무작위 숫자 구역에 심는다. 경기 끝까지 그 구역을 맞히면 누구든 −15점."},
 	# 물리
-	{"id": "speed_up", "name": "이속 증가", "category": CardHandRules.Category.PHYSICAL, "target": Target.CASTER, "timing": Timing.ROUND, "effect": "speed_up", "mod": "move_scale", "value": 1.5, "solo": true, "live": true, "weight": 1.0, "art": "", "big": "빠름", "text": "이번 라운드 동안 내 이동 속도가 1.5배."},
-	{"id": "speed_down", "name": "이속 감소", "category": CardHandRules.Category.PHYSICAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "speed_down", "mod": "move_scale", "value": 0.5, "solo": true, "live": true, "weight": 1.0, "art": "", "big": "느림", "text": "Tab 으로 고른 사람의 이동 속도가 이번 라운드 동안 절반."},
+	{"id": "speed_up", "name": "이속 증가", "category": CardHandRules.Category.PHYSICAL, "target": Target.CASTER, "timing": Timing.ROUND, "effect": "speed_up", "mod": "move_scale", "value": 1.5, "live": true, "weight": 1.0, "art": "", "big": "빠름", "text": "이번 라운드 동안 내 이동 속도가 1.5배."},
+	{"id": "speed_down", "name": "이속 감소", "category": CardHandRules.Category.PHYSICAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "speed_down", "mod": "move_scale", "value": 0.5, "live": true, "weight": 1.0, "art": "", "big": "느림", "text": "Tab 으로 고른 사람의 이동 속도가 이번 라운드 동안 절반."},
 	{"id": "bind", "name": "속박", "category": CardHandRules.Category.PHYSICAL, "target": Target.CASTER, "timing": Timing.INSTANT, "effect": "bind", "aim": true, "live": true, "weight": 1.0, "art": "", "big": "속박", "text": "조준점 방향으로 속박 구슬을 날린다. 처음 맞은 사람은 2.5초 동안 못 움직인다."},
 	{"id": "pull", "name": "끌어당기기", "category": CardHandRules.Category.PHYSICAL, "target": Target.CASTER, "timing": Timing.INSTANT, "effect": "pull", "aim": true, "live": true, "weight": 1.0, "art": "", "big": "당김", "text": "조준점 방향의 첫 사람을 내 앞으로 끌어당긴다(앉은 사람은 안 끌려온다)."},
-	{"id": "body_size", "name": "키 변화", "category": CardHandRules.Category.PHYSICAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "body_size", "mod": "body_scale", "values": [1.4, 0.6], "value_names": ["거인", "꼬마"], "solo": true, "live": true, "weight": 1.0, "art": "", "big": "키", "text": "Tab 으로 고른 사람의 키가 이번 라운드 동안 무작위로 커지거나 작아진다(눈높이도 바뀐다)."},
-	{"id": "blackout", "name": "정전", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "blackout", "mod": "blackout", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "정전", "text": "던지는 사람의 차례 동안 펍 불이 꺼진다. 과녁만 희미하게 보인다."},
-	{"id": "hiccup", "name": "딸꾹질", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "hiccup", "mod": "hiccup", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "딸꾹", "text": "차례 동안 가끔 딸꾹질로 조준이 위로 툭 튄다."},
-	{"id": "outbody", "name": "유체이탈", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "outbody", "mod": "outbody", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "유체", "text": "차례 동안 화면이 내 몸 뒤 위쪽(3인칭)에서 보인다. 조준점은 그대로 화면 가운데."},
-	{"id": "telescope", "name": "망원경", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "telescope", "mod": "telescope", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "망원", "text": "차례 동안 크게 확대된 동그란 망원경 화면으로만 본다. 시야가 천천히 흔들린다."},
-	{"id": "oneshot", "name": "원샷", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "oneshot", "mod": "oneshot", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "원샷", "text": "던지는 사람이 독한 술을 원샷한 것처럼 차례 동안 화면이 크게 출렁인다."},
+	{"id": "body_size", "name": "키 변화", "category": CardHandRules.Category.PHYSICAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "body_size", "mod": "body_scale", "values": [1.4, 0.6], "value_names": ["거인", "꼬마"], "live": true, "weight": 1.0, "art": "", "big": "키", "text": "Tab 으로 고른 사람의 키가 이번 라운드 동안 무작위로 커지거나 작아진다(눈높이도 바뀐다)."},
+	{"id": "blackout", "name": "정전", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "blackout", "mod": "blackout", "live": true, "weight": 1.0, "art": "", "big": "정전", "text": "던지는 사람의 차례 동안 펍 불이 꺼진다. 과녁만 희미하게 보인다."},
+	{"id": "hiccup", "name": "딸꾹질", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "hiccup", "mod": "hiccup", "live": true, "weight": 1.0, "art": "", "big": "딸꾹", "text": "차례 동안 가끔 딸꾹질로 조준이 위로 툭 튄다."},
+	{"id": "outbody", "name": "유체이탈", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "outbody", "mod": "outbody", "live": true, "weight": 1.0, "art": "", "big": "유체", "text": "차례 동안 화면이 내 몸 뒤 위쪽(3인칭)에서 보인다. 조준점은 그대로 화면 가운데."},
+	{"id": "telescope", "name": "망원경", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "telescope", "mod": "telescope", "live": true, "weight": 1.0, "art": "", "big": "망원", "text": "차례 동안 크게 확대된 동그란 망원경 화면으로만 본다. 시야가 천천히 흔들린다."},
+	{"id": "oneshot", "name": "원샷", "category": CardHandRules.Category.PHYSICAL, "target": Target.OPPONENT, "timing": Timing.TURN, "effect": "oneshot", "mod": "oneshot", "live": true, "weight": 1.0, "art": "", "big": "원샷", "text": "던지는 사람이 독한 술을 원샷한 것처럼 차례 동안 화면이 크게 출렁인다."},
 	# 특수
 	{"id": "swap_turn", "name": "차례 바꾸기", "category": CardHandRules.Category.SPECIAL, "target": Target.CASTER, "timing": Timing.INSTANT, "effect": "swap_turn", "live": true, "weight": 1.0, "art": "", "big": "교대", "text": "아직 안 던진 내가 지금 던지는 사람과 차례를 바꾼다. 내 차례에 쓰면 다음 사람과 바꾼다(던지기 전만)."},
 	{"id": "skip_turn", "name": "점프", "category": CardHandRules.Category.SPECIAL, "target": Target.CASTER, "timing": Timing.INSTANT, "effect": "skip_turn", "live": true, "weight": 1.0, "art": "", "big": "점프", "text": "다음 차례 사람을 한 번 건너뛴다(UNO 점프)."},
 	{"id": "timer_cut", "name": "타이머 감소", "category": CardHandRules.Category.SPECIAL, "target": Target.OPPONENT, "timing": Timing.INSTANT, "effect": "timer_cut", "live": true, "weight": 1.0, "art": "", "big": "½초", "text": "던지는 사람의 남은 투척 시간이 절반이 된다(최소 3초)."},
-	{"id": "voice_warp", "name": "목소리 변조", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "voice_warp", "mod": "voice_pitch", "values": [1.55, 0.68], "value_names": ["헬륨 목소리", "괴물 목소리"], "solo": true, "live": true, "weight": 1.0, "art": "", "big": "변조", "text": "Tab 으로 고른 사람의 목소리가 이번 라운드 동안 헬륨(높게) 또는 괴물(낮게) 목소리가 된다."},
-	{"id": "voice_mute", "name": "강제 음소거", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "voice_mute", "mod": "mute", "solo": true, "live": true, "weight": 1.0, "art": "", "big": "쉿", "text": "Tab 으로 고른 사람의 마이크가 이번 라운드 동안 꺼진다."},
+	{"id": "voice_warp", "name": "목소리 변조", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "voice_warp", "mod": "voice_pitch", "values": [1.55, 0.68], "value_names": ["헬륨 목소리", "괴물 목소리"], "live": true, "weight": 1.0, "art": "", "big": "변조", "text": "Tab 으로 고른 사람의 목소리가 이번 라운드 동안 헬륨(높게) 또는 괴물(낮게) 목소리가 된다."},
+	{"id": "voice_mute", "name": "강제 음소거", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "voice_mute", "mod": "mute", "live": true, "weight": 1.0, "art": "", "big": "쉿", "text": "Tab 으로 고른 사람의 마이크가 이번 라운드 동안 꺼진다."},
 	{"id": "pickpocket", "name": "소매치기", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.INSTANT, "effect": "pickpocket", "live": true, "weight": 1.0, "art": "", "big": "슬쩍", "text": "Tab 으로 고른 사람의 손패에서 무작위 한 장을 훔쳐 내 빈 칸에 넣는다."},
-	{"id": "big_head", "name": "왕머리", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "big_head", "mod": "head_scale", "value": 2.4, "solo": true, "live": true, "weight": 1.0, "art": "", "big": "왕", "text": "Tab 으로 고른 사람의 머리가 이번 라운드 동안 2.4배로 커진다."},
+	{"id": "big_head", "name": "왕머리", "category": CardHandRules.Category.SPECIAL, "target": Target.PICK, "timing": Timing.ROUND, "effect": "big_head", "mod": "head_scale", "value": 2.4, "live": true, "weight": 1.0, "art": "", "big": "왕", "text": "Tab 으로 고른 사람의 머리가 이번 라운드 동안 2.4배로 커진다."},
 	{"id": "random_card", "name": "랜덤 카드", "category": CardHandRules.Category.SPECIAL, "target": Target.CASTER, "timing": Timing.INSTANT, "effect": "random_card", "live": true, "weight": 1.0, "art": "", "big": "?!", "text": "게임 안의 카드 중 지금 쓸 수 있는 무작위 한 장이 바로 발동한다."},
 ]
 

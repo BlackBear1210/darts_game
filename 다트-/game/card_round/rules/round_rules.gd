@@ -51,7 +51,6 @@ class Effect:
 	var axes: Vector2 = Vector2.ONE
 	var choice: int = -1
 	var state: int = EffectState.QUEUED
-	var contributors: Array[int] = []
 	## 결과 한 줄(예: "60 → 130", "숫자 섞기 무효").
 	var result: String = ""
 	## 카드 목록의 "value"/"values" 에서 정한 수치(과녁 배율·이동 배율 같은 것). dart_modifiers 의 "mod" 로 실린다.
@@ -295,10 +294,6 @@ func use_problem(seat: int, target: int, now: float) -> String:
 		return "먼저 Q·E(또는 1~7)로 카드를 꺼내 든다"
 	if bool(CardCatalog.card(card.type).get("legacy", false)):
 		return "삭제된 카드입니다"
-	var together: Effect = synergy_effect(target, card.type)
-	if together != null:
-		if seat in together.contributors: return "이미 이 방해카드에 참여했습니다"
-		if together.contributors.size() >= CardCatalog.SYNERGY_MAX_PLAYERS: return "시너지 최대 단계입니다"
 	if str(CardCatalog.card(card.type).effect) == "retry" and seats[seat].retry_used:
 		return "재도전은 경기당 한 번만 쓸 수 있습니다"
 	if CardCatalog.card(card.type).has("choice") and card.choice < 0:
@@ -413,31 +408,10 @@ func use(seat: int, target: int, now: float) -> Dictionary:
 			shared.timing = CardCatalog.Timing.ROUND
 			shared.state = EffectState.ACTIVE
 			effects.append(shared)
-	if CardCatalog.supports_synergy(card.type):
-		effect.contributors.append(seat)
-		var previous: Effect = synergy_effect(target, card.type)
-		if previous != null:
-			effect.contributors.assign(previous.contributors)
-			effect.contributors.append(seat)
-			if effect.kind == "wind":
-				effect.push = previous.push
-				effect.label = previous.label
-			if effect.kind == "reverse": effect.axes = Vector2(-1, -1)
-			previous.state = EffectState.DONE
-			previous.result = "%d인 협동 강화" % effect.contributors.size()
 	effects.append(effect)
 	if effect.kind != "nullify":
 		seats[seat].last_effect = effect
 	return result
-
-
-## 만료된 차례·라운드 효과는 다음 협동에 참여하지 않는다.
-func synergy_effect(target: int, type: int) -> Effect:
-	if not CardCatalog.supports_synergy(type): return null
-	for effect in effects:
-		if effect.target == target and effect.card_type == type and effect.kind == str(CardCatalog.card(type).effect) and not effect.contributors.is_empty() and effect.state in [EffectState.QUEUED, EffectState.ACTIVE]:
-			return effect
-	return null
 
 
 ## 무효로 사라진 카드도 로그에 남긴다(효과 패널에서 줄을 그어 보여 준다).
@@ -504,8 +478,7 @@ func dart_modifiers(seat: int) -> Dictionary:
 	# 과녁 형태는 F5 MatchCards와 F6 TurnEffects가 공용 BoardChaos로 표현·채점한다.
 	var mods := {"drop": 0.0, "push": 0.0, "power": false, "triple": false, "shuffle": false, "cover": false, "drowsy": false,
 		"spin": false, "split": false, "vertical": false, "horizontal": false, "move": false, "large": false,
-		"dizzy": 0.0, "reverse_axes": Vector2.ONE, "body_reward": false, "hit_penalty": 0,
-		"synergy_levels": {}, "drowsy_strength": 1.0, "reverse_sensitivity": 1.0, "marked_sector": -1}
+		"dizzy": 0.0, "reverse_axes": Vector2.ONE, "body_reward": false, "hit_penalty": 0, "marked_sector": -1}
 	mods.merge(MOD_DEFAULTS)
 	for effect in effects:
 		if effect.target != seat:
@@ -515,20 +488,14 @@ func dart_modifiers(seat: int) -> Dictionary:
 		if not (turn_effect or dart_effect):
 			continue
 		var data: Dictionary = CardCatalog.card(effect.card_type)
-		var factor: float = CardCatalog.synergy_factor(effect.contributors.size())
-		if not effect.contributors.is_empty(): mods.synergy_levels[effect.kind] = effect.contributors.size()
 		match effect.kind:
-			"heavy": mods.drop = float(mods.drop) + float(data.drop) * factor
-			"wind": mods.push = float(mods.push) + effect.push * factor
-			"drowsy":
-				mods.drowsy = true
-				mods.drowsy_strength = factor
+			"heavy": mods.drop = float(mods.drop) + float(data.drop)
+			"wind": mods.push = float(mods.push) + effect.push
+			"drowsy": mods.drowsy = true
 			"power", "triple", "shuffle", "cover", "spin", "split", "vertical", "horizontal", "move", "large", "body_reward": mods[effect.kind] = true
-			"dizzy": mods.dizzy = maxf(float(mods.dizzy), factor)
+			"dizzy": mods.dizzy = maxf(float(mods.dizzy), 1.0)
 			"body_dizzy": mods.dizzy = maxf(float(mods.dizzy), 0.25)
-			"reverse":
-				mods.reverse_axes *= effect.axes
-				mods.reverse_sensitivity = 1.35 if effect.contributors.size() >= 3 else 1.0
+			"reverse": mods.reverse_axes *= effect.axes
 			"hit_penalty": mods.hit_penalty = effect.choice
 			# 지목 카드가 노리는 구역(과녁에 표시, GameView → BoardView.show_choice).
 			"sector_bid", "double_target":

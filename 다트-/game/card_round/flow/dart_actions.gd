@@ -72,7 +72,7 @@ func throw(seat: int, aim: Vector2, charge: float) -> void:
 	var speed_multiplier: float = CardCatalog.POWER_SPEED_MULTIPLIER if bool(mods.power) else 1.0
 	aim += Vector2(float(mods.push), -float(mods.drop))
 	if bool(mods.drowsy):
-		var spread: float = CardCatalog.DROWSY_AIM_SPREAD * float(mods.get("drowsy_strength", 1.0))
+		var spread: float = CardCatalog.DROWSY_AIM_SPREAD
 		aim += Vector2(_ctx.random.randf_range(-spread, spread), _ctx.random.randf_range(-spread, spread))
 	var aims: Array[Vector2] = [aim]
 	if bool(mods.triple):

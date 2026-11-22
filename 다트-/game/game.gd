@@ -464,7 +464,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var actor: PlayerView = actors.get(controller.local_peer_id)
 		var axes: Vector2 = actor.identity.card_effects.get("reverse_axes", Vector2.ONE) if actor != null else Vector2.ONE
-		axes *= float(actor.identity.card_effects.get("reverse_sensitivity", 1.0)) if actor != null else 1.0
 		if _screen_fx != null: axes *= _screen_fx.mouse_factor
 		_yaw -= event.relative.x * MOUSE_SENSITIVITY * Preferences.sensitivity * axes.x
 		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENSITIVITY * Preferences.sensitivity * axes.y, -1.25, 1.25)
@@ -965,6 +964,19 @@ func _show_score_popup(hit: Dictionary) -> void:
 	if int(hit.get("mine_hits", 0)) > 0: note = "MINE!"
 	elif float(hit.get("taken", 0.0)) > 0.0: note = "%s TAKEN" % ScorePopup.number_text(-float(hit.taken))
 	ScorePopup.spawn(self, hit.target, float(hit.get("points", 0)), table.board.global_basis.z, bust, note)
+
+
+## [개발자 모드] 나를 투척선 뒤로 옮긴다. 방장이 자리를 소유하므로 방장 화면에서만 뜻이 있다.
+func developer_teleport(peer_id: int) -> bool:
+	if not multiplayer.is_server() or not developer_enabled:
+		return false
+	var actor := actors.get(peer_id) as PlayerView
+	if actor == null:
+		return false
+	actor.seated = false
+	actor.update_posture()
+	actor.position = Vector3(0, 0, TableView.THROW_LINE_Z + 0.4)
+	return true
 
 
 ## 못 움직이는 상태인가: 소품에 맞은 스턴(LoungeWorld)과 몸으로 막은 스턴을 함께 본다.

@@ -40,39 +40,33 @@ func shuffle_with(random: RandomNumberGenerator) -> void:
 		numbers[other] = number
 
 
-## 값 계열 방해카드의 실제 변화. F5와 F6의 강화 범위가 달라지지 않게 공유한다.
-func apply_card_change(kind: String, choice: int, players: int, random: RandomNumberGenerator) -> void:
-	var catalog = preload("res://game/card_round/rules/card_catalog.gd")
-	var factor: float = catalog.synergy_factor(players)
+## 값 계열 방해카드의 실제 변화. F5와 F6의 범위가 달라지지 않게 공유한다.
+## 2026-11-22 협동 시너지를 없애면서 인원수 배율을 걷어냈다 — 누가 쓰든 한 장 분량으로 걸린다.
+func apply_card_change(kind: String, choice: int, random: RandomNumberGenerator) -> void:
 	match kind:
 		"shuffle":
 			shuffle_with(random)
-			if players >= 2:
-				for index in range(20): numbers[index] = random.randi_range(1, 20)
-			if players >= 3: apply_card_change("ink_board", -1, 1, random)
 		"random_scores":
-			for index in range(20): numbers[index] = random.randi_range(1, roundi(20 * factor))
+			for index in range(20): numbers[index] = random.randi_range(1, 20)
 			for index in range(3): ring_multipliers[index] = random.randi_range(1, 3)
-			inner_bull_score = random.randi_range(25, roundi(60 * factor))
-			outer_bull_score = random.randi_range(10, roundi(40 * factor))
+			inner_bull_score = random.randi_range(25, 60)
+			outer_bull_score = random.randi_range(10, 40)
 		"lock_scores":
 			var regions: Array[int] = []
 			for region in range(82):
 				if not overrides.has(region): regions.append(region)
 			var value: int = random.randi_range(1, 20)
-			for index in range(mini(regions.size(), roundi(random.randi_range(5, 20) * factor))):
+			for index in range(mini(regions.size(), random.randi_range(5, 20))):
 				var selected: int = random.randi_range(0, regions.size() - 1)
 				overrides[regions[selected]] = value
 				regions.remove_at(selected)
 		"block_sector":
-			for offset in range(clampi(players, 1, 3)):
-				var selected: int = posmod(choice + (offset if offset < 2 else -1), 20)
-				if selected not in blocked_sectors: blocked_sectors.append(selected)
+			if choice >= 0 and choice not in blocked_sectors: blocked_sectors.append(choice)
 		"ink_board":
 			var sectors: Array[int] = []
 			for index in range(20):
 				if index not in hidden_sectors: sectors.append(index)
-			while hidden_sectors.size() < roundi(5 * factor) and not sectors.is_empty():
+			while hidden_sectors.size() < 5 and not sectors.is_empty():
 				var selected: int = random.randi_range(0, sectors.size() - 1)
 				hidden_sectors.append(sectors[selected])
 				sectors.remove_at(selected)

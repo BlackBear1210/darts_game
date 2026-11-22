@@ -1,3 +1,17 @@
+# 최신 인수인계 — 카드 시너지 제거 · 개발자 모드 (2026-11-22)
+
+- 상세: `작업기록/2026-11-22_시너지제거_개발자모드.md`.
+- **카드 협동 시너지는 없다.** `Effect.contributors`·`synergy_factor`·`BoardChaos.boost` 모두 삭제했다. 같은 효과는 한 번만 걸리고, 중복 거절은 `MatchCards.duplicate_reason` **한 곳**이 화면 안내와 방장 검증에 같이 쓰인다 — 새 카드를 넣을 때 여기만 보면 된다.
+- `BoardLayout.apply_card_change(kind, choice, random)` 에서 **인원수 인자가 빠졌다**(옛 호출부를 복사하지 말 것). `BoardChaos.boost` 를 부르던 자리는 `pose()` 를 바로 쓴다.
+- 카드 목록의 `"solo"` 표시는 없앴다(이제 모든 카드가 그 규칙이다). `"mod"`·`"aim"`·`"live"` 는 그대로.
+- **개발자 모드는 ESC 개인 설정에서 켠다**(개발 빌드만, `Main.set_developer_mode`). `--developer` 실행도 그대로 된다.
+  - 카드 시험대 = `MatchController.developer_card` → `MatchCards.developer_play`. 손패만 건너뛰고 **사용 경로는 진짜와 같다** — 새 카드를 만들면 여기서 바로 눌러 볼 수 있다.
+  - 경기 조작 = `developer_set_score` · `developer_skip` · `developer_clear_effects` · `GameView.developer_teleport`.
+  - 모든 치트가 방장에서 `is_server() and developer_enabled` 를 다시 본다. 새 치트를 넣을 때도 같은 줄을 넣을 것.
+- 남은 판단: 시너지가 사라져 방해 카드가 약해졌다 — 수치 재조정은 팀 몫. `CARD_PLAN` 문서의 시너지 표도 정리 대상.
+
+---
+
 # 최신 인수인계 — 카드 59장 · 쓰는 순간 카드 모듈 · 다트 머신 (2026-11-21)
 
 - **새 카드는 카드 목록(`card_catalog.gd` `CARDS`) 맨 뒤에만 붙인다.** 손패가 종류 번호로 오가서 순서를 바꾸면 저장·네트워크 손패가 다른 카드가 된다.

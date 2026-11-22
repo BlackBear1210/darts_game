@@ -221,12 +221,25 @@ func open_settings(mode: String = "personal") -> void:
 	settings_panel = SettingsPanel.new()
 	settings_panel.session = session
 	settings_panel.developer = developer_mode
+	settings_panel.game = _game
+	settings_panel.developer_changed.connect(set_developer_mode)
 	settings_panel.mode = mode
 	settings_panel.closed.connect(func() -> void:
 		settings_panel = null
 		if _game != null: Input.mouse_mode = Input.MOUSE_MODE_CAPTURED)
 	settings_panel.leave_requested.connect(session.leave_room)
 	add_child(settings_panel)
+
+## 개발자 모드를 켜고 끈다(2026-11-22: 예전에는 --developer 로 실행해야만 켤 수 있었다).
+## 개발 빌드에서만 켜진다 — 내보낸 게임에서는 설정에 항목이 보이지 않고 여기서도 꺼진다.
+## 로컬 화면만 열어 준다. 방장 권한이 필요한 것(방 규칙·치트)은 방장 쪽에서 다시 확인한다.
+func set_developer_mode(on: bool) -> void:
+	developer_mode = on and OS.is_debug_build()
+	session.developer_authorized = developer_mode
+	if _game != null:
+		_game.developer_enabled = developer_mode
+		_game.controller.developer_enabled = developer_mode
+
 
 ## 경기 모델을 뒤에서 읽기 시작한다(app/asset_warmup.gd).
 func _start_warmup() -> void:

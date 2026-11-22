@@ -2,12 +2,18 @@ extends CanvasLayer
 ## ESC 개인 설정과 방장 모니터 설정. 적용 요청은 반드시 NetworkSession의 검증을 지난다.
 signal closed
 signal leave_requested
+## 개인 설정에서 개발자 모드를 켜고 껐다(app/main.gd 가 받아 경기·연결에 알린다).
+signal developer_changed(on: bool)
 const Style = preload("res://ui/lounge_style.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const VoiceChat = preload("res://network/voice_chat.gd")
 var session: NetworkSession
+## 경기 화면(개발자 탭의 카드 시험대·경기 조작이 쓴다). 로비에서 열면 null 이다.
+var game: GameView
 var developer: bool = false
+## 카드 시험대가 고른 대상(0 = 지금 던지는 사람, 그 뒤는 플레이어 순서).
+var _bench_target: int = 0
 var mode: String = "personal"
 var _root: Control
 var _body: VBoxContainer
@@ -165,6 +171,14 @@ func _personal() -> void:
 	Style.section(_body, "게임 · 조작", Style.GOLD)
 	Style.row(_body, "마우스 감도", Style.number(Preferences.sensitivity, 0.3, 2.0, 0.1, func(v: float) -> void: Preferences.sensitivity = v))
 	Style.row(_body, "상호작용 / 착석", Style.select(["F", "R"], 0 if Preferences.interact_key == KEY_F else 1, func(v: int) -> void: Preferences.interact_key = KEY_F if v == 0 else KEY_R))
+	# 개발자 모드(2026-11-22): 예전에는 --developer 로 실행해야만 켤 수 있었다. 개발 빌드에서는 여기서 켠다.
+	if OS.is_debug_build():
+		Style.section(_body, "개발자", Style.PINK)
+		Style.row(_body, "개발자 모드", Style.toggle(developer, func(v: bool) -> void:
+			developer = v
+			developer_changed.emit(v)
+			_note.text = "개발자 모드를 %s. 설정을 닫았다 다시 열면 개발자 탭이 보여요." % ("켰어요" if v else "껐어요")))
+		Style.label(_body, "방장이면 설정에 「개발자」 탭이 생겨요 — 카드 시험대와 경기 조작. 경기 중 F1 봇 화면 · F2 다음 봇 · F3 턴 종료 · F4 선택 봇 차례.", 16, Style.MUTED)
 	Style.label(_body, "WASD 이동 · Enter 참여 · A/D 훔쳐보기 · S 의자 회전 · 병·캡슐 들고 좌클릭 = 마시기·열기\n다트 턴 중 Q·E / 1–7 카드 꺼내기 · F 사용 · T 감정표현\nTab 플레이어 목록 · 사람마다 목소리 볼륨(무효 카드를 들었을 땐 Tab = 대상 바꾸기)", 17, Style.MUTED)
 
 ## 음성 채팅(2026-11-01): 방식·키·장치·감도 + 마이크 테스트. 사람마다 볼륨은 경기 중 Tab 목록에서.
@@ -276,8 +290,10 @@ static func _lock_when_playing(control: SpinBox, lobby: bool) -> void:
 
 
 func _developer() -> void:
-	Style.section(_body, "개발자 · 밸런스 실험실", Style.PINK)
-	Style.label(_body, "로컬 개발 실행(--developer) 방장만 사용 가능 · 수치는 팀 미확정", 17, Style.MUTED)
+	_card_bench()
+	_match_tools()
+	Style.section(_body, "밸런스 실험실", Style.PINK)
+	Style.label(_body, "방장만 사용 가능 · 수치는 팀 미확정", 17, Style.MUTED)
 	Style.row(_body, "병 적중 스턴 · 초", Style.number(_draft.hit_stun, 0, 3, 0.1, func(v: float) -> void: _draft.hit_stun = v))
 	Style.row(_body, "빗나감 회수 대기 · 초", Style.number(_draft.miss_cooldown, 0.5, 10, 0.5, func(v: float) -> void: _draft.miss_cooldown = v))
 	for entry: Dictionary in Catalog.CARDS:
@@ -292,6 +308,77 @@ func _developer() -> void:
 			elif not _draft.disabled_cards.has(id): _draft.disabled_cards.append(id)))
 		line.add_child(Style.number(float(_draft.card_weights.get(id, 1.0)), 0.01, 100, 0.1, func(v: float) -> void: _draft.card_weights[id] = v))
 	Style.label(_body, "오른쪽 수치는 같은 카드 종류 안의 상대 가중치입니다.\n카드 추가·제외는 이 방의 추첨 목록에만 적용됩니다.", 17, Style.MUTED)
+
+## [개발자 모드] 카드 시험대: 손패와 상관없이 아무 카드나 눌러 바로 써 본다.
+## 진짜 사용 경로(MatchCards.developer_play)를 그대로 지나므로 여기서 본 것이 경기에서 보는 것과 같다.
+func _card_bench() -> void:
+	Style.section(_body, "카드 시험대", Style.MINT)
+	if game == null or game.controller == null or game.controller.cards == null:
+		Style.label(_body, "경기 중(카드를 쓰는 방)에만 쓸 수 있어요.", 17, Style.MUTED)
+		return
+	var names: Array[String] = ["지금 던지는 사람"]
+	for player in game.controller.state.players:
+		names.append(str(player.display_name))
+	_bench_target = clampi(_bench_target, 0, names.size() - 1)
+	Style.row(_body, "대상", Style.select(names, _bench_target, func(v: int) -> void: _bench_target = v))
+	Style.label(_body, "카드를 누르면 바로 씁니다. 대상은 카드가 정한 쪽이 먼저고(나에게 거는 카드·무효 등) 여기 고른 사람은 「상대 1명」·「Tab 지목」 카드에만 쓰입니다.", 16, Style.MUTED)
+	for category in range(CardHandRules.CATEGORY_NAMES.size()):
+		Style.label(_body, str(CardHandRules.CATEGORY_NAMES[category]), 18, Style.GOLD)
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", 8)
+		flow.add_theme_constant_override("v_separation", 8)
+		_body.add_child(flow)
+		for type in range(Catalog.count()):
+			if not Catalog.is_available(type) or int(Catalog.card(type).category) != category: continue
+			var card_type: int = type
+			Style.secondary(flow, str(Catalog.card(type).name), func() -> void: _play_card(card_type))
+
+
+## 시험대 단추 하나. 방장 경기 상태를 직접 바꾸므로 결과(또는 못 쓴 이유)를 아래 줄에 적어 준다.
+func _play_card(type: int) -> void:
+	var target: int = 0
+	if _bench_target > 0 and _bench_target - 1 < game.controller.state.players.size():
+		target = game.controller.state.players[_bench_target - 1].peer_id
+	var problem: String = game.controller.developer_card(game.controller.local_peer_id, type, target)
+	_note.text = "「%s」 %s" % [str(Catalog.card(type).name), "사용!" if problem.is_empty() else "못 씀 — " + problem]
+
+
+## [개발자 모드] 경기 조작: 점수·차례·효과를 바로 바꾼다.
+func _match_tools() -> void:
+	Style.section(_body, "경기 조작", Style.GOLD)
+	if game == null or game.controller == null:
+		Style.label(_body, "경기 중에만 쓸 수 있어요.", 17, Style.MUTED)
+		return
+	var controller: MatchController = game.controller
+	var me: MatchPlayer = controller.state.find_player(controller.local_peer_id)
+	var score := HBoxContainer.new()
+	score.add_theme_constant_override("separation", 8)
+	_body.add_child(score)
+	Style.label(score, "내 점수", 18).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for delta: int in [-50, -10, 10, 50]:
+		var step: int = delta
+		Style.secondary(score, "%+d" % step, func() -> void:
+			var now: MatchPlayer = controller.state.find_player(controller.local_peer_id)
+			if now == null: return
+			controller.developer_set_score(now.peer_id, now.score + step)
+			_note.text = "내 점수 %d" % controller.state.find_player(controller.local_peer_id).score)
+	Style.secondary(score, "0으로", func() -> void:
+		controller.developer_set_score(controller.local_peer_id, 0)
+		_note.text = "내 점수 0")
+	Style.label(_body, "지금 내 점수 %d점" % (me.score if me != null else 0), 16, Style.MUTED)
+	var turn := HBoxContainer.new()
+	turn.add_theme_constant_override("separation", 8)
+	_body.add_child(turn)
+	Style.label(turn, "차례 · 효과", 18).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Style.secondary(turn, "차례 끝내기", func() -> void:
+		controller.developer_skip()
+		_note.text = "차례를 끝냈어요(F3 과 같아요).")
+	Style.secondary(turn, "카드 효과 모두 지우기", func() -> void:
+		controller.developer_clear_effects()
+		_note.text = "걸려 있던 카드 효과를 모두 지웠어요.")
+	Style.secondary(turn, "투척선으로", func() -> void:
+		_note.text = "투척선 뒤로 옮겼어요." if game.developer_teleport(controller.local_peer_id) else "지금은 옮길 수 없어요.")
+
 
 func _apply() -> void:
 	if mode == "personal":
