@@ -290,6 +290,7 @@ static func _lock_when_playing(control: SpinBox, lobby: bool) -> void:
 
 
 func _developer() -> void:
+	_card_test()
 	_card_bench()
 	_match_tools()
 	Style.section(_body, "밸런스 실험실", Style.PINK)
@@ -308,6 +309,38 @@ func _developer() -> void:
 			elif not _draft.disabled_cards.has(id): _draft.disabled_cards.append(id)))
 		line.add_child(Style.number(float(_draft.card_weights.get(id, 1.0)), 0.01, 100, 0.1, func(v: float) -> void: _draft.card_weights[id] = v))
 	Style.label(_body, "오른쪽 수치는 같은 카드 종류 안의 상대 가중치입니다.\n카드 추가·제외는 이 방의 추첨 목록에만 적용됩니다.", 17, Style.MUTED)
+
+
+func _card_test() -> void:
+	Style.section(_body, "카드 조합 테스트", Style.MINT)
+	if game == null or not game.can_start_card_test():
+		Style.label(_body, "혼자 플레이 맵에 입장한 뒤, 경기 시작 전에 이용할 수 있어요.", 17, Style.MUTED)
+		return
+	Style.label(_body, "사람마다 카드를 한 장씩 골라 바로 조준하고 던져 보세요. 다음 턴으로 넘어가지 않아요.", 16, Style.MUTED)
+	var names: Array[String] = ["카드 없음"]
+	var types: Array[int] = [-1]
+	for type in range(Catalog.count()):
+		if Catalog.is_available(type):
+			names.append(str(Catalog.card(type).name))
+			types.append(type)
+	for player: MatchPlayer in game.controller.state.players:
+		var peer_id: int = player.peer_id
+		var label: String = "투척자 · 나" if peer_id == game.controller.local_peer_id else "방해자 · " + player.display_name
+		var selected: int = types.find(int(game.card_test_selection.get(peer_id, -1)))
+		Style.row(_body, label, Style.select(names, maxi(0, selected), func(index: int) -> void:
+			game.card_test_selection[peer_id] = types[index]))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
+	_body.add_child(actions)
+	Style.button(actions, "조합 다시 시작" if game.controller.card_test_active else "조합 테스트 시작", func() -> void:
+		if game.can_start_card_test():
+			game.start_card_test()
+			_close())
+	if game.controller.card_test_active:
+		Style.secondary(actions, "테스트 끝내기", func() -> void:
+			game.stop_card_test()
+			_close())
+		Style.label(_body, game.controller.notice, 16, Style.MUTED)
 
 ## [개발자 모드] 카드 시험대: 손패와 상관없이 아무 카드나 눌러 바로 써 본다.
 ## 진짜 사용 경로(MatchCards.developer_play)를 그대로 지나므로 여기서 본 것이 경기에서 보는 것과 같다.

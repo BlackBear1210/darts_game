@@ -82,6 +82,7 @@ var _dressing: Dictionary = {}
 var session: NetworkSession
 var actors: Dictionary = {}
 var developer_enabled: bool = false
+var card_test_selection: Dictionary = {}
 var _controls: Dictionary = {}
 ## 몸으로 막기 스턴(방장만 센다). peer ID → 풀리는 시각.
 var _stun_until: Dictionary = {}
@@ -176,11 +177,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 	controller.stun_player = stun_player
 	controller.throw_stray = throw_stray
 	controller.knock_down = knock_down
-	card_world = CardWorld.new()
-	card_world.name = "CardWorld"
-	add_child(card_world)
-	card_world.setup(self)
-	controller.card_world = card_world.host_action
+	_setup_card_world()
 	emotes = Emotes.new()
 	emotes.name = "Emotes"
 	add_child(emotes)
@@ -428,6 +425,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 			if event.keycode == KEY_ENTER and session.room.phase == RoomState.Phase.LOBBY:
+				if controller.card_test_active:
+					return
 				var player: RoomPlayer = session.room.find_player(id)
 				if player != null and is_seated(id): session.set_ready(not player.is_ready)
 				get_viewport().set_input_as_handled()
@@ -498,7 +497,8 @@ func _physics_process(delta: float) -> void:
 		for id: int in actors:
 			var actor := actors[id] as PlayerView
 			if actor.identity.is_bot:
-				if _frozen(id): actor.simulate(delta, {})
+				if _frozen(id) or (controller.card_test_active and controller.state.active_player().peer_id != id):
+					actor.simulate(delta, {})
 				else: _drive_bot(actor, delta)
 				continue
 			var controls: Dictionary = _controls.get(id, {})
@@ -979,6 +979,84 @@ func developer_teleport(peer_id: int) -> bool:
 	return true
 
 
+func can_start_card_test() -> bool:
+	return developer_enabled and session != null and session.is_host() and session.room.settings.solo \
+		and session.room.phase == RoomState.Phase.LOBBY and is_instance_valid(actors.get(controller.local_peer_id)) \
+		and session.room.players.all(func(player: RoomPlayer) -> bool: return player.is_bot or player.peer_id == controller.local_peer_id) \
+		and (controller.state.phase == MatchState.Phase.WAITING or controller.card_test_active)
+
+
+func start_card_test() -> void:
+	if not can_start_card_test():
+		return
+	_reset_card_test()
+	var thrower := actors[controller.local_peer_id] as PlayerView
+	if lounge != null:
+		lounge._drop_held(controller.local_peer_id)
+	thrower.crouched = false
+	developer_teleport(controller.local_peer_id)
+	thrower.velocity = Vector3.ZERO
+	var to_board: Vector3 = TableView.BOARD_CENTER - thrower.eye_position()
+	_yaw = atan2(-to_board.x, -to_board.z)
+	_pitch = atan2(to_board.y, Vector2(to_board.x, to_board.z).length())
+	_was_seated = false
+	# 조준형 방해 카드도 같은 위치에서 비교할 수 있게 투척선 바깥쪽에 세운다.
+	var first_bot: PlayerView
+	var sides: Array[float] = [-1.8, 1.8, 3.6]
+	var bot_index: int = 0
+	for player: MatchPlayer in controller.state.players:
+		if not player.is_bot:
+			continue
+		var bot := actors.get(player.peer_id) as PlayerView
+		if bot == null:
+			continue
+		if first_bot == null:
+			first_bot = bot
+		bot.seated = false
+		bot.crouched = false
+		bot.velocity = Vector3.ZERO
+		bot.position = thrower.position + Vector3(sides[bot_index], 0, -0.8)
+		bot.update_posture()
+		_aim_test_actor(bot, thrower)
+		bot_index += 1
+	var type: int = int(card_test_selection.get(controller.local_peer_id, -1))
+	if first_bot != null and CardCatalog.is_available(type) and bool(CardCatalog.card(type).get("aim", false)):
+		_aim_test_actor(thrower, first_bot)
+	controller.start_card_test(card_test_selection)
+	thrower.rotation.y = _yaw
+	thrower.pitch = _pitch
+
+
+static func _aim_test_actor(actor: PlayerView, target: PlayerView) -> void:
+	var direction: Vector3 = target.global_position + Vector3.UP * 0.9 - actor.eye_position()
+	actor.rotation.y = atan2(-direction.x, -direction.z)
+	actor.pitch = atan2(direction.y, Vector2(direction.x, direction.z).length())
+
+
+func stop_card_test() -> void:
+	if controller.card_test_active:
+		_reset_card_test()
+
+
+func _reset_card_test() -> void:
+	# 이전에 날린 카드의 지연 판정도 다음 테스트 턴에 들어오지 않게 한다.
+	var mouse_mode := Input.mouse_mode
+	remove_child(card_world)
+	card_world.free()
+	_setup_card_world()
+	throw_input.enabled = false
+	begin_match(session.room)
+	Input.mouse_mode = mouse_mode
+
+
+func _setup_card_world() -> void:
+	card_world = CardWorld.new()
+	card_world.name = "CardWorld"
+	add_child(card_world)
+	card_world.setup(self)
+	controller.card_world = card_world.host_action
+
+
 ## 못 움직이는 상태인가: 소품에 맞은 스턴(LoungeWorld)과 몸으로 막은 스턴을 함께 본다.
 ## [방장] 넉백 없이 잠깐 못 움직이게 한다(속박·끌어당기기·카드 맞음 — CardWorld). 이미 더 길게 묶여 있으면 그대로.
 func freeze_player(peer_id: int, seconds: float) -> void:
@@ -1359,6 +1437,8 @@ func _flight_result(start: Vector3, target: Vector3, duration: float, hit: Vecto
 
 
 func sync_room(room: RoomState) -> void:
+	if controller.card_test_active and not can_start_card_test():
+		stop_card_test()
 	controller.room_settings = room.settings
 	if room.settings.social_lobby:
 		controller.config.rounds = room.settings.rounds

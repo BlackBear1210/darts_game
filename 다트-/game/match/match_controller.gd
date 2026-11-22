@@ -36,6 +36,7 @@ var knock_down: Callable
 ## "bind"/"pull" → 맞은 사람 peer ID(0 = 빗나감), "card_throw" → 던졌으면 true. 없으면(씬 없는 시험) 빗나감으로 본다.
 var card_world: Callable
 var developer_enabled: bool = false
+var card_test_active: bool = false
 var notice: String = ""
 var _turn_end: float = 0.0
 var _phase_end: float = 0.0
@@ -101,6 +102,9 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 ## 연결(session 신호)·규칙(config)·내 번호(local_peer_id)·요청 번호(_request_number, 계속 올라가야 한다)는 그대로 둔다.
 func reset_match(room: RoomState) -> void:
 	room_settings = room.settings
+	if card_test_active and cards != null:
+		cards.actions.cards = null
+	card_test_active = false
 	state = MatchState.new()
 	state.match_id = room.match_id
 	for identity in room.players:
@@ -424,17 +428,17 @@ func _process(_delta: float) -> void:
 		return
 	match state.phase:
 		MatchState.Phase.AIMING:
-			if cards != null:
+			if cards != null and not card_test_active:
 				cards.tick_bots()
 			if _now() >= _turn_end:
 				_timeout_turn()
 		MatchState.Phase.FLIGHT:
-			if cards != null:
+			if cards != null and not card_test_active:
 				cards.tick_bots()
 			if _now() >= _phase_end:
 				_land_dart()
 		MatchState.Phase.SETTLING:
-			if _now() >= _phase_end:
+			if not card_test_active and _now() >= _phase_end:
 				_advance_turn()
 		MatchState.Phase.TABLE:
 			if _everyone_seated() or _now() >= _phase_end:
@@ -716,6 +720,44 @@ func developer_card(peer_id: int, type: int, target_peer: int) -> String:
 	if cards == null:
 		return "이 방은 카드를 쓰지 않습니다"
 	return cards.developer_play(peer_id, type, target_peer)
+
+
+## 같은 맵의 혼자 플레이 대기실에서 조합 한 턴을 바로 연다.
+func start_card_test(selection: Dictionary) -> void:
+	if not multiplayer.is_server() or not developer_enabled or not room_settings.solo or state.phase != MatchState.Phase.WAITING:
+		return
+	var thrower := state.find_player(local_peer_id)
+	if thrower == null:
+		return
+	card_test_active = true
+	state.turn_index = state.players.find(thrower)
+	cards = MatchCards.new(self)
+	cards.begin_round()
+	_refill_darts()
+	_begin_turn()
+	var failures: PackedStringArray = []
+	var participants := state.players.duplicate()
+	# 무효 카드의 대상 효과가 먼저 있어야 한다. 나머지는 자리 순서대로 적용한다.
+	for counter_pass: bool in [false, true]:
+		for player: MatchPlayer in participants:
+			var type: int = int(selection.get(player.peer_id, -1))
+			if not CardCatalog.is_available(type):
+				continue
+			var counter: bool = int(CardCatalog.card(type).target) == CardCatalog.Target.COUNTER
+			if counter != counter_pass:
+				continue
+			var target: int = local_peer_id
+			if player == thrower:
+				target = 0
+				for other: MatchPlayer in participants:
+					if other != thrower and (not counter or int(selection.get(other.peer_id, -1)) >= 0):
+						target = other.peer_id
+						break
+			var problem: String = developer_card(player.peer_id, type, target)
+			if not problem.is_empty():
+				failures.append("%s: %s (%s)" % [player.display_name, CardCatalog.card(type).name, problem])
+	notice = "카드 조합 테스트 · Esc에서 다시 시작" if failures.is_empty() else "적용 실패 · " + " / ".join(failures)
+	_publish()
 
 
 ## [개발자 모드] 점수를 직접 넣는다.

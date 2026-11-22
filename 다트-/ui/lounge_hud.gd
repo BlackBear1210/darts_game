@@ -292,8 +292,9 @@ func _process(delta: float) -> void:
 	var height: float = _root.size.y
 	var state: MatchState = game.controller.state
 	var room: RoomState = game.session.room
-	var waiting: bool = room.phase == RoomState.Phase.LOBBY
-	var finished: bool = state.phase == MatchState.Phase.FINISHED
+	var testing: bool = game.controller.card_test_active
+	var waiting: bool = room.phase == RoomState.Phase.LOBBY and not testing
+	var finished: bool = state.phase == MatchState.Phase.FINISHED and not testing
 	_update_scores(state, waiting)
 	_update_phase(state, room, waiting, finished, delta)
 	_banner.position = Vector2((width - _banner.size.x) / 2, 18)
@@ -351,6 +352,8 @@ func _update_effects(state: MatchState, hidden: bool) -> void:
 
 func _update_scores(state: MatchState, waiting: bool) -> void:
 	_round_chip.text = " 라운지 " if waiting else " ROUND %02d / %02d " % [state.round_number, game.controller.config.rounds]
+	if game.controller.card_test_active:
+		_round_chip.text = " 테스트 "
 	var active: MatchPlayer = null if waiting else state.active_player()
 	var key := PackedStringArray()
 	for player in state.players:
@@ -394,7 +397,17 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 	var sub: String = ""
 	# 설명 줄은 340px 칸에 들어가도록 뜻이 끊기는 곳에서 직접 줄을 바꾼다(2026-10-31).
 	# 자동 줄바꿈만 두면 한글이 글자 사이에서 끊겨 "써\n요." "사\n람에게" 처럼 보였다.
-	if waiting:
+	if game.controller.card_test_active:
+		_phase_title.text = "카드 조합 테스트"
+		_phase_detail.text = "%d발 남음 · Esc에서 조합 변경" % state.darts_left
+		if state.phase in [MatchState.Phase.SETTLING, MatchState.Phase.FINISHED]:
+			_phase_detail.text = "%s\nEsc에서 다시 시작" % str(state.last_hit.get("reason", "테스트 턴 종료"))
+		if game.controller.notice.begins_with("적용 실패"):
+			_phase_detail.text += "\n" + game.controller.notice
+		stage = RoundBanner.Stage.DARTS
+		sub = "테스트 턴 · %d발 남음" % state.darts_left
+		limit = game.controller.config.turn_seconds
+	elif waiting:
 		_phase_title.text = "준비 시간"
 		_phase_detail.text = "자기 색 의자에 %s 로 앉고\nEnter 로 참여" % OS.get_keycode_string(Preferences.interact_key) if Preferences.show_key_hints else "자기 색 의자에 앉아 참여"
 		if not room.settings.solo and room.players.size() < 2: _phase_detail.text += "\n친구가 들어오기를 기다리는 중…"
@@ -422,7 +435,7 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 		sub = "%s 차례 · %d발 남음 · 내 다트 %d" % [active.display_name if active != null else "대기", state.darts_left, mine.darts if mine != null else 0]
 	_banner.visible = not waiting and not finished
 	if _banner.visible:
-		_banner.show_state(state.round_number, game.controller.config.rounds, stage, sub, seconds, limit, delta)
+		_banner.show_state(state.round_number, 1 if game.controller.card_test_active else game.controller.config.rounds, stage, sub, seconds, limit, delta)
 
 
 ## 킬로그: 새 줄이 들어오면 위에서 칩으로 쌓이고 몇 초 뒤 흐려져 사라진다.
@@ -489,7 +502,7 @@ func _update_cards(state: MatchState, waiting: bool, finished: bool) -> void:
 	if me.pending_card >= 0:
 		# 카드를 꺼내 들면 오른쪽 아래 카드 패널이 이름·대상·"F 로 쓰기"를 다 보여 준다 → 아래 한 줄 안내는 숨긴다(겹침 방지).
 		_show_card_panel(me, _target_name(state, me))
-	else:
+	elif not game.controller.card_test_active:
 		_card_hint.text = "Q·E 로 카드 꺼내기 (1–7 바로) → %s 로 쓰기 · 효과는 지금 던지는 사람에게" % OS.get_keycode_string(Preferences.interact_key)
 		_card_hint.visible = Preferences.show_key_hints
 

@@ -105,7 +105,7 @@ func _refresh_screen() -> void:
 		_remove_game()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
-	if _game != null and (_game.controller.state.match_id != session.room.match_id or (session.room.phase == RoomState.Phase.LOBBY and _game.controller.state.phase != MatchState.Phase.WAITING)):
+	if _game != null and (_game.controller.state.match_id != session.room.match_id or (session.room.phase == RoomState.Phase.LOBBY and _game.controller.state.phase != MatchState.Phase.WAITING and not _game.controller.card_test_active)):
 		# 경기 시작(경기 번호가 바뀜)·로비로 돌아오기: 라운지 방에서는 화면을 그대로 두고 경기 상태만 새로 한다
 		# (2026-11-18 "방 만든 뒤 대기 없애기" — 지우고 새로 만들면 펍 1.2초 · 오락실 1.9초 멈췄다).
 		# 전용 서버는 경기마다 계정 기록(_backend.watch_match)을 새로 묶어야 해서 예전처럼 새로 만든다.
@@ -237,6 +237,8 @@ func set_developer_mode(on: bool) -> void:
 	developer_mode = on and OS.is_debug_build()
 	session.developer_authorized = developer_mode
 	if _game != null:
+		if not developer_mode:
+			_game.stop_card_test()
 		_game.developer_enabled = developer_mode
 		_game.controller.developer_enabled = developer_mode
 
@@ -258,5 +260,8 @@ func _input(event: InputEvent) -> void:
 		if _account_open:
 			_account_open = false
 			_refresh_screen()
-		else: open_settings()
+		elif _game != null and _game.controller.card_test_active:
+			open_settings("developer")
+		else:
+			open_settings()
 		get_viewport().set_input_as_handled()

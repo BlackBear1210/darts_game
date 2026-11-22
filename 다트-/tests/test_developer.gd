@@ -20,6 +20,39 @@ func _run() -> void:
 	main.session.host_room("테스터", 17680, options)
 	await create_timer(0.8).timeout
 	var game: GameView = main._game
+	assert(not game.can_start_card_test(), "개발자 모드 없이 테스트를 시작할 수 없다")
+	main.set_developer_mode(true)
+	var test_controller: MatchController = game.controller
+	var opponent: int = test_controller.state.players[1].peer_id
+	game.card_test_selection = {1: Catalog.type_of("power_up"), opponent: Catalog.type_of("dizzy")}
+	game.start_card_test()
+	assert(main._game == game and main.session.room.phase == RoomState.Phase.LOBBY, "같은 맵에서 연습 턴을 연다")
+	assert(test_controller.card_test_active and test_controller.state.phase == MatchState.Phase.AIMING)
+	assert(test_controller.state.active_player().peer_id == 1 and game.can_throw_from(1))
+	assert(test_controller.state.find_player(1).hand.is_empty(), "무작위 손패를 배분하지 않는다")
+	var effects: Dictionary = test_controller.state.find_player(1).card_effects
+	assert(bool(effects.get("power", false)) and float(effects.get("dizzy", 0)) > 0, "나와 방해자의 카드가 함께 걸린다")
+	test_controller.submit_throw(Vector2.ZERO, 0.7)
+	assert(test_controller.state.phase == MatchState.Phase.FLIGHT, "정상 투척 경로로 던질 수 있다")
+	test_controller._phase_end = test_controller._now()
+	await process_frame
+	await process_frame
+	assert(not test_controller.state.last_hit.is_empty(), "착탄 결과가 나온다")
+	test_controller.developer_skip()
+	test_controller._phase_end = test_controller._now()
+	await process_frame
+	await process_frame
+	assert(test_controller.state.phase == MatchState.Phase.SETTLING and test_controller.state.active_player().peer_id == 1)
+	game.card_test_selection.erase(opponent)
+	game.start_card_test()
+	effects = test_controller.state.find_player(1).card_effects
+	assert(bool(effects.get("power", false)) and float(effects.get("dizzy", 0)) == 0, "다시 시작하면 선택한 카드만 남는다")
+	game.card_test_selection[opponent] = Catalog.type_of("bind")
+	game.start_card_test()
+	await create_timer(0.35).timeout
+	assert(game._frozen(1), "조준이 필요한 방해 카드도 같은 맵에서 실제로 맞는다")
+	main.set_developer_mode(false)
+	assert(not test_controller.card_test_active and test_controller.state.phase == MatchState.Phase.WAITING and not game._frozen(1))
 	game.force_seat(1)
 	await create_timer(0.3).timeout
 	main.session.set_ready(true)
@@ -62,5 +95,5 @@ func _run() -> void:
 
 	main.queue_free()
 	await process_frame
-	print("PASS: developer mode toggles in game, the card bench plays any card through the real path, and match tools set score/clear effects/teleport")
+	print("PASS: card combination turn, real throw and result, replay without opponent effect, original developer tools")
 	quit()
