@@ -1,3 +1,18 @@
+# 최신 인수인계 — 경기 HUD 판 제거 · 카드 칸 흰 선 (2026-11-22 밤)
+
+- 상세: `작업기록/2026-11-22_HUD배경제거_카드칸흰선.md`.
+- **경기 HUD 에 새 판(배경)을 넣지 말 것.** 글자는 `Style.hud_label(parent, text, size, color)` 로 만든다(잉크 외곽선 + 그림자). 이미 만든 Label 은 `Style.outline(label, size)`. 판을 지울 때는 `Style.clear()`.
+  - 판이 꼭 필요한 곳(경기가 멈추는 결과 창 등)만 `Style.card()` 를 쓴다. 이 판은 `SKEW` 만큼 기운다 — 곧게 하려면 `lounge_style.gd` `SKEW = 0.0`.
+- **점수판 = `ui/score_list.gd`**: `show_players(players, active, me, title)`. `title` 을 비우면 제목(로고+"라운지")이 숨는다 — `LoungeHUD._update_scores` 가 대기 중에만 "라운지" 를 넘긴다. 결과 창 순위 줄도 `ScoreList.row(...)` 를 같이 쓴다.
+- **킬로그 = `ui/kill_feed.gd`**: `show_feed(state.feed, delta)`. 줄 형식은 여전히 `MatchController.feed_entry` 가 정한다.
+- **카드 칸 흰 선 = `room_seating.gd` `CARD_SPOT_*` 상수 + `art/pub/card_spot_line.gdshader`**. 칸 자리는 `TableCards.SLOT_X0/SLOT_GAP/SLOT_Z` 를 따른다 — 손패 칸 위치를 바꾸면 선도 같이 따라온다. 바꾼 뒤 `pub_builder.gd -- --game-room-only` 로 `pub_game.tscn` 재생성.
+  - 선을 메시로 다시 만들지 말 것 — 프로젝트에 MSAA·FXAA 가 없어서 멀리서 점선처럼 끊긴다(셰이더가 fwidth 로 1화소 밑은 옅게 만든다).
+  - `SeatMat_N` 노드 이름은 `TableView.show_seats` 가 쓰므로 유지. 예전 `PlayerMat`·`CardSlot`·`ReserveSlot`·`SeatSymbol` 은 없다.
+- `TableCards.MAT_TOP` 0.017 → 0.006(매트 없음, 펠트 위). F6 예약 2칸은 선 없이 펠트 위에 놓인다.
+- `tests/render_match_ui.gd` 는 이번 작업 전부터 "봇이 카드를 꺼내 들었다" 에서 실패한다(원인 미조사).
+
+---
+
 # 2026-11-22 · 펍 투척선과 월넛 다트머신 경계 분리
 
 씬은 `art/dart_machine/dart_machine.tscn` 하나로 설치한다. 기구는 `dart_drive.gd`와 `flip_guard.gd`, 호스트·클라이언트 공통 변환은 `game/board/board_chaos.gd`, 번호와 꽂힌 다트는 `game/board/board.gd`, HUD 우선순위는 `ui/lounge_hud.gd`가 담당한다.

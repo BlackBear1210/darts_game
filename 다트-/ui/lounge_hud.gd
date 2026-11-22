@@ -1,20 +1,21 @@
 extends CanvasLayer
 ## 경기 화면 HUD(2026-10-30 디자인 개편). 자세한 규칙은 ESC/모니터에서만 보여 준다.
+## 2026-11-22: 판넬(검정 배경)을 모두 걷어 냈다 — 사용자 요청 "배경을 가리는 걸 최소화". 글자는 잉크 외곽선으로 읽힌다(Style.outline).
 ##
-##   왼쪽 위    점수판(자리 색 띠 · 자리 표식 · 이름 · 점수, 지금 차례는 금색 테두리) + 단계 카드(제목 · 설명 · 남은 시간 막대)
-##   오른쪽 위  방 정보 칩 + 초대 코드 복사, 그 아래 킬로그(배틀그라운드처럼 "누가 [아이콘] 누구를")
+##   왼쪽 위    점수판(이름 · 점수만) — ui/score_list.gd. 라운지에서만 "DARTY 라운지" 머리글과 준비 안내가 붙는다.
+##   오른쪽 위  방 정보(라운지만) + 초대 코드 복사, 그 아래 킬로그 — ui/kill_feed.gd
 ##   가운데     조준점 + 충전 막대(다트·소품 던지기)
-##   아래 가운데 키 안내 칩(키캡 + 할 일), 대기실이면 준비 현황 칩
+##   아래 가운데 키 안내 칩(키캡 + 할 일), 대기실이면 준비 현황(✓ 이름)
 ##   가운데 위  라운드 칸(◆ 카드 충전 · ● 다트) · 지금 단계 → 다음 단계 · 남은 초(큰 숫자 + 막대) — ui/round_banner.gd
-##   아래 가운데 키 안내 칩 위: 카드 쓰는 법 · 고른 카드와 대상 한 줄(카드 그림은 왼쪽 아래 3D 손패 부채가 보여 준다)
 ##   오른쪽 아래 꺼내 든 카드 설명(그림 · 이름 · 효과 · 대상 · 준비 막대) — 카드 라운드 시연과 같은 자리
 ##   화면 전체  장난 효과(인형에 얼굴 가림 · 가챠 먹물)
-## 글자 크기·색·카드 모양은 ui/lounge_style.gd 한 곳에서 온다.
+## 글자 크기·색·카드 모양은 ui/lounge_style.gd 한 곳에서 온다. 모듈(score_list · kill_feed · round_banner)은 씬 없이 .new() 로 붙는다.
 const Style = preload("res://ui/lounge_style.gd")
+const ScoreList = preload("res://ui/score_list.gd")
+const KillFeed = preload("res://ui/kill_feed.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
 const VoiceChat = preload("res://network/voice_chat.gd")
-const UiIcon = preload("res://ui/ui_icon.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
 const MatchCards = preload("res://game/match/match_cards.gd")
@@ -24,17 +25,13 @@ const RoundBanner = preload("res://ui/round_banner.gd")
 const CardActions = preload("res://game/match/match_card_actions.gd")
 ## N 키로 키 안내를 숨기거나 다시 켤 때 잠깐 뜨는 알림(초).
 const HINT_TOAST_SECONDS: float = 1.6
-## 자리 표식(색약이어도 모양으로 구분 — 기획 2-4).
-const SEAT_GLYPHS: Array[String] = ["●", "▲", "■", "◆"]
-## 킬로그 한 줄이 떠 있는 시간(초)과 사라지는 시간.
-const FEED_LIFE: float = 5.0
-const FEED_ROWS := 2
-const FEED_FADE: float = 0.8
+## 화면 가장자리 여백(px). 왼쪽 위 점수판·오른쪽 위 방 정보·킬로그가 같이 쓴다.
+const EDGE: float = 28.0
+const TOP: float = 26.0
 
 var game: GameView
 var _root: Control
-var _score_box: VBoxContainer
-var _round_chip: Label
+var _scores: ScoreList
 var _phase_title: Label
 var _phase_detail: Label
 var _effects: Label
@@ -43,9 +40,7 @@ var _timer_bar: ProgressBar
 var _banner: RoundBanner
 var _room: Label
 var _copy: Button
-var _feed_box: VBoxContainer
-var _feed_seen: Dictionary = {}
-var _feed_key: String = ""
+var _feed: KillFeed
 var _prompt_box: HBoxContainer
 var _prompt_key: String = ""
 var _ready_box: HBoxContainer
@@ -68,7 +63,6 @@ var _result: PanelContainer
 var _result_rows: VBoxContainer
 var _result_buttons: HBoxContainer
 var _result_key: String = ""
-var _score_key: String = ""
 var _overlay: Control
 var _target: int = 0
 var _link_dialog: AcceptDialog
@@ -106,61 +100,50 @@ func _ready() -> void:
 
 # ─────────────────────────────── 만들기 ───────────────────────────────
 
+## 왼쪽 위: 점수판(ui/score_list.gd) + 그 아래 단계 안내(라운지 "준비 시간" · 적용 중인 카드 효과). 바탕 없음.
 func _build_scoreboard() -> void:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.88), Style.INK, Style.SHADOW, 3, 16, 14))
-	panel.position = Vector2(28, 26)
-	panel.custom_minimum_size = Vector2(380, 0)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	panel.add_child(column)
-	var header := HBoxContainer.new()
-	column.add_child(header)
-	var logo := Style.heading(header, "DARTY", 26, Style.GOLD)
-	logo.add_theme_font_override("font", Style.font("logo"))
-	header.add_child(_spacer())
-	_round_chip = Style.label(header, "", 17, Style.INK)
-	_round_chip.add_theme_stylebox_override("normal", Style.flat(Style.MINT, Style.INK, 2, 10, 10, 2))
-	_score_box = VBoxContainer.new()
-	_score_box.add_theme_constant_override("separation", 6)
-	column.add_child(_score_box)
-	# 단계 카드(점수판 아래 붙은 띠).
+	column.position = Vector2(EDGE, TOP)
+	column.add_theme_constant_override("separation", 10)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(column)
+	_scores = ScoreList.new()
+	_scores.name = "ScoreList"
+	column.add_child(_scores)
 	var phase := PanelContainer.new()
 	_phase_panel = phase
-	phase.add_theme_stylebox_override("panel", Style.flat(Color(Style.INK, 0.6), Color(0, 0, 0, 0), 0, 10, 12, 8))
+	phase.add_theme_stylebox_override("panel", Style.clear())
+	phase.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(phase)
 	var phase_column := VBoxContainer.new()
 	phase_column.add_theme_constant_override("separation", 2)
+	phase_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	phase.add_child(phase_column)
 	_phase_title = Style.heading(phase_column, "", 22, Style.CREAM)
-	_phase_detail = Style.label(phase_column, "", 16, Style.MUTED)
+	_phase_detail = Style.hud_label(phase_column, "", 16, Style.CREAM)
 	_phase_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_phase_detail.custom_minimum_size.x = 340
 	_timer_bar = _bar(Style.GOLD, 8)
 	phase_column.add_child(_timer_bar)
-	_effects = Style.label(phase_column, "", 16, Style.PINK)
+	_effects = Style.hud_label(phase_column, "", 16, Style.PINK)
 	_effects.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_effects.custom_minimum_size.x = 340
 	_effects.visible = false
 
 
+## 오른쪽 위: 방 이름·접속 방식(라운지만) → 초대 코드 복사 버튼(방장·라운지만) → 킬로그(ui/kill_feed.gd).
 func _build_room_corner() -> void:
-	_room = Style.label(_root, "", 16, Style.CREAM)
+	_room = Style.hud_label(_root, "", 17, Style.CREAM)
 	_room.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_room.add_theme_stylebox_override("normal", Style.flat(Color(Style.PANEL, 0.82), Style.INK, 2, 12, 14, 8))
 	_room.size = Vector2(440, 0)
 	_copy = Style.secondary(_root, "초대 코드 복사", func() -> void:
 		DisplayServer.clipboard_set(game.session.invitation())
 		_copy.text = "복사했어요 ✓")
 	_copy.icon = null
 	_copy.custom_minimum_size = Vector2(210, 48)
-	_feed_box = VBoxContainer.new()
-	_feed_box.alignment = BoxContainer.ALIGNMENT_BEGIN
-	_feed_box.add_theme_constant_override("separation", 6)
-	_feed_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_feed_box)
+	_feed = KillFeed.new()
+	_feed.name = "KillFeed"
+	_root.add_child(_feed)
 
 
 func _build_bottom() -> void:
@@ -179,9 +162,8 @@ func _build_bottom() -> void:
 	_charge.size = Vector2(180, 10)
 	_root.add_child(_charge)
 	_build_card_panel()
-	_hint_toast = Style.label(_root, "", 18, Style.INK)
+	_hint_toast = Style.hud_label(_root, "", 20, Style.CREAM)
 	_hint_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_toast.add_theme_stylebox_override("normal", Style.card(Style.CREAM, Style.INK, Vector2(0, 4), 3, 12, 14))
 	_hint_toast.visible = false
 	_prompt_box = HBoxContainer.new()
 	_prompt_box.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -190,15 +172,15 @@ func _build_bottom() -> void:
 	_root.add_child(_prompt_box)
 	_ready_box = HBoxContainer.new()
 	_ready_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	_ready_box.add_theme_constant_override("separation", 10)
+	_ready_box.add_theme_constant_override("separation", 22)  # 판 없는 글자라 칸 사이를 넓혀 서로 붙어 보이지 않게(2026-11-22)
 	_ready_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_ready_box)
 
 
-## 오른쪽 아래 '꺼내 든 카드' 패널: 카드 그림 옆에 이름·분류·효과 글·대상·준비 막대·쓰는 키.
+## 오른쪽 아래 '꺼내 든 카드' 패널: 카드 그림 옆에 이름·분류·효과 글·대상·준비 막대·쓰는 키. 바탕 없음(2026-11-22).
 func _build_card_panel() -> void:
 	_card_panel = PanelContainer.new()
-	_card_panel.add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.92), Style.INK, Style.SHADOW, 3, 16, 14))
+	_card_panel.add_theme_stylebox_override("panel", Style.clear())
 	_card_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card_panel.visible = false
 	_root.add_child(_card_panel)
@@ -215,12 +197,12 @@ func _build_card_panel() -> void:
 	column.add_theme_constant_override("separation", 4)
 	row.add_child(column)
 	_card_name = Style.heading(column, "", 28, Style.GOLD)
-	_card_info = Style.label(column, "", 15, Style.MUTED)
-	_card_text = Style.label(column, "", 18, Style.CREAM)
+	_card_info = Style.hud_label(column, "", 15, Style.MUTED)
+	_card_text = Style.hud_label(column, "", 18, Style.CREAM)
 	_card_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_card_text.custom_minimum_size.x = 380
-	_card_target = Style.label(column, "", 18, Style.MINT)
-	_choice_label = Style.label(column, "", 18, Style.GOLD)
+	_card_target = Style.hud_label(column, "", 18, Style.MINT)
+	_choice_label = Style.hud_label(column, "", 18, Style.GOLD)
 	_card_bar = _bar(Style.MINT, 8)
 	column.add_child(_card_bar)
 	_card_status = Style.heading(column, "", 24, Style.GOLD)
@@ -300,11 +282,11 @@ func _process(delta: float) -> void:
 	# 오른쪽 위: 방 정보 → 초대 버튼 → 킬로그.
 	_room.text = "%s\n%s  ·  %s  ·  %d/%d명" % [room.settings.room_name, "초대 전용" if room.settings.private_room else "공개 접속",
 		"암호 있음" if room.has_password else "암호 없음", room.players.size(), room.settings.capacity]
-	_room.position = Vector2(width - 468, 26)
+	_room.position = Vector2(width - EDGE - _room.size.x, TOP)
 	_copy.visible = waiting and game.session.is_room_host() and not room.settings.solo
-	_copy.position = Vector2(width - 238, 26 + _room.size.y + 10)
-	_feed_box.position = Vector2(width - 28 - _feed_box.size.x, 26 + _room.size.y + (72 if _copy.visible else 14))
-	_update_feed(state)
+	_copy.position = Vector2(width - EDGE - _copy.size.x, TOP + _room.size.y + 10)
+	_feed.show_feed(state.feed, delta)
+	_feed.position = Vector2(width - EDGE - _feed.size.x, TOP + _room.size.y + (72 if _copy.visible else 14))
 	_update_cards(state, waiting, finished)
 	_update_effects(state, waiting or finished)
 	# 라운드와 남은 시간은 위 배너 한 곳에 둔다. 효과와 상태 경고는 조준 중에도 남긴다.
@@ -312,8 +294,8 @@ func _process(delta: float) -> void:
 	_phase_detail.visible = waiting
 	_phase_panel.visible = waiting or _effects.visible
 	_room.visible = waiting
-	_feed_box.visible = not game.throw_input.charging and not finished
-	if not waiting: _feed_box.position.y = 26
+	_feed.visible = not game.throw_input.charging and not finished
+	if not waiting: _feed.position.y = TOP
 	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
 	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
@@ -353,42 +335,10 @@ func _update_effects(state: MatchState, hidden: bool) -> void:
 		_effects.text = "적용 중 · %s\n%s" % [active.display_name, text]
 
 
+## 점수판: 라운지에서만 "DARTY 라운지" 머리글, 경기 중에는 이름·점수 줄만(라운드는 위 가운데 배너).
 func _update_scores(state: MatchState, waiting: bool) -> void:
-	_round_chip.text = " 라운지 " if waiting else " ROUND %02d / %02d " % [state.round_number, game.controller.config.rounds]
-	if game.controller.card_test_active:
-		_round_chip.text = " 테스트 "
 	var active: MatchPlayer = null if waiting else state.active_player()
-	var key := PackedStringArray()
-	for player in state.players:
-		key.append("%d|%s|%.1f|%s" % [player.seat, player.display_name, player.score, "A" if player == active else ""])
-	var joined := ",".join(key)
-	if joined == _score_key: return
-	_score_key = joined
-	for child in _score_box.get_children():
-		child.queue_free()
-	for player in state.players:
-		_score_box.add_child(_score_row(player, player == active, player.peer_id == game.controller.local_peer_id))
-
-
-func _score_row(player: MatchPlayer, active: bool, me: bool) -> Control:
-	var tint: Color = PlayerLook.COLORS[player.seat % PlayerLook.COLORS.size()]
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", Style.flat(Color(tint.darkened(0.55), 0.92), Style.GOLD if active else Color(tint, 0.6), 3 if active else 2, 10, 10, 4))
-	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", 10)
-	row.add_child(line)
-	var glyph := Style.label(line, SEAT_GLYPHS[player.seat % 4], 20, tint.lightened(0.25))
-	glyph.custom_minimum_size.x = 22
-	var name := Style.label(line, player.display_name + ("  (나)" if me else ""), 19, Style.CREAM)
-	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name.clip_text = true
-	if active:
-		Style.label(line, "▶ 차례", 14, Style.GOLD)
-	var score := Style.heading(line, "%.1f" % player.score, 26, Style.GOLD if active else Style.CREAM)
-	score.add_theme_font_override("font", Style.font("logo"))
-	score.custom_minimum_size.x = 54
-	score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	return row
+	_scores.show_players(state.players, active, game.controller.local_peer_id, "라운지" if waiting else "")
 
 
 func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: bool, delta: float) -> void:
@@ -439,64 +389,6 @@ func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: 
 	_banner.visible = not waiting and not finished
 	if _banner.visible:
 		_banner.show_state(state.round_number, 1 if game.controller.card_test_active else game.controller.config.rounds, stage, sub, seconds, limit, delta)
-
-
-## 킬로그: 새 줄이 들어오면 위에서 칩으로 쌓이고 몇 초 뒤 흐려져 사라진다.
-func _update_feed(state: MatchState) -> void:
-	var now: float = _time
-	for entry in state.feed:
-		if not _feed_seen.has(entry): _feed_seen[entry] = now
-	for entry in _feed_seen.keys():
-		if entry not in state.feed and now - float(_feed_seen[entry]) > FEED_LIFE: _feed_seen.erase(entry)
-	var shown := PackedStringArray()
-	for entry in state.feed:
-		if now - float(_feed_seen[entry]) < FEED_LIFE: shown.append(entry)
-	if shown.size() > FEED_ROWS:
-		shown = shown.slice(shown.size() - FEED_ROWS)
-	var joined := "\n".join(shown)
-	if joined != _feed_key:
-		_feed_key = joined
-		for child in _feed_box.get_children():
-			child.queue_free()
-		for entry in shown:
-			var chip := feed_chip(entry)
-			chip.set_meta("entry", entry)
-			_feed_box.add_child(chip)
-	for chip in _feed_box.get_children():
-		if not chip.has_meta("entry"): continue
-		var age: float = now - float(_feed_seen.get(chip.get_meta("entry"), now))
-		# 들어올 때 오른쪽에서 미끄러져 들어오고, 끝날 때 흐려진다.
-		chip.modulate.a = clampf((FEED_LIFE - age) / FEED_FADE, 0.0, 1.0) * clampf(age / 0.15, 0.0, 1.0)
-
-
-## 킬로그 한 줄을 칩으로 만든다. 예전 글자 한 줄(구분 글자 없음)도 그대로 보여 준다.
-static func feed_chip(entry: String) -> Control:
-	var chip := PanelContainer.new()
-	chip.add_theme_stylebox_override("panel", Style.flat(Color(Style.INK, 0.78), Color(Style.CREAM, 0.12), 1, 10, 12, 5))
-	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", 8)
-	line.alignment = BoxContainer.ALIGNMENT_END
-	chip.add_child(line)
-	var parts := entry.split(MatchController.FEED_SEPARATOR)
-	if parts.size() < 6:
-		Style.label(line, entry, 16, Style.CREAM)
-		return chip
-	var actor_seat: int = int(parts[1])
-	var target_seat: int = int(parts[4])
-	if not parts[2].is_empty():
-		Style.label(line, parts[2], 17, _seat_color(actor_seat))
-	line.add_child(UiIcon.make(parts[0], 26, Style.CREAM))
-	if not parts[5].is_empty():
-		Style.label(line, parts[5], 17, _seat_color(target_seat))
-	if not parts[3].is_empty():
-		Style.label(line, parts[3], 15, Style.MUTED)
-	return chip
-
-
-static func _seat_color(seat: int) -> Color:
-	if seat < 0: return Style.CREAM
-	return PlayerLook.COLORS[seat % PlayerLook.COLORS.size()].lightened(0.3)
 
 
 func _update_cards(state: MatchState, waiting: bool, finished: bool) -> void:
@@ -676,9 +568,9 @@ func _update_ready(room: RoomState, waiting: bool) -> void:
 	_ready_key = joined
 	for child in _ready_box.get_children():
 		child.queue_free()
+	# 준비 현황: 바탕 없이 글자만(준비 = 청록 ✓, 아직 = 크림 ○).
 	for player in room.players:
-		var chip := Style.label(_ready_box, ("✓ " if player.is_ready else "○ ") + player.display_name, 18, Style.INK if player.is_ready else Style.CREAM)
-		chip.add_theme_stylebox_override("normal", Style.flat(Style.MINT if player.is_ready else Color(Style.PANEL, 0.9), Style.INK, 2, 12, 14, 6))
+		Style.hud_label(_ready_box, ("✓ " if player.is_ready else "○ ") + player.display_name, 19, Style.MINT if player.is_ready else Style.CREAM)
 
 
 func _update_result() -> void:
@@ -695,10 +587,7 @@ func _update_result() -> void:
 	var rank: int = 1
 	for index in range(players.size()):
 		if index > 0 and players[index].score != players[index - 1].score: rank = index + 1
-		var row := _score_row(players[index], rank == 1, players[index].peer_id == game.controller.local_peer_id)
-		var medal := Style.heading(row.get_child(0), "%d위" % rank, 22, Style.GOLD if rank == 1 else Style.MUTED)
-		row.get_child(0).move_child(medal, 0)
-		_result_rows.add_child(row)
+		_result_rows.add_child(ScoreList.row(players[index], rank == 1, players[index].peer_id == game.controller.local_peer_id, "%d위" % rank, 44.0))
 
 
 # ─────────────────────────────── 장난 효과 덮개 ───────────────────────────────
@@ -888,13 +777,6 @@ func open_link() -> void:
 	_link_error.text = ""
 	_link_dialog.popup_centered()
 	_url.grab_focus()
-
-
-func _spacer() -> Control:
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return spacer
 
 
 func _bar(fill: Color, thickness: int) -> ProgressBar:

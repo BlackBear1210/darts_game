@@ -25,7 +25,9 @@ const BOARD_GREEN := Color("1f9d68")
 
 ## 단단한 그림자 거리(px). 누르면 0 으로 줄어 "눌린" 느낌을 준다.
 const SHADOW := Vector2(0, 6)
-## 버튼 기울기(StyleBoxFlat.skew). 다트 깃처럼 살짝 기울인다.
+## 버튼 기울기(StyleBoxFlat.skew). 다트 깃처럼 살짝 기울인다(2026-10-30 개편 — card() 의 모서리 반지름이 16 이하면 기운다).
+## 경기 화면 HUD 는 2026-11-22 부터 판을 쓰지 않아(outline·hud_label) 기울어진 테두리가 없다. 로비·설정 창 버튼만 기운다.
+## 메뉴 버튼까지 곧게 하려면 이 값을 0.0 으로 바꾸면 된다(한 곳).
 const SKEW: float = -0.08
 
 const FONT_FILES := {
@@ -195,6 +197,29 @@ static func label(parent: Node, text: String, font_size: int = 20, color: Color 
 	item.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(item)
 	return item
+
+
+## 배경 판 없이 게임 화면 위에 바로 쓰는 HUD 글자(2026-11-22 사용자 요청 "검정 배경을 없애 게임할 때 안 거슬리게").
+## 판넬 대신 잉크 외곽선 + 아래 그림자로 대비를 만든다 → 크림색 벽에서도, 어두운 바닥에서도 읽힌다
+## (Xbox 접근성 지침 XAG 101·102: 배경이 계속 바뀌는 게임 화면 위 글자는 외곽선이나 판으로 대비를 확보한다).
+static func outline(item: Label, font_size: int) -> Label:
+	var thickness: int = maxi(5, font_size / 4)
+	item.add_theme_color_override("font_outline_color", INK)
+	item.add_theme_constant_override("outline_size", thickness)
+	item.add_theme_color_override("font_shadow_color", Color(INK, 0.75))
+	item.add_theme_constant_override("shadow_offset_x", 0)
+	item.add_theme_constant_override("shadow_offset_y", maxi(2, font_size / 10))
+	item.add_theme_constant_override("shadow_outline_size", thickness)
+	return item
+
+
+static func hud_label(parent: Node, text: String, font_size: int = 20, color: Color = CREAM) -> Label:
+	return outline(label(parent, text, font_size, color), font_size)
+
+
+## 바탕도 여백도 없는 판 모양(PanelContainer 의 배경을 지울 때).
+static func clear() -> StyleBoxEmpty:
+	return StyleBoxEmpty.new()
 
 
 ## 제목 글자: 굵은 한글 + 잉크 외곽선 + 단단한 그림자(스티커 글자).

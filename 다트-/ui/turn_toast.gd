@@ -4,7 +4,7 @@ extends CanvasLayer
 ##
 ## [언제 뜨나] GameView._on_throw_requested 가 정한다: 경기 중(다트 단계)인데 지금 차례가 남의 것일 때 던지면
 ##   그 다트는 예전처럼 "그냥 던진 다트"로 날아가고(점수 없음), 던진 사람 화면에만 이 알림이 뜬다.
-## [모양] 화면 가운데 위쪽 분홍 카드: 큰 글씨 "내 차례가 아니에요!" + 작은 글씨 "지금은 ● 이름 차례 · 이 다트는 점수에 안 들어가요".
+## [모양] 화면 가운데 위쪽 분홍 글자(2026-11-22 판 없앰): 큰 글씨 "내 차례가 아니에요!" + 작은 글씨 "지금은 ● 이름 차례 · 이 다트는 점수에 안 들어가요".
 ##   톡 튀어나왔다가(커졌다 제자리) 잠깐 머문 뒤 흐려지며 사라진다. 다시 던지면 처음부터 다시 뜨고 좌우로 살짝 흔들린다.
 ## 마우스·키 입력을 막지 않는다(MOUSE_FILTER_IGNORE) — 경기 조작에 지장이 없다.
 
@@ -34,20 +34,18 @@ func _ready() -> void:
 	_card.name = "TurnToastCard"
 	_card.theme = Style.theme()
 	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_card.add_theme_stylebox_override("panel", Style.card(Color(Style.PINK, 0.96), Style.INK, Style.SHADOW, 4, 18, 22))
+	# 2026-11-22: 분홍 판(기울어진 테두리)을 없애고 분홍 글자 + 잉크 외곽선만 남겼다(경기 HUD 공통 — 배경을 가리지 않는다).
+	_card.add_theme_stylebox_override("panel", Style.clear())
 	holder.add_child(_card)
 	var column := VBoxContainer.new()
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_theme_constant_override("separation", 4)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card.add_child(column)
-	_title = Style.heading(column, "내 차례가 아니에요!", 38)
+	_title = Style.heading(column, "내 차례가 아니에요!", 40, Style.PINK)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_detail = Style.label(column, "", 19, Style.CREAM)
+	_detail = Style.hud_label(column, "", 20, Style.CREAM)
 	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 분홍 바탕 위 작은 글씨가 흐려 보이지 않게 잉크 테두리를 두른다.
-	_detail.add_theme_color_override("font_outline_color", Style.INK)
-	_detail.add_theme_constant_override("outline_size", 5)
 	_card.visible = false
 
 

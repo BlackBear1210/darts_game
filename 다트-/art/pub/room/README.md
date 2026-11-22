@@ -29,7 +29,7 @@ F5 경기 방 `art/pub/pub_game.tscn` 은 **생성물**이다. 코드가 방을 
 | 레인 매트·투척선 | `room_board.gd` `build_lane` | `Lane` |
 | 럼주통 | `room_board.gd` `build_barrels` | `Barrels` |
 | 다트판 양옆 꾸밈(네온 과녁·다트 걸이·벽시계·트로피·거울 간판·깃발 줄) | `room_board_sides.gd` `build_board_sides` (+ `_neon_target` · `_dart_rack` · `_wall_clock` · `_trophy_shelf` · `_pub_mirror` · `_bunting`) | `PubOnly/BoardSideDecor` |
-| 카드 테이블 · 의자 · 자리 매트/러그/번호 | `room_seating.gd` `build_table_and_seats` · `club_chair` · `bar_stool` | `TableAndSeats` |
+| 카드 테이블 · 의자 · 러그 · 카드 칸 흰 선(2026-11-22, 자리 색 매트 대신) | `room_seating.gd` `build_table_and_seats`(`CARD_SPOT_*` 상수) · `_card_spot_material` · `club_chair` · `bar_stool` · 선 셰이더 `art/pub/card_spot_line.gdshader` | `TableAndSeats` |
 | 바 · 맥주 꼭지 · 뒤 선반 · 냉장고 · 바 스툴 · 바텐더 | `room_bar.gd` `build_bar` · `_back_bar` · `_bar_fridge` | `Bar` |
 | 바텐더가 꺼내는 것과 손님 자리 | `room_bar.gd` `build_bar` 의 `sources` · `customers` | `Bar` |
 | NPC 구석 자리 · 앉은 손님 · 당구대 (비스트로 탁자는 2026-11-21 삭제) | `room_guests.gd` `build_npc_corner` · `build_guests` · `build_pool_table` | `NpcCorner` · `Guests` · `PoolTable` |

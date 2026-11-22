@@ -1,6 +1,7 @@
 extends Node3D
 ## 원형 테이블 위의 카드 전부: 가운데 덱 더미, 자리마다 7칸(왼손과 같은 카드), 방해 보상 예약 2칸.
-## 칸 위치는 펍 생성물의 자리 매트(art/pub/room/room_seating.gd: 카드 7칸 x = -0.36 + 0.12c, z = 0.66 / 예약 칸 z = 0.49)와 같다.
+## 카드 7칸 위치(SLOT_*)는 펍 생성물의 흰 선 칸(art/pub/room/room_seating.gd 가 이 상수를 그대로 읽는다)과 같다.
+## 예약 2칸(RESERVE_*)은 F6 시연에서만 쓰여 2026-11-22부터 테이블에 선을 그리지 않는다(F5 경기에는 예약 칸이 없다).
 ## 좌표는 월드 기준(이 노드는 원점에 둔다). 규칙(누가 무슨 카드)은 round_rules.gd 가 정하고 여기서는 보여 주기만 한다.
 
 const CardView = preload("res://game/card_round/cards/card_view.gd")
@@ -11,7 +12,9 @@ const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const DECK_YAW: float = 0.35
 ## 펠트 윗면 높이 = 테이블 높이 + 펠트(0.011). 자리 매트는 그보다 조금 높다.
 const FELT_TOP: float = 0.011
-const MAT_TOP: float = 0.017
+## 칸 위 카드 바닥 높이(테이블 높이 기준). 2026-11-22 자리 색 매트(윗면 0.017)를 없애고 펠트(0.004) 위 흰 선 칸만 남겨
+## 카드도 펠트로 내려왔다(선은 카드 바깥을 두르므로 카드와 겹치지 않는다 — art/pub/room/room_seating.gd CARD_SPOT_*).
+const MAT_TOP: float = 0.006
 const SLOT_X0: float = -0.36
 const SLOT_GAP: float = 0.12
 const SLOT_Z: float = 0.66

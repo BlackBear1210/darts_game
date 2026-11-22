@@ -6,6 +6,8 @@ extends PanelContainer
 ## 카드 라운드 시연(F6)의 game/card_round/ui/round_tracker.gd 와 같은 칸 모양을 F5 경기 상태(MatchState)로 그린다.
 ## 예전 F5 HUD 는 왼쪽 위 단계 카드에 초만 적어서 "다음에 무엇이 오는지"가 안 보였다.
 ## 나중에 설정에서 UI 위치를 옮기게 할 때를 위해 이 표시는 노드 하나로 묶어 둔다(자리는 LoungeHUD 가 정한다).
+## 2026-11-22: 검정 판을 없앴다(사용자 요청 "배경을 가리는 걸 최소화"). 글자는 잉크 외곽선, 라운드 칸은 잉크 테두리로 읽힌다.
+## 붙이는 법: 씬 없이 RoundBanner.new() 를 add_child 하고 매 프레임 show_state() 를 부른다.
 
 const Style = preload("res://ui/lounge_style.gd")
 const Sfx = preload("res://art/audio/sfx.gd")
@@ -20,6 +22,9 @@ const ROUND_GAP: float = 22.0
 const URGENT_SECONDS: float = 5.0
 const TICK_SECONDS: int = 3
 const DIM := Color("6f6a5c")
+## 판 없이 화면 위에 바로 그리는 글자·칸의 잉크 테두리 굵기(px)와 칸 받침 색.
+const OUTLINE: int = 6
+const HALO := Color(0.07, 0.05, 0.07, 0.75)
 
 var _pips: Control
 var _stage_label: Label
@@ -36,7 +41,7 @@ var _last_tick: int = -1
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_theme_stylebox_override("panel", Style.card(Color(Style.PANEL, 0.9), Style.INK, Style.SHADOW, 3, 16, 12))
+	add_theme_stylebox_override("panel", Style.clear())
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 2)
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -52,8 +57,8 @@ func _ready() -> void:
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(line)
 	_stage_label = Style.heading(line, "", 26, Style.GOLD)
-	_next_label = Style.label(line, "", 16, Style.MUTED)
-	_sub_label = Style.label(column, "", 16, Style.CREAM)
+	_next_label = Style.hud_label(line, "", 16, Style.MUTED)
+	_sub_label = Style.hud_label(column, "", 17, Style.CREAM)
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_seconds_label = Style.heading(column, "", 44, Style.CREAM)
 	_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -62,7 +67,7 @@ func _ready() -> void:
 	_bar.show_percentage = false
 	_bar.custom_minimum_size = Vector2(0, 8)
 	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bar.add_theme_stylebox_override("background", Style.flat(Color(Style.INK, 0.8), Color(0, 0, 0, 0), 0, 4, 0, 0))
+	_bar.add_theme_stylebox_override("background", Style.flat(Color(Style.INK, 0.55), Color(0, 0, 0, 0), 0, 4, 0, 0))
 	_bar.add_theme_stylebox_override("fill", Style.flat(Style.MINT, Color(0, 0, 0, 0), 0, 4, 0, 0))
 	column.add_child(_bar)
 	custom_minimum_size = Vector2(_pips_width() + 40, 0)
@@ -132,11 +137,14 @@ func _draw_pips() -> void:
 	var left: float = (_pips.size.x - width) * 0.5
 	var middle: float = (PIP + 10) * 0.5
 	var title: String = "R %d/%d" % [_round, _total] if _total > 0 else "R %d" % _round
+	# 판이 없으므로 글자와 칸 둘레에 잉크 테두리를 먼저 그린다(크림색 벽 앞에서도 읽히게).
+	_pips.draw_string_outline(font, Vector2(left, middle + 7), title, HORIZONTAL_ALIGNMENT_LEFT, 110, 20, OUTLINE, Style.INK)
 	_pips.draw_string(font, Vector2(left, middle + 7), title, HORIZONTAL_ALIGNMENT_LEFT, 110, 20, Style.CREAM)
 	for round_value in range(1, _shown_rounds() + 1):
 		var x: float = left + 120.0 + (round_value - 1) * (PIP * 2 + PAIR_GAP + ROUND_GAP)
 		var cards := Vector2(x + PIP * 0.5, middle)
 		var darts := Vector2(x + PIP * 1.5 + PAIR_GAP, middle)
+		_pips.draw_line(cards, darts, Color(Style.INK, 0.8), 5.0)
 		_pips.draw_line(cards, darts, DIM, 2.0)
 		_draw_pip(cards, round_value, Stage.CARDS)
 		_draw_pip(darts, round_value, Stage.DARTS)
@@ -154,6 +162,8 @@ func _draw_pip(center: Vector2, round_value: int, stage_value: Stage) -> void:
 		radius *= 1.0 + 0.14 * sin(_time * 5.0)
 		_pips.draw_circle(center, radius * 1.7, Color(base, 0.2))
 	if stage_value == Stage.CARDS:
+		var halo: float = radius + 3.0
+		_pips.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -halo), center + Vector2(halo, 0), center + Vector2(0, halo), center + Vector2(-halo, 0)]), HALO)
 		var diamond := PackedVector2Array([center + Vector2(0, -radius), center + Vector2(radius, 0), center + Vector2(0, radius), center + Vector2(-radius, 0)])
 		if state == 2:
 			diamond.append(diamond[0])
@@ -161,7 +171,9 @@ func _draw_pip(center: Vector2, round_value: int, stage_value: Stage) -> void:
 		else:
 			_pips.draw_colored_polygon(diamond, color)
 	elif state == 2:
+		_pips.draw_circle(center, radius * 0.85 + 2.5, HALO)
 		_pips.draw_arc(center, radius * 0.85, 0, TAU, 24, color, 2.0, true)
 	else:
+		_pips.draw_circle(center, radius * 0.85 + 2.5, HALO)
 		_pips.draw_circle(center, radius * 0.85, color)
 		_pips.draw_circle(center, radius * 0.3, Style.INK)
