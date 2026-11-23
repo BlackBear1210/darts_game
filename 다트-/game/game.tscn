@@ -7,8 +7,21 @@
 [ext_resource type="PackedScene" path="res://game/dart/dart.tscn" id="5_dart"]
 [ext_resource type="Script" uid="uid://vulm8j6jmp13" path="res://game/throwing/trajectory_preview.gd" id="6_preview"]
 
+[ext_resource type="Script" path="res://art/characters/dart_hand/dart_hand.gd" id="7_hand"]
+[ext_resource type="Shader" path="res://art/characters/dart_hand/flight_color.gdshader" id="8_ink"]
+
+[sub_resource type="ShaderMaterial" id="HandInk"]
+resource_local_to_scene = true
+shader = ExtResource("8_ink")
+
 [node name="Game" type="Node3D" unique_id=452074249]
 script = ExtResource("2_game")
+
+[node name="DartHand" type="Sprite2D" parent="."]
+visible = false
+centered = false
+material = SubResource("HandInk")
+script = ExtResource("7_hand")
 
 [node name="Camera" type="Camera3D" parent="." unique_id=923790970]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 4.3)

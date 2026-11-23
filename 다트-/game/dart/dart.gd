@@ -104,13 +104,18 @@ func fly(start: Vector3, target: Vector3, duration: float, hit_board: bool = tru
 	global_position = start
 	look_at(start + velocity, Vector3.UP)
 	# 판정 원점은 유지하고 외형만 손에서 출발해 착탄점으로 합류시킨다.
-	_release_offset = global_basis * release_offset
-	_visual.global_position = global_position + _release_offset
+	set_visual_start(global_position + global_basis * release_offset)
 	_visual.scale = Vector3.ONE * size_multiplier
 	if powered and _wind.is_empty():
 		_add_wind()
 	_set_wind(0.0)
 	set_physics_process(true)
+
+
+## 로컬 화면의 다트 촉에서 출발한 외형이 비행 동안 판정 궤적에 합류한다.
+func set_visual_start(at: Vector3) -> void:
+	_release_offset = at - global_position
+	_visual.global_position = at
 
 
 ## 날아가는 중에 착탄점이 바뀌었다(궤적 카드, MatchController.redirect_flight). 지금 자리·지금 시각에서 출발해

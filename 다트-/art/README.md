@@ -20,8 +20,8 @@
 | 플레이어·봇 몸짓(서기·걷기·숙이기·점프·앉기·조준·던지기·카드 들기·가리키기·만세·마시기·엿보기·왕머리·깜빡임) | `characters/character_motion.gd` + `characters/character_pose_layer.gd` | PlayerView `_process`, 로비 `lobby_backdrop.gd` |
 | 펍 NPC 몸짓 | `characters/character_rig.gd` | `pub/npc_idle.gd` |
 | 자리 색·모양(●▲■◆)·캐릭터 이름 | `player_look.gd`(PlayerLook) | 이름표·발밑 매트·스툴·HUD·칠판·다트 깃이 모두 이 표 하나를 봄 |
-| 1인칭 오른팔(다트 쥔 손·크기 카드 큰 다트) | `characters/first_person_arm.gd` (리깅 캐릭터 오른팔) | `game/game.gd` `_equip_hand()` · `_animate_hand()`(`held_dart`·`hold_large`) · 화면 찍기 `tests/render_fp_arm.gd` |
-| 1인칭 던지기 몸짓(당기기·던지기·팔로 스루·다시 쥐기) | `characters/first_person_throw.gd` (곡선 상수) | `game/game.gd` `_animate_hand()` · 미리보기 `tests/render_fp_arm.gd` |
+| F5 경기의 1인칭 오른손 | `characters/dart_hand/`의 기본·대형 다트를 쥔 손과 놓은 손 그림 | `game/game.tscn`의 `DartHand` |
+| 1인칭 던지기 몸짓(당기기·던지기·팔로 스루·다시 쥐기) | `characters/dart_hand/dart_hand.gd`, `characters/first_person_throw.gd` | `game/game.gd`의 `_animate_hand()` · 경기 화면 촬영 `tests/render_first_idea.gd` |
 | 다트(은 촉·금 몸통·자리 색 깃) | `game/dart/dart.tscn` + `paint()` | 꽂힐 때 2.2배로 커짐(과녁이 실제의 2.5배라서). 크기 카드 배율 `LARGE_SIZE` |
 | 힘 카드 바람 줄기(날아가는 다트 뒤) | `game/dart/dart.gd` `WIND_LAYERS` · `WIND_SHADER_CODE` | `powered = true` 인 다트가 `fly()` 때 붙임(`game.gd _show_throw` · F6 `dart_actions.gd`) |
 | 칠판 점수판(과녁 왼쪽 문) | `pub/room/room_board.gd`의 `ChalkScores` 글자 | `game/game.gd` `_chalk_text()` → `TableView.set_chalk_scores()` |
@@ -43,7 +43,7 @@ blender --background --factory-startup --python character_assets/approved_game_c
 - 22개 승인 변형 뼈 + 44개 게임 호환 보조 뼈, 동작27개. 승인 Walk/Sit_Down/Sit_Idle/Stand_Up과 기존 게임용 추가 모션을 제공한다. 게임 의자 별칭3개는 원래 앉기 회전을 유지하고 전체 배치만 맞춘다.
 - 가져오기 설정 `meshes/generate_lods=false`, `meshes/force_disable_compression=true`, `animation/fps=24`, `animation/remove_immutable_tracks=false`를 유지한다. 압축/LOD로 승인 외형을 다시 바꾸거나 상수 트랙을 제거하지 않는다.
 - `approved_walk_sit` 메타데이터가 기존 낮은 의자용 다리 보정을 끄고 승인 앉기를 사용하게 한다. 앉은 감정표현에는 승인 골반·다리를 고정한다. 얼굴 기준점은 꾸미기/손 IK에만 쓰며 얼굴 메시를 수정하지 않는다.
-- 1인칭은 같은 Body/Top_01의 오른팔 면을 복사해 사용하고 실제 손바닥 소켓으로 다트를 맞춘다. 화면용 팔 배율/방향은 별도로 맞추며 3인칭 몸 비율은 유지한다. 승인 손에 손가락별 변형 가중치는 없어 쥐기/펴기 변형은 후속 작업이다.
+- F5 경기에서 내 오른손은 화면 오른쪽 아래의 2D 그림으로 보인다. 다트를 놓으면 편 손 그림으로 바뀌고 3D 다트가 손끝에서 출발한다. 다른 플레이어는 승인된 캐릭터의 3D 투척 모션을 본다.
 - 실제 게임 화면/검증/한계는 `작업기록/2026-11-19_승인리깅_게임적용.md`와 저장소 루트 `output/character_nude_base_20261116/game_apply_20261119/`를 따른다.
 
 ## 이전 v18 리깅 캐릭터 다시 만들기
@@ -180,7 +180,9 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 "<Godot exe>" --path . --script res://tests/render_fp_arm.gd                  # 1인칭 오른팔만 몇 초 만에 → .godot/fp_arm/
 ```
 
-`render_fp_arm.gd`는 1인칭 팔 각도·크기를 맞출 때 쓴다. 경기 전체를 띄우지 않고 game.tscn의 실제 카메라·손·다트를 꺼내 사용한다.
+아래 내용은 기존 3D 팔의 미리보기용이다. 현재 F5 경기에서 보이는 2D 손은 `render_first_idea.gd`의 충전·투척 화면에서 확인할 수 있다.
+
+`render_fp_arm.gd`는 3D 팔 각도·크기를 맞출 때 쓴다. 경기 전체를 띄우지 않고 game.tscn의 카메라·손·다트를 꺼내 사용한다.
 `first_person_arm.gd`의 `GRIP_BEND`(손가락 굽힘)·`GRIP_ROLL`·`ELBOW_OPEN`·`PINCH_NUDGE`·`LARGE_NUDGE`·`HAND_SCALE`, 손에 든 다트 방향(`game.tscn`·`card_round.tscn` 의 `HeldDart`)을 고치고 바로 확인할 수 있다. 가리키는 손·큰 다트·힘 카드 바람도 함께 촬영한다.
 손 값을 바꾼 뒤에는 이 화면 찍기로 손이 다트를 뚫는지 꼭 본다(엄지 1~2° 차이로 뚫린다). 깊이를 mm 로 재던 확인용 시험 `test_fp_grip.gd` 는 2026-11-18 사용자 요청으로 지웠다(커밋 445f67d 에서 꺼내 쓸 수 있다).
 

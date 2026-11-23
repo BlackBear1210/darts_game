@@ -29,9 +29,8 @@ const CHAOS_SETTLE_RATE: float = 4.0
 
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
-## 1인칭 오른팔(선수 몸과 같은 리깅 캐릭터의 팔). class_name 이 없는 도구라 preload 로 부른다.
 const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
-const FirstPersonArm = preload("res://art/characters/first_person_arm.gd")
+const DartHand = preload("res://art/characters/dart_hand/dart_hand.gd")
 ## 1인칭 당기기·던지기·팔로 스루 곡선(미리보기 tests/render_fp_arm.gd 도 같은 함수를 쓴다).
 const FirstPersonThrow = preload("res://art/characters/first_person_throw.gd")
 ## 봇의 차례 행동 계산(방장 전용). class_name 이 없는 도구라 preload 로 부른다.
@@ -117,10 +116,7 @@ var _prop_charge_from: float = -1.0
 const PROP_CHARGE_TIME: float = 1.0
 var _shown_hand: Array[int] = []
 ## 손맛 연출(보이기만): 1인칭 손 기본 자세, 내가 던진 직후 1→0 으로 줄어드는 반동, 과녁 흔들림.
-var _hand_base: Transform3D
-## 손에 든 다트(Camera/Hand/HeldDart)의 장면 자세. 크기 카드는 이 자세에서 자루 가운데를 축으로 키운다
-## (FirstPersonArm.held_dart). 팔도 이 자세(크기 없음)에 맞춘다 — 커진 다트를 따라 손이 커지지 않는다.
-var _held_dart_base: Transform3D
+@onready var _dart_hand: DartHand = $DartHand
 var _throw_kick: float = 0.0
 ## 손에 보이는 당긴 정도. 충전 중엔 충전값, 그 밖엔 천천히 0 으로 돌아간다
 ## — 놓은 뒤 서버 응답(_throw_kick 시작)을 기다리는 사이 손이 겨누기 자세로 툭 튀지 않는다.
@@ -157,8 +153,6 @@ func _ready() -> void:
 	throw_input.board = table.board
 	$TrajectoryPreview.hide()
 	$Camera/Hand.hide()
-	_hand_base = ($Camera/Hand as Node3D).transform
-	_held_dart_base = ($Camera/Hand/HeldDart as Node3D).transform
 	_prepare_hand_fan()
 
 
@@ -202,7 +196,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		actors[player.peer_id] = view
 		if player.peer_id == local_peer_id:
 			camera.cull_mask = 0xfffff & ~(1 << (player.seat + 1))
-			_equip_hand(player.seat)
+			_dart_hand.set_seat(player.seat)
 	if room.settings.social_lobby:
 		lounge = LoungeWorld.new()
 		lounge.name = "LoungeWorld"
@@ -292,8 +286,10 @@ func _prepare_hand_fan() -> void:
 	# 펍이 어두워도 내 카드 글자가 읽히게 조명을 받지 않는다(2026-11-02).
 	_fan.lit = false
 	camera.add_child(_fan)
-	# 카드 라운드 시연의 1인칭 부채와 같은 자리(화면 왼쪽 아래).
-	_fan.transform = Transform3D(Vector3(0.995, -0.0998, 0), Vector3(0.0998, 0.995, 0), Vector3(0, 0, 1), Vector3(-0.22, -0.4, -0.42))
+	# 7장 부채의 왼쪽·오른쪽 끝을 참고 화면 너비의 약 5%와 43%에 맞춘다.
+	_fan.position = Vector3(-0.25, -0.394, -0.42)
+	_fan.rotation_degrees.z = -1.0
+	_fan.scale = Vector3.ONE * 1.1
 	_sync_hand_fan()
 	# 테이블 매트 카드도 카드 그림을 쓰므로 굽기 뒤에 만든다(굽기 전에 그림을 부르면 단색 그림으로 굳는다).
 	seat_cards = SeatCards.new()
@@ -344,26 +340,6 @@ func _on_card_dealt(_seat: int, _index: int) -> void:
 	_sync_hand_fan()
 	if held_cards != null:
 		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
-
-
-## 1인칭 오른팔을 붙이고 손에 든 다트 깃을 자리 색으로 칠한다.
-## 2026-11-09: 선수 몸과 같은 리깅 캐릭터의 오른팔을 쓴다(art/characters/first_person_arm.gd).
-## 예전에는 옛 도형 모델(art/characters/character_factory.gd 의 create_hand)이라 3인칭 내 팔과 생김새가 달랐다.
-func _equip_hand(seat: int) -> void:
-	var hand := $Camera/Hand as Node3D
-	var old := hand.get_node_or_null("FirstPersonHand")
-	if old != null:
-		hand.remove_child(old)
-		old.queue_free()
-	var arm := FirstPersonArm.new()
-	arm.name = "FirstPersonHand"
-	arm.seat = seat
-	arm.dart_grip = _held_dart_base
-	# 1인칭 소매도 꾸미기 옷 색으로(3인칭 내 몸과 같은 색).
-	var me := actors.get(controller.local_peer_id) as PlayerView
-	if me != null: arm.shirt = int(me.look.get("shirt", 0))
-	hand.add_child(arm)
-	($Camera/Hand/HeldDart as DartView).paint(PlayerLook.COLORS[seat])
 
 
 ## 소품 던질 힘(0~1). 우클릭을 안 누르고 있으면 -1. HUD 충전 막대도 이 값을 쓴다.
@@ -644,7 +620,6 @@ func _on_wardrobe_closed(look: Dictionary) -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
 	if local != null:
 		local.wear(clean)
-		_equip_hand(local.identity.seat)
 	_send_look(clean, false)
 	if is_inside_tree() and DisplayServer.get_name() != "headless" and controller.state.phase != MatchState.Phase.FINISHED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -689,10 +664,7 @@ func _apply_looks(data: Dictionary) -> void:
 		if actor == null:
 			continue
 		var clean: Dictionary = PlayerOutfit.sanitize(looks[key])
-		var shirt_changed: bool = id == controller.local_peer_id and int(clean.shirt) != int(actor.look.get("shirt", 0))
 		actor.wear(clean)
-		if shirt_changed:
-			_equip_hand(actor.identity.seat)
 		var room_player: RoomPlayer = session.room.find_player(id) if session != null else null
 		if room_player != null:
 			room_player.look = clean
@@ -769,7 +741,6 @@ func can_throw_from(id: int) -> bool:
 func _animate_hand(delta: float) -> void:
 	_throw_kick = maxf(0.0, _throw_kick - delta / FirstPersonThrow.KICK_SECONDS)
 	_board_shake = maxf(0.0, _board_shake - delta * 4.0)
-	var hand := $Camera/Hand as Node3D
 	var reload: bool = throw_input.enabled
 	if throw_input.charging:
 		_held_pull = throw_input.timing
@@ -778,25 +749,17 @@ func _animate_hand(delta: float) -> void:
 	elif _throw_kick <= 0.0:
 		_held_pull = move_toward(_held_pull, 0.0, delta * 4.0)
 	var pull: float = throw_input.timing if throw_input.charging else 0.0
-	var now: float = Time.get_ticks_msec() / 1000.0
-	var tremble := Vector3(sin(now * 47.0), cos(now * 39.0), 0.0) * 0.0025 * pull * pull
 	var motion: float = 0.3 if Preferences.reduced_motion else 1.0
-	var arm := hand.get_node_or_null("FirstPersonHand") as FirstPersonArm
-	var elbow: Vector3 = arm.elbow if arm != null else Vector3.ZERO
-	var shown_pull: float = _held_pull if _throw_kick <= 0.0 else pull
-	hand.transform = FirstPersonThrow.pose(_hand_base, elbow, shown_pull, _throw_kick, _released_pull, reload, motion, Vector3.ZERO if Preferences.reduced_motion else tremble)
-	if arm != null:
-		arm.animate_grip(FirstPersonThrow.fingers_open(_throw_kick), delta)
-		arm.swing(FirstPersonThrow.forearm(_throw_kick, reload, motion), FirstPersonThrow.wrist(_throw_kick, reload, motion))
-	hand.visible = throw_input.enabled or _throw_kick > 0.0
-	var held := $Camera/Hand/HeldDart as Node3D
-	held.visible = FirstPersonThrow.dart_in_hand(_throw_kick, reload)
-	# 크기 카드: 다트만 자루 가운데를 축으로 커지고, 손은 크기 그대로 굵어진 자루 바깥으로 살짝 비킨다.
 	var me: MatchPlayer = controller.state.find_player(controller.local_peer_id)
 	var large: bool = me != null and bool(me.card_effects.get("large", false))
-	held.transform = FirstPersonArm.held_dart(_held_dart_base, DartView.LARGE_SIZE if large else 1.0)
-	if arm != null:
-		arm.hold_large(large)
+	var first_person: bool = me != null and camera.is_current() and not camera.get_cull_mask_value(me.seat + 2)
+	_dart_hand.visible = is_visible_in_tree() and first_person and (reload or _throw_kick > 0.0)
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if _dart_hand.visible:
+		var shown_pull: float = _held_pull if _throw_kick <= 0.0 else pull
+		_dart_hand.pose(shown_pull, _throw_kick, _released_pull, reload, large, motion)
+		if throw_input.charging and not Preferences.reduced_motion:
+			_dart_hand.position += Vector2(sin(now * 36.0), cos(now * 41.0)) * pull * pull * _dart_hand.scale.x * 3.0
 	camera.rotation.x += FirstPersonThrow.recoil(_throw_kick) * 0.02 * motion
 	table.board.position = Vector3.UP * TableView.BOARD_CENTER.y + Vector3.FORWARD * 0.003 * _board_shake
 
@@ -1182,6 +1145,8 @@ func _show_stray(data: Dictionary) -> void:
 	var dart := DART_SCENE.instantiate() as DartView
 	_darts.add_child(dart)
 	dart.fly(data.start, data.target, float(data.duration))
+	if thrower != null and thrower.identity.peer_id == controller.local_peer_id and _dart_hand.visible:
+		dart.set_visual_start(camera.project_position(_dart_hand.tip_on_screen(), 0.55))
 	if thrower != null:
 		dart.paint(thrower.color)
 	dart.landed.connect(_on_stray_landed.bind(dart, int(data.get("victim", 0))))
@@ -1267,6 +1232,8 @@ func _show_throw(data: Dictionary) -> void:
 			dart.queue_hops(flight.hops)
 		else:
 			dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
+		if actor != null and actor.identity.peer_id == controller.local_peer_id and _dart_hand.visible:
+			dart.set_visual_start(camera.project_position(_dart_hand.tip_on_screen(), 0.55))
 		dart.paint(color)
 		dart.landed.connect(_on_dart_landed.bind(dart))
 		_flying_darts.append(dart)
