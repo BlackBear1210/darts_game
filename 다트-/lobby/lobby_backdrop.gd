@@ -38,6 +38,10 @@ const THROW_HAND := Vector3(0.18, 1.43, -0.5)
 ## 소개용 다트 간격(초)과 과녁에 남는 최대 개수.
 const ATTRACT_EVERY: float = 3.2
 const MAX_DARTS: int = 3
+## [2026-11-23 최적화] 경기 중에도 이 펍이 노드 약 2,800개·메시 2,200개로 살아 있었다(그리기만 멈춰 있었다).
+## 타이틀이 이만큼 가려져 있으면 놓아주고, 돌아오면 붙잡아 둔 장면으로 다시 짓는다(파일은 다시 읽지 않는다).
+## 계정 화면처럼 잠깐 가려질 때 짓고 놓기를 반복하지 않도록 둔 여유(초)다.
+const RELEASE_AFTER: float = 1.0
 
 var _viewport: SubViewport
 var _camera: Camera3D
@@ -50,17 +54,19 @@ var _next_attract: float = 1.4
 var _fade_frames: int = -1
 var _time: float = 0.0
 var _rng := RandomNumberGenerator.new()
+## 다시 지을 때 펍 파일을 또 읽지 않도록 붙잡아 둔 장면.
+var _packed: PackedScene
+## 타이틀이 가려져 있던 시간(초). RELEASE_AFTER 를 넘으면 놓아준다.
+var _hidden_seconds: float = 0.0
+## 밝히기 tween — 놓아줄 때 멈춰야 검게 둔 화면을 다시 밝히지 않는다.
+var _fade: Tween
 
 
 func _ready() -> void:
 	stretch = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_viewport = SubViewport.new()
-	_viewport.own_world_3d = true
-	_viewport.gui_disable_input = true
-	_viewport.msaa_3d = Viewport.MSAA_2X
-	add_child(_viewport)
+	_viewport = _make_viewport()
 	# 펍이 오기 전 빈 3D 화면은 회색이다 → 검게 덮어 두었다가 지은 뒤 밝힌다.
 	modulate = Color.BLACK
 	# 화면 없는 실행(시험·전용 서버)은 바로 읽어 짓는다 — 엔진의 가짜 그리기 장치는 여러 스레드 읽기에 깨진다(app/asset_warmup.gd start).
@@ -74,8 +80,19 @@ func _ready() -> void:
 		_build(load(TABLE_PATH) as PackedScene)
 
 
+## 펍을 담을 따로 된 3D 세계. 놓아줄 때 통째로 지우므로 다시 지을 때 새로 만든다.
+func _make_viewport() -> SubViewport:
+	var viewport := SubViewport.new()
+	viewport.own_world_3d = true
+	viewport.gui_disable_input = true
+	viewport.msaa_3d = Viewport.MSAA_2X
+	add_child(viewport)
+	return viewport
+
+
 ## 뒤에서 읽은 펍으로 방·카메라·던지는 캐릭터를 짓는다.
 func _build(table_scene: PackedScene) -> void:
+	_packed = table_scene
 	_table = table_scene.instantiate() as TableView
 	# 메시 묶기를 여러 프레임에 나눠 나타나는 순간의 멈춤을 줄인다(한 번에 묶으면 0.45초).
 	_table.spread_batching = true
@@ -107,6 +124,25 @@ func is_built() -> bool:
 	return _table != null
 
 
+## 가려진 펍을 놓아준다. 3D 세계를 통째로 지우므로 방·소품·조명·캐릭터·다트가 함께 빠진다.
+## 타이틀로 돌아오면 _process 가 붙잡아 둔 장면으로 다시 짓고 검은 화면에서 다시 밝힌다.
+func _release() -> void:
+	if _fade != null:
+		_fade.kill()
+		_fade = null
+	_viewport.queue_free()
+	_viewport = null
+	_table = null
+	_darts_root = null
+	_camera = null
+	_thrower = null
+	_rig = null
+	_fade_frames = -1
+	_time = 0.0
+	_next_attract = 1.4
+	modulate = Color.BLACK
+
+
 ## 뒤에서 읽던 펍이 다 왔으면 짓는다. 아직이면 false.
 func _try_build() -> bool:
 	var status := ResourceLoader.load_threaded_get_status(TABLE_PATH)
@@ -123,17 +159,30 @@ func _try_build() -> bool:
 
 
 func _process(delta: float) -> void:
+	# 타이틀이 가려진 동안(경기 중)에는 짓지 않는다 — 짓는 순간의 멈춤이 경기 중에 오지 않게.
+	if not is_visible_in_tree():
+		if _table == null:
+			return
+		_hidden_seconds += delta
+		if _hidden_seconds >= RELEASE_AFTER:
+			_release()
+		else:
+			_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		return
+	_hidden_seconds = 0.0
 	# 지은 다음다음 프레임에 밝히기 시작한다(첫 그리기 멈춤이 지난 뒤 — _build).
 	if _fade_frames > 0:
 		_fade_frames -= 1
 		if _fade_frames == 0:
-			create_tween().tween_property(self, "modulate", Color.WHITE, FADE_IN)
-	# 타이틀이 가려진 동안(경기 중)에는 짓지 않는다 — 짓는 순간의 멈춤이 경기 중에 오지 않게.
-	if _table == null and (not is_visible_in_tree() or not _try_build()):
-		return
-	if not is_visible_in_tree():
-		_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-		return
+			_fade = create_tween()
+			_fade.tween_property(self, "modulate", Color.WHITE, FADE_IN)
+	if _table == null:
+		if _packed != null:
+			# 타이틀로 돌아왔다 — 붙잡아 둔 장면으로 다시 짓는다(파일 읽기 없이 약 0.2초).
+			_viewport = _make_viewport()
+			_build(_packed)
+		elif not _try_build():
+			return
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_time += delta
 	# 손으로 든 카메라처럼 아주 천천히 흔들린다.
@@ -204,7 +253,8 @@ func _throw(from: Vector3, aim: Vector2, duration: float, screen := Vector2.INF)
 	dart.fly(from, target, duration)
 	Sfx.play(self, "whoosh", -14.0)
 	get_tree().create_timer(duration).timeout.connect(func() -> void:
-		if not is_inside_tree():
+		# 날아가는 중에 펍을 놓아주면(_release) 과녁이 없다.
+		if not is_inside_tree() or _table == null:
 			return
 		Sfx.play(self, "thunk", -9.0 if screen == Vector2.INF else -3.0)
 		if screen != Vector2.INF:
