@@ -14,6 +14,7 @@ const HUD_SCENE: PackedScene = preload("res://ui/game_hud.tscn")
 const FrontDoor = preload("res://lobby/front_door.gd")
 const SettingsPanel = preload("res://ui/settings_panel.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 var front: Control
 var settings_panel: CanvasLayer
 var _account_open: bool = false
@@ -28,6 +29,8 @@ var _backend: BackendConnection
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	Preferences.load_saved()
+	# 토큰 지갑(2026-11-23). 저장된 차림은 토큰이 없던 시절 것이므로 산 것으로 쳐 준다(PlayerWallet.load_saved).
+	PlayerWallet.load_saved(Preferences.look)
 	front = FrontDoor.new()
 	front.name = "FrontDoor"
 	add_child(front)

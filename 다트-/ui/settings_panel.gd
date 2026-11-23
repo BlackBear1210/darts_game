@@ -6,6 +6,7 @@ signal leave_requested
 signal developer_changed(on: bool)
 const Style = preload("res://ui/lounge_style.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const VoiceChat = preload("res://network/voice_chat.gd")
 var session: NetworkSession
@@ -156,6 +157,11 @@ func _render() -> void:
 	else: _room()
 
 func _personal() -> void:
+	# 토큰(2026-11-23). 경기 결과 말고도 아무 때나 확인할 수 있는 자리 — 꾸미기 방까지 걸어가지 않아도 된다.
+	Style.section(_body, "토큰", Style.GOLD)
+	Style.heading(_body, "가진 토큰 %d개" % PlayerWallet.tokens, 30, Style.PINK if PlayerWallet.tokens < 0 else Style.GOLD)
+	var wallet_note := Style.label(_body, "경기 순위로 번다 · 1등 +10 · 2등 +5 · 3등 0 · 꼴찌는 벌칙에서 맞은 횟수 × %d 차감(빚도 가능). 라운지 꾸미기 방에서 모자·안경·옷 같은 물건을 산다." % PlayerWallet.PUNISH_COST, 16, Style.MUTED)
+	wallet_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	Style.section(_body, "사운드", Style.PINK)
 	Style.row(_body, "전체 볼륨 %", _slider(Preferences.master * 100, 0, 100, 5, func(v: float) -> void: Preferences.master = v / 100; Preferences.apply()))
 	Style.row(_body, "주크박스 음악 %", _slider(Preferences.music * 100, 0, 100, 5, func(v: float) -> void: Preferences.music = v / 100))
@@ -254,6 +260,7 @@ func _room() -> void:
 	Style.row(_body, "취기 강도 · 0 꺼짐 / 3 강함", Style.number(_draft.intoxication, 0, 3, 1, func(v: float) -> void: _draft.intoxication = v))
 	Style.row(_body, "카드를 받을 때 함께 마시기", Style.toggle(_draft.drink_on_deal, func(v: bool) -> void: _draft.drink_on_deal = v))
 	Style.row(_body, "소품 잡기 / 방해", Style.toggle(_draft.props_enabled, func(v: bool) -> void: _draft.props_enabled = v))
+	Style.row(_body, "경기 끝 꼴찌 벌칙", Style.toggle(_draft.punishment, func(v: bool) -> void: _draft.punishment = v))
 	Style.row(_body, "공간 효과음 %", Style.number(_draft.object_volume * 100, 0, 100, 5, func(v: float) -> void: _draft.object_volume = v / 100))
 	if session.room.phase != RoomState.Phase.LOBBY:
 		_note.text = "경기 중 변경: 라운드 상한, 다음 턴부터 제한 시간, 다음 배부부터 특수 카드 확률. 나머지는 대기실에서 바꿔요."

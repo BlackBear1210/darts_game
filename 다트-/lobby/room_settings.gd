@@ -28,13 +28,15 @@ const DESCRIPTIONS: Array[String] = [
 @export var intoxication: float = 0.0
 @export var drink_on_deal: bool = false
 @export var props_enabled: bool = true
+## 경기가 끝나면 꼴찌를 과녁판에 묶고 나머지가 던지는 벌칙(2026-11-23). 끄면 바로 결과 화면으로 간다.
+@export var punishment: bool = true
 @export var hit_stun: float = 1.0
 @export var miss_cooldown: float = 2.0
 @export var object_volume: float = 0.6
 @export var card_weights: Dictionary = {}
 @export var disabled_cards: Array[String] = []
 
-const FIELDS: Array[String] = ["social_lobby", "solo", "capacity", "bot_count", "room_name", "private_room", "theme_id", "preset", "win_mode", "target_score", "rounds", "dart_seconds", "cards_enabled", "special_cards", "special_chance", "alcohol", "intoxication", "drink_on_deal", "props_enabled", "hit_stun", "miss_cooldown", "object_volume", "card_weights", "disabled_cards"]
+const FIELDS: Array[String] = ["social_lobby", "solo", "capacity", "bot_count", "room_name", "private_room", "theme_id", "preset", "win_mode", "target_score", "rounds", "dart_seconds", "cards_enabled", "special_cards", "special_chance", "alcohol", "intoxication", "drink_on_deal", "props_enabled", "punishment", "hit_stun", "miss_cooldown", "object_volume", "card_weights", "disabled_cards"]
 
 func _init() -> void:
 	for entry: Dictionary in Catalog.CARDS: card_weights[str(entry.id)] = 1.0

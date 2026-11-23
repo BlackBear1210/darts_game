@@ -18,6 +18,9 @@ const GLOW := 0.15
 const NUMBER_SCALE := 1.6
 ## 판에 붙은 다트 표시(판을 다시 그릴 때 지우지 않는다).
 const PINNED_META := "pinned_dart"
+## 경기 끝 벌칙으로 판에 묶인 꼴찌(2026-11-23). 판을 다시 그려도 지우지 않는다.
+const VICTIM_NAME := "StrappedVictim"
+const BoardVictim = preload("res://game/board/board_victim.gd")
 
 var layout := BoardLayout.new()
 ## 고정 점수 글자는 같은 타일의 외곽 숫자와 각도·방향을 공유하고 반경만 다르다.
@@ -87,7 +90,7 @@ func show_layout(data: BoardLayout) -> void:
 				if not part.has_meta(PINNED_META):
 					child.remove_child(part)
 					part.queue_free()
-		elif not child.has_meta(PINNED_META):
+		elif not child.has_meta(PINNED_META) and child.name != VICTIM_NAME:
 			_spin.remove_child(child)
 			child.queue_free()
 	BoardArt.build(_spin, layout.numbers, BoardLayout.RADIUS, GLOW, NUMBER_SCALE, _groups, layout.ring_scale)
@@ -97,6 +100,37 @@ func show_layout(data: BoardLayout) -> void:
 	_build_badges()
 	_show_values()
 	show_chaos(_shape)
+
+
+## 경기 끝 벌칙(2026-11-23 사용자 요청): 꼴찌를 판 앞면에 묶는다. Spin 의 자식이라 판이 돌면 함께 돈다.
+## 크기·자리는 board_victim.gd 가 정한다 — 방장의 명중 판정도 같은 치수를 본다.
+func strap_victim(model: Node3D) -> void:
+	release_victim()
+	model.name = VICTIM_NAME
+	model.position = BoardVictim.model_position()
+	model.scale = Vector3.ONE * BoardVictim.model_scale()
+	# 캐릭터 정면은 -Z → 던지는 쪽(판 앞면 +Z)을 보도록 돌린다.
+	model.rotation.y = PI
+	_spin.add_child(model)
+
+
+## 묶인 사람의 1인칭 눈(벌칙 카메라). 원점 = 눈 자리, basis.z = 판 앞면 방향(던지는 쪽), basis.y = 판과 함께 도는 위쪽.
+## 묶인 사람이 없으면 크기 0 인 Transform3D 를 돌려준다(부르는 쪽이 basis.y 로 판별한다).
+func victim_eye() -> Transform3D:
+	if _spin == null or _spin.get_node_or_null(VICTIM_NAME) == null:
+		return Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+	var axes := Basis(_spin.global_basis.x.normalized(), _spin.global_basis.y.normalized(), _spin.global_basis.z.normalized())
+	var local := Vector3(0.0, BoardVictim.HEAD_Y * BoardLayout.RADIUS, BoardVictim.EYE_FORWARD * BoardLayout.RADIUS)
+	return Transform3D(axes, _spin.to_global(local))
+
+
+func release_victim() -> void:
+	if _spin == null:
+		return
+	var strapped: Node = _spin.get_node_or_null(VICTIM_NAME)
+	if strapped != null:
+		_spin.remove_child(strapped)
+		strapped.queue_free()
 
 
 ## 아수라장 모양을 그림에 옮긴다(모든 화면에서 매 프레임). shape = BoardChaos.pose(...).

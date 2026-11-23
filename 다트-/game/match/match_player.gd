@@ -21,6 +21,8 @@ var speed_scale: float = 1.0
 var darts: int = 0
 ## 이번 라운드에 다트에 맞은 횟수. MatchController.DART_HITS_TO_FALL(2)번이면 쓰러진다(래그돌) → 0 으로 돌아간다.
 var dart_hits: int = 0
+## 경기 끝 벌칙에서 과녁판에 묶인 채 몸에 맞은 횟수(2026-11-23). 토큰이 이 수만큼 깎인다.
+var punish_hits: int = 0
 var pending_card: int = -1
 ## 꺼내 든 카드의 손패 번호(hand 의 몇 번째). -1 = 안 꺼냄. 같은 종류가 여러 장이어도 부채의 어느 카드인지 알려 준다.
 var pending_slot: int = -1
@@ -49,7 +51,7 @@ func to_snapshot() -> Dictionary:
 	return {"peer_id": peer_id, "name": display_name, "seat": seat, "score": score, "bot": is_bot,
 		"numbers": layout.numbers, "board_values": layout.to_snapshot(), "bonus": bonus, "multiplier": multiplier, "hand": hand,
 		"speed_scale": speed_scale, "pending_card": pending_card, "pending_slot": pending_slot, "card_effects": card_effects,
-		"darts": darts, "dart_hits": dart_hits}
+		"darts": darts, "dart_hits": dart_hits, "punish_hits": punish_hits}
 
 
 static func from_snapshot(data: Dictionary) -> MatchPlayer:
@@ -70,4 +72,5 @@ static func from_snapshot(data: Dictionary) -> MatchPlayer:
 	player.card_effects = data.get("card_effects", {})
 	player.darts = int(data.get("darts", 0))
 	player.dart_hits = int(data.get("dart_hits", 0))
+	player.punish_hits = int(data.get("punish_hits", 0))
 	return player

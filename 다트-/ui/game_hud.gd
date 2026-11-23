@@ -4,6 +4,7 @@ extends CanvasLayer
 ## 카드 목록(이름·분류)은 카드 라운드 시연의 것을 그대로 쓴다 — 카드 정의는 한 곳만 유지한다.
 const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 
 signal leave_requested
 signal lobby_requested
@@ -189,6 +190,13 @@ func _process(_delta: float) -> void:
 		# 몸으로 막기(2026-11-02): 레인 옆벽의 틈 안에 서 있다 → 날아오는 다트를 몸으로 가로막을 수 있다.
 		seat_text = "몸으로 막는 중 — 맞으면 잠깐 못 움직이지만 방해 성공 보상"
 	var can_throw: bool = state.phase == MatchState.Phase.AIMING and state.active_player() != null and state.active_player().peer_id == id
+	# 벌칙(2026-11-23): 꼴찌는 과녁판에 묶여 아무것도 못 하고, 나머지는 돌아가는 그 판을 맞힌다.
+	if state.punish_target != 0 and state.phase in MatchController.DART_PHASES:
+		var tied: MatchPlayer = state.find_player(state.punish_target)
+		if state.punish_target == id:
+			seat_text = "벌칙 · 과녁판에 묶였어요 — A · D 로 판 돌리는 방향 바꾸기 · 한 대 맞을 때마다 토큰 −%d" % PlayerWallet.PUNISH_COST
+		else:
+			seat_text = "벌칙 · %s 가 과녁판에 묶여 돌고 있어요" % (tied.display_name if tied != null else "꼴찌")
 	var throw_status: String = "투척 가능: 왼쪽 버튼을 누르고 놓으세요"
 	if state.phase == MatchState.Phase.FINISHED:
 		throw_status = "경기 종료"
@@ -234,17 +242,18 @@ func _process(_delta: float) -> void:
 	_update_bot_view()
 
 
+## 결과 화면 순위 줄. 순위는 MatchState.ranking 한 곳에서만 세고, 토큰은 그 순위로 계산한다(app/player_wallet.gd).
 func ranking_text() -> String:
-	var players: Array[MatchPlayer] = controller.state.players.duplicate()
-	players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.score > b.score)
+	var state := controller.state
 	var lines := PackedStringArray()
-	var rank: int = 0
-	var previous: int = -1
-	for index in range(players.size()):
-		if players[index].score != previous:
-			rank = index + 1
-		previous = players[index].score
-		lines.append("%d위  %s  %.1f점" % [rank, players[index].display_name, players[index].score])
+	for row: Dictionary in state.ranking():
+		var player: MatchPlayer = row.player
+		var punished: bool = player.peer_id == state.punish_target
+		var tokens: int = PlayerWallet.match_reward(int(row.rank), punished, player.punish_hits)
+		var tail: String = "벌칙 %d대 · 토큰 %+d" % [player.punish_hits, tokens] if punished else "토큰 %+d" % tokens
+		lines.append("%d위  %s  %.1f점  ·  %s" % [int(row.rank), player.display_name, player.score, tail])
+	lines.append("")
+	lines.append("내 토큰 %d개 (이번 판 %+d)" % [PlayerWallet.tokens, game.token_change])
 	return "\n".join(lines)
 
 

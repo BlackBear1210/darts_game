@@ -15,6 +15,7 @@ const ScoreList = preload("res://ui/score_list.gd")
 const KillFeed = preload("res://ui/kill_feed.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 const Preferences = preload("res://ui/player_preferences.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 const VoiceChat = preload("res://network/voice_chat.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
@@ -61,6 +62,8 @@ var _pending_since: float = 0.0
 var _charge: ProgressBar
 var _result: PanelContainer
 var _result_rows: VBoxContainer
+## 결과 패널의 토큰 줄(2026-11-23).
+var _result_tokens: Label
 var _result_buttons: HBoxContainer
 var _result_key: String = ""
 var _overlay: Control
@@ -224,6 +227,9 @@ func _build_result() -> void:
 	_result_rows = VBoxContainer.new()
 	_result_rows.add_theme_constant_override("separation", 8)
 	column.add_child(_result_rows)
+	# 토큰 정산(2026-11-23). 순위 줄 아래에 내 잔액과 이번 판 변화를 적는다.
+	_result_tokens = Style.heading(column, "", 24, Style.GOLD)
+	_result_tokens.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_result_buttons = HBoxContainer.new()
 	_result_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_result_buttons.add_theme_constant_override("separation", 14)
@@ -530,6 +536,9 @@ func _update_prompt() -> void:
 	var stunned: bool = game.lounge != null and game.lounge.is_stunned(game.controller.local_peer_id)
 	if stunned:
 		pairs = [["✦", "잠깐 어질어질…"]]
+	# 벌칙으로 과녁판에 묶인 동안에는 A·D 가 판을 돌리는 방향이다(2026-11-23).
+	if game.strapped_id == game.controller.local_peer_id:
+		pairs = [["A / D", "판 돌리는 방향 바꾸기"], ["✦", "맞을 때마다 토큰 −%d" % PlayerWallet.PUNISH_COST]]
 	# 행동 후보는 실행 가능한 순서다. 충전 중에는 고정 문구와 충전 막대만 갱신한다.
 	if game.throw_input.charging and not stunned:
 		pairs = [["놓기", "다트 발사"], ["우클릭", "취소"]]
@@ -574,11 +583,13 @@ func _update_ready(room: RoomState, waiting: bool) -> void:
 
 
 func _update_result() -> void:
-	var players: Array[MatchPlayer] = game.controller.state.players.duplicate()
+	var state: MatchState = game.controller.state
+	var players: Array[MatchPlayer] = state.players.duplicate()
 	var countdown: bool = game.controller.room_settings.win_mode == 2
 	players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.score < b.score if countdown else a.score > b.score)
 	var key := PackedStringArray()
-	for player in players: key.append("%s|%.1f" % [player.display_name, player.score])
+	for player in players: key.append("%s|%.1f|%d" % [player.display_name, player.score, player.punish_hits])
+	key.append("%d|%d" % [PlayerWallet.tokens, game.token_change])
 	var joined := ",".join(key)
 	if joined == _result_key: return
 	_result_key = joined
@@ -587,7 +598,19 @@ func _update_result() -> void:
 	var rank: int = 1
 	for index in range(players.size()):
 		if index > 0 and players[index].score != players[index - 1].score: rank = index + 1
-		_result_rows.add_child(ScoreList.row(players[index], rank == 1, players[index].peer_id == game.controller.local_peer_id, "%d위" % rank, 44.0))
+		var player: MatchPlayer = players[index]
+		var line: HBoxContainer = ScoreList.row(player, rank == 1, player.peer_id == game.controller.local_peer_id, "%d위" % rank, 44.0)
+		# 토큰(2026-11-23): 점수 오른쪽에 이번 판 변화. 벌칙에 묶였던 사람은 맞은 횟수도 같이 적는다.
+		var punished: bool = player.peer_id == state.punish_target
+		var change: int = PlayerWallet.match_reward(rank, punished, player.punish_hits)
+		var text: String = "%+d토큰" % change
+		if punished:
+			text = "벌칙 %d대  %+d토큰" % [player.punish_hits, change]
+		var tag := Style.hud_label(line, text, 19, Style.PINK if change < 0 else Style.MINT)
+		tag.custom_minimum_size.x = 150
+		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_result_rows.add_child(line)
+	_result_tokens.text = "내 토큰 %d개  (이번 판 %+d)" % [PlayerWallet.tokens, game.token_change]
 
 
 # ─────────────────────────────── 장난 효과 덮개 ───────────────────────────────

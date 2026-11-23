@@ -114,6 +114,13 @@ static func rest() -> Dictionary:
 	return pose(-1.0, 1.0, -1.0, -1.0)
 
 
+## 각도만 정해진 제자리 모양. 경기 끝 벌칙은 카드 효과 없이 판만 돌린다(각도는 방장이 적분해서 보낸다).
+static func spun(angle: float) -> Dictionary:
+	var shape := rest()
+	shape["angle"] = angle
+	return shape
+
+
 ## 회전각. 속도를 SPIN_RAMP 동안 0 → SPIN_SPEED 로 올린 것의 적분이라 시작할 때 덜컥 튀지 않는다.
 static func spin_angle(age: float, direction: float) -> float:
 	if age <= 0.0:

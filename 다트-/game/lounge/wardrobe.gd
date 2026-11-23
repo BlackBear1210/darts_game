@@ -23,6 +23,7 @@ signal closed(look: Dictionary)
 
 const Style = preload("res://ui/lounge_style.gd")
 const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
 const MeshKit = preload("res://art/mesh_kit.gd")
 const RoundKit = preload("res://art/pub/round_kit.gd")
@@ -72,6 +73,15 @@ var _dragging: bool = false
 ## 칸마다 지금 고른 이름 글자(칸 제목 옆) · 카드 버튼들(칸 → [카드...], 번호 순서).
 var _values: Dictionary = {}
 var _cards: Dictionary = {}
+## 토큰 잔액 글자와 안내 한 줄(2026-11-23 라커룸 구매).
+var _tokens_label: Label
+var _note: Label
+## 사려고 고른 잠긴 물건({"key": 칸, "index": 번호}). 비었으면 구매 줄이 숨는다.
+## 잠긴 카드는 **누른다고 바로 사지 않는다** — 아래 "토큰으로 사기" 버튼을 눌러야 산다(2026-11-24 사용자 요청).
+var _buying: Dictionary = {}
+var _buy_bar: HBoxContainer
+var _buy_label: Label
+var _buy_button: Button
 var _fade: ColorRect
 var _fade_to: float = 0.0
 var _closing: bool = false
@@ -258,6 +268,10 @@ func _build_panel() -> void:
 	panel.add_child(column)
 	Style.heading(column, "꾸미기 방", 34)
 	Style.label(column, "고른 차림은 모두에게 보여요 · 점수·판정은 그대로", 15, Style.MUTED)
+	# 토큰(2026-11-23): 경기 순위로 벌고 여기서 쓴다. 잠긴 물건은 값이 적혀 있고, 누르면 산다.
+	_tokens_label = Style.label(column, "", 19, Style.GOLD)
+	_note = Style.label(column, "잠긴 물건을 누르면 토큰으로 사요 · 1등 +10 · 2등 +5 · 꼴찌는 벌칙에서 맞은 만큼 −", 14, Style.MUTED)
+	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	# 칸이 많아 창이 낮으면 넘친다 → 카드 목록만 위아래로 굴린다(제목·버튼은 늘 보인다).
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -285,6 +299,19 @@ func _build_panel() -> void:
 		for index in range(names.size()):
 			cards.append(_card(flow, key, index, str(names[index])))
 		_cards[key] = cards
+	# 구매 줄(2026-11-24): 잠긴 물건을 고르면 여기 이름·값이 뜨고, 버튼을 눌러야 산다.
+	_buy_bar = HBoxContainer.new()
+	_buy_bar.add_theme_constant_override("separation", 12)
+	_buy_bar.visible = false
+	column.add_child(_buy_bar)
+	_buy_label = Style.label(_buy_bar, "", 19, Style.CREAM)
+	_buy_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_buy_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# 글자가 길어도 패널을 넓히지 않는다(넓어지면 오른쪽이 화면 밖으로 밀린다).
+	_buy_label.clip_text = true
+	_buy_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_buy_button = Style.button(_buy_bar, "토큰으로 사기", _buy_selected)
+	_buy_button.custom_minimum_size.x = 160
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 12)
 	column.add_child(buttons)
@@ -337,12 +364,40 @@ func _card(parent: Control, key: String, index: int, title: String) -> Button:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.clip_text = true
+	# 잠긴 물건은 이름 대신 값을 보인다(_refresh_values 가 매번 고쳐 쓴다).
+	card.set_meta("title", title)
+	card.set_meta("label", label)
 	return card
 
 
 func _pick(key: String, index: int) -> void:
 	if _closing:
 		return
+	# 잠긴 물건은 고르기만 한다 — 아래 "토큰으로 사기" 를 눌러야 산다(실수로 토큰이 빠지지 않게).
+	if not PlayerWallet.owns(key, index):
+		_buying = {"key": key, "index": index}
+		_refresh_values()
+		return
+	_buying.clear()
+	look[key] = index
+	look = PlayerOutfit.sanitize(look)
+	_refresh_values()
+	_dress_model()
+
+
+## 구매 줄의 버튼: 고른 잠긴 물건을 사고 바로 입는다. 토큰이 모자라면 버튼이 눌리지 않는다.
+func _buy_selected() -> void:
+	if _closing or _buying.is_empty():
+		return
+	var key: String = str(_buying.key)
+	var index: int = int(_buying.index)
+	var cost: int = PlayerWallet.price(key, index)
+	if not PlayerWallet.buy(key, index):
+		_note.text = "토큰이 모자라요 — %s 는 %d개, 지금 %d개" % [PlayerOutfit.choice_name(key, index), cost, PlayerWallet.tokens]
+		_refresh_values()
+		return
+	_note.text = "%s 샀어요 · 토큰 −%d" % [PlayerOutfit.choice_name(key, index), cost]
+	_buying.clear()
 	look[key] = index
 	look = PlayerOutfit.sanitize(look)
 	_refresh_values()
@@ -358,21 +413,52 @@ func _step(key: String, direction: int) -> void:
 
 func _reset() -> void:
 	look = _entered_look.duplicate()
+	_buying.clear()
 	_refresh_values()
 	_dress_model()
 
 
 ## 칸 제목 옆 이름 + 고른 카드만 금테로.
 func _refresh_values() -> void:
+	if _tokens_label != null:
+		_tokens_label.text = "토큰 %d개" % PlayerWallet.tokens
+	_refresh_buy_bar()
 	for key: String in _values:
 		var chosen: int = int(look.get(key, 0))
 		(_values[key] as Label).text = PlayerOutfit.choice_name(key, chosen)
 		var cards: Array = _cards.get(key, [])
 		for index in range(cards.size()):
-			_style_card(cards[index] as Button, index == chosen)
+			var card := cards[index] as Button
+			var owned: bool = PlayerWallet.owns(key, index)
+			var label := card.get_meta("label") as Label
+			var title: String = str(card.get_meta("title"))
+			label.text = title if owned else "🔒 %d" % PlayerWallet.price(key, index)
+			label.add_theme_color_override("font_color", Style.CREAM if owned else Style.GOLD)
+			card.tooltip_text = title if owned else "%s · %d토큰 — 아래 '토큰으로 사기'" % [title, PlayerWallet.price(key, index)]
+			var picked: bool = (index == chosen and owned) or (not _buying.is_empty() and str(_buying.key) == key and int(_buying.index) == index)
+			_style_card(card, picked, owned)
 
 
-func _style_card(card: Button, chosen: bool) -> void:
+## 구매 줄: 고른 잠긴 물건의 이름·값과 살 수 있는지.
+func _refresh_buy_bar() -> void:
+	if _buy_bar == null:
+		return
+	_buy_bar.visible = not _buying.is_empty()
+	if _buying.is_empty():
+		return
+	var key: String = str(_buying.key)
+	var index: int = int(_buying.index)
+	var cost: int = PlayerWallet.price(key, index)
+	var enough: bool = PlayerWallet.tokens >= cost
+	_buy_label.text = "%s  ·  %d토큰" % [PlayerOutfit.choice_name(key, index), cost] if enough 		else "%s  ·  %d토큰 (%d개 부족)" % [PlayerOutfit.choice_name(key, index), cost, cost - PlayerWallet.tokens]
+	_buy_label.add_theme_color_override("font_color", Style.CREAM if enough else Style.PINK)
+	_buy_button.disabled = not enough
+	_buy_button.text = "토큰으로 사기" if enough else "토큰 부족"
+
+
+## chosen = 지금 입은 것(금테) · owned = 이미 산 것. 잠긴 카드는 흐리게 보이고 값이 적힌다.
+func _style_card(card: Button, chosen: bool, owned: bool = true) -> void:
+	card.modulate.a = 1.0 if owned else 0.62
 	var edge: Color = Style.GOLD if chosen else Color(Style.MUTED, 0.35)
 	var fill: Color = Color(Style.GOLD, 0.16) if chosen else Color(Style.PANEL_HI, 0.9)
 	var normal := Style.flat(fill, edge, 3 if chosen else 2, 10, 0)

@@ -37,6 +37,9 @@ RPC는 이 지속 노드에서만 수신하고, Game/MatchController는 로컬 s
 F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `PlayerPreferences`는 개인 표시·음향 설정이다. `Main`은 `social_lobby` 방에 연결되는 즉시 `Game`과 `LoungeHUD`를 만들고, 방 단계 LOBBY인 동안 `MatchController`는 WAITING이다. 실제 착석 여부를 확인한 준비가 모두 모이면 기존 LOADING 장벽을 거쳐 경기를 시작한다. 재경기는 맵 대기와 준비 초기화로 돌아간다. Main의 `_lounge_memory`가 경기 장면 재생성 사이의 소품·음악·취기를 이어 준다.
 
 - `lobby/front_door.gd`, `ui/lounge_style.gd`, `ui/dart_cursor.gd`: 새 로비와 공용 UI, 다트 커서. 연결은 NetworkSession으로 위임한다.
+- `game/board/board_victim.gd`: 경기 끝 벌칙으로 과녁판에 묶인 꼴찌의 몸 치수와 명중 판정(정규화 과녁 좌표). 방장의 판정과 각 화면의 그림이 같이 쓴다.
+- `app/player_wallet.gd`: 토큰 지갑(순위 보상·꾸미기 물건 값·산 물건). `user://player_wallet.cfg` 에 이 기계만의 값으로 저장한다.
+- `lobby/lobby_backdrop.gd`: 타이틀 뒤 3D 펍. 따로 된 World3D(SubViewport)에 경기와 같은 `game/table/table.tscn` 을 띄운다. 타이틀이 1초 넘게 가려지면(경기 중) SubViewport 를 통째로 놓아주고, 돌아오면 붙잡아 둔 PackedScene 으로 다시 짓는다 — 그래서 `_table` 등은 null 일 수 있고 `is_built()` 로 확인한다.
 - `lobby/room_settings.gd`: 공개 설정 Resource. 비밀번호·개발자 권한은 포함하지 않는다. sanitize/허용 카드 풀/상대 가중치가 여기 있다.
 - `network/network_session.gd`: 초대/암호 도전 응답, 정원, 설정 발신자 검증, 준비와 자동 시작. 개발자 값은 local server host+debug 개발 플래그 조건을 별도로 확인한다.
 - `ui/settings_panel.gd`, `player_preferences.gd`: ESC 개인 설정과 모니터 방장/개발자 설정. 개인 설정은 ConfigFile, 공유 설정은 server 승인만 사용한다.

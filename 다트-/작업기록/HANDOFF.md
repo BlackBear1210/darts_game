@@ -1,3 +1,47 @@
+# 2026-11-24 인수인계 — 벌칙 회전 조종 · 토큰 표시
+
+- **결과 창은 두 개다.** 타이틀 화면에서 만든 방은 늘 `social_lobby = true` 이므로 실제로 보이는 것은
+  `ui/lounge_hud.gd` `_update_result()` 다. `ui/game_hud.gd ranking_text()` 는 사교 방이 아닌 경로용이다.
+  **결과 화면에 무언가를 더할 때는 두 곳 다 고칠 것.**
+- **벌칙 회전각은 공식이 아니라 상태다.** `MatchState.punish_angle`·`punish_spin`·`punish_dir` 을 방장이 적분해 보내고
+  방장·손님이 `MatchController._tick_punish_spin` 으로 같이 굴린다. 방향이 바뀌면 `_publish()` 로 다시 맞춘다.
+  과녁 모양이 필요하면 `BoardChaos.from_ages(...)` 가 아니라 **`controller.chaos_shape()` / `shape_at(elapsed)`** 를 쓸 것.
+- **묶인 사람 몸통이 판 한가운데를 지나므로 정중앙(불)은 각도와 상관없이 맞는다.** 피할 수 있게 하려면
+  `game/board/board_victim.gd` 의 `BODY_HALF_X`·`FEET_Y` 를 줄여 가운데를 비워야 한다.
+- **라커룸 구매는 두 단계다**: 잠긴 카드 누르기(`_buying` 에 담김) → 아래 "토큰으로 사기" 버튼. 카드만 눌러서는 사지 않는다.
+
+---
+
+# 최신 인수인계 — 꼴찌 벌칙 · 토큰 (2026-11-23)
+
+- 상세: `작업기록/2026-11-23_꼴찌벌칙_토큰_라커룸.md`.
+- **벌칙은 새 Phase 가 아니다.** `MatchState.punish_target != 0` 이면 벌칙이고, 단계는 그대로 AIMING/FLIGHT/SETTLING 이다.
+  벌칙이 **진행 중**인지는 `punish_target != 0 and phase in MatchController.DART_PHASES` 로 본다
+  (FINISHED 뒤에도 `punish_target` 은 남는다 — 결과 화면이 누가 묶였는지 읽는다).
+- **묶인 몸 치수는 `game/board/board_victim.gd` 한 곳**이다. 방장 판정과 화면 그림이 같이 쓰므로 한쪽만 고치지 말 것.
+- **벌칙 회전은 카드가 아니라 `MatchController.board_ages()`** 가 소유한다. 과녁 모양이 필요하면
+  `cards.shape_now(...)` 대신 **`controller.shape_at(elapsed)`** 를 부를 것(벌칙 회전이 빠진다).
+- **토큰 규칙은 `app/player_wallet.gd match_reward()` 한 곳.** 결과 화면·실제 지급이 같은 함수를 쓴다.
+  토큰은 스냅샷으로 주고받지 않는다 — 각 화면이 같은 순위·맞은 횟수로 각자 계산한다.
+- **꾸미기 물건 값표도 지갑에 있다.** `art/characters/player_outfit.gd` SLOTS 에 물건을 더하면
+  `PlayerWallet.PRICES` 의 같은 칸에도 값을 **맨 뒤에** 더할 것 — `tests/test_punishment.gd` 가 길이를 검사한다.
+- 아직 없는 것: 꼴찌가 회전을 조종하는 2단계, 꼴찌 전용 카메라, 계정 서버에 토큰 올리기.
+
+---
+
+# 2026-11-23 · 로비 배경 놓아주기
+
+- 상세: `작업기록/2026-11-23_로비배경_놓아주기.md`.
+- **타이틀 뒤 펍은 경기 중에 살아 있지 않다.** `lobby/lobby_backdrop.gd` 가 타이틀이 `RELEASE_AFTER`(1초) 넘게 가려지면 `_release()` 로 SubViewport 를 통째로 지운다.
+  - 그래서 `_table`·`_camera`·`_viewport`·`_thrower`·`_rig` 는 **null 일 수 있다.** 이 노드들을 밖에서 쓸 때는 `is_built()` 로 먼저 확인한다.
+  - 돌아오면 `_process` 가 붙잡아 둔 `_packed` 으로 다시 짓는다. 펍 파일(`TABLE_PATH`)은 처음 한 번만 읽는다.
+  - 로비 연습 다트는 놓아줄 때 함께 사라진다(의도된 동작 — 경기 뒤 돌아오면 깨끗한 과녁).
+- **이 게임은 GPU 가 아니라 CPU·장면 복잡도에 묶여 있다.** 1인칭에서 해상도를 65% 로 낮춰도 안 빨라졌다.
+  최적화를 할 때 해상도·후처리를 건드리지 말고 **노드 수와 그림자 던지는 메시**를 줄일 것.
+- 아직 손대지 않은 것: 그림자 던지는 메시 2,104개 대 그림자 조명 2개 · 묶기로 숨긴 원본 473~568개가 트리에 남음 · "그래픽 품질 · 가벼움" 이 효과 없음.
+
+---
+
 # 최신 인수인계 — 경기 HUD 판 제거 · 카드 칸 흰 선 (2026-11-22 밤)
 
 - 상세: `작업기록/2026-11-22_HUD배경제거_카드칸흰선.md`.

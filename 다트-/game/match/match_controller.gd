@@ -64,6 +64,15 @@ const REDRAW_LIMIT: int = 12
 var _nullify_dealt: bool = false
 ## 몸으로 막은 사람이 못 움직이는 시간(초). F6 카드 라운드 시연(Disruption.STUN_SECONDS)과 같은 시연값이다.
 const BODY_STUN_SECONDS: float = 3.0
+## 경기 끝 벌칙(2026-11-23 사용자 요청): 꼴찌를 돌아가는 점수 과녁판에 묶고 나머지가 던진다.
+## 인원이 몇이든 전체 발수를 이만큼 안팎으로 맞춘다 → 벌칙 길이가 늘 비슷하다(한 사람 최소 2발).
+const PUNISH_TOTAL_DARTS: int = 6
+## 벌칙 회전(라디안/초)과 방향을 바꿀 때의 가속(라디안/초²).
+## 가속이 있어서 **방향을 홱 뒤집지 못한다** — 반대로 돌아서는 데 1초가 걸린다(다트가 날아오는 시간보다 길다).
+const PUNISH_SPIN_SPEED: float = 1.1
+const PUNISH_SPIN_ACCEL: float = 2.2
+const BoardVictim = preload("res://game/board/board_victim.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 ## 다트에 이만큼 맞으면 쓰러진다(줄 끊긴 인형). 횟수는 라운드마다 0 으로 돌아간다(2026-11-15 사용자 요청 "2번 맞으면").
 const DART_HITS_TO_FALL: int = 2
 ## 그냥 던진 다트에 맞았을 때 잠깐 움찔하는 시간(초). 몸으로 막기(BODY_STUN_SECONDS)보다 짧다.
@@ -166,6 +175,8 @@ func _receive_action(sender: int, action: String, payload: Array) -> void:
 		if cards != null: cards.action(sender, payload[1], payload[2])
 	if action == "restart" and payload.is_empty() and sender == session.room.host_peer_id:
 		restart()
+	if action == "punish_spin" and payload.size() == 2 and payload[0] == state.match_id and payload[1] is int:
+		_accept_punish_spin(sender, payload[1])
 	if action == "throw" and payload.size() == 5:
 		if payload[0] is int and payload[1] is int and payload[2] is int and payload[3] is Vector2 and (payload[4] is float or payload[4] is int):
 			_accept_throw(sender, payload[0], payload[1], payload[2], payload[3], payload[4])
@@ -400,7 +411,7 @@ func _bounce(first: Dictionary, peer_id: int, index: int, pierce: bool, arrival:
 	second["shutter_hit"] = false
 	var final_age := arrival + (0.0 if state.phase == MatchState.Phase.FLIGHT else RUBBER_SECONDS)
 	if not _shutter_stops(second, pierce, final_age):
-		var shape: Dictionary = cards.shape_now(final_age) if cards != null else BoardChaos.rest()
+		var shape: Dictionary = shape_at(final_age)
 		shape.cover = false
 		if BoardChaos.on_infill(landing, shape) and not BoardChaos.locate(landing, shape, BoardView.BoardArt.BACKING_RATIO).is_finite():
 			second.target = Vector3(second.target) + Vector3.BACK * BoardChaos.INFILL_FRONT
@@ -430,7 +441,7 @@ func _bounce(first: Dictionary, peer_id: int, index: int, pierce: bool, arrival:
 
 
 func _shutter_stops(flight: Dictionary, pierce: bool, arrival: float) -> bool:
-	var shape: Dictionary = cards.shape_now(arrival) if cards != null else BoardChaos.rest()
+	var shape: Dictionary = shape_at(arrival)
 	var stopped := not pierce and BoardChaos.covered(Vector2(flight.x, flight.y), shape)
 	flight["shutter_hit"] = stopped
 	if stopped:
@@ -462,7 +473,9 @@ func _play_redirect(data: Dictionary) -> void:
 		dart_redirected.emit(data)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if state.punish_target != 0 and state.phase in DART_PHASES:
+		_tick_punish_spin(delta)
 	if not multiplayer.is_server():
 		return
 	match state.phase:
@@ -543,14 +556,15 @@ func _deal_single_nullify() -> void:
 
 
 func _begin_turn() -> void:
-	if cards != null: cards.begin_dart_turn()
+	var punishing: bool = state.punish_target != 0
+	if cards != null and not punishing: cards.begin_dart_turn()
 	state.turn_id += 1
 	# 이번 차례의 발수 = 이 사람이 라운드 시작 때 받은 다트 중 아직 남은 것(차례 밖에서 던져 버렸으면 그만큼 적다).
 	var thrower: MatchPlayer = state.active_player()
 	state.darts_left = thrower.darts if thrower != null else 0
 	_pending_hit.clear()
 	_turn_end = _now() + config.turn_seconds
-	if thrower != null and cards != null and cards.actions.take_skip(thrower.peer_id):
+	if thrower != null and cards != null and not punishing and cards.actions.take_skip(thrower.peer_id):
 		# 점프 카드(2026-11-21): 이 사람의 이번 차례는 통째로 건너뛴다(다트는 남는다 — 그냥 던지기에는 쓸 수 있다).
 		state.darts_left = 0
 		state.last_hit = {"peer_id": thrower.peer_id, "points": 0, "reason": "점프 카드 · 차례 건너뜀", "request_id": -state.turn_id}
@@ -578,6 +592,9 @@ func _timeout_turn() -> void:
 func _land_dart() -> void:
 	if state.phase != MatchState.Phase.FLIGHT or _pending_hit.is_empty():
 		return
+	if state.punish_target != 0:
+		_land_punish_dart()
+		return
 	var won: bool = false
 	# 몸에 맞은 발은 "○○ 몸에 맞음!" 이라고 적힌 채로 둔다(점수 식으로 덮지 않는다).
 	var victims: Array[int] = []
@@ -602,7 +619,7 @@ func _land_dart() -> void:
 	else:
 		add_feed(feed_entry("dart", state.active_player(), str(state.last_hit.reason)))
 	if won:
-		_set_phase(MatchState.Phase.FINISHED, 0)
+		_begin_punish()
 		return
 	if state.darts_left > 0 and _now() < _turn_end:
 		_set_phase(MatchState.Phase.AIMING, _turn_end - _now())
@@ -627,6 +644,9 @@ func _body_blocked(victim_id: int) -> void:
 
 
 func _advance_turn() -> void:
+	if state.punish_target != 0:
+		_advance_punish()
+		return
 	if cards != null: cards.end_dart_turn()
 	if cards != null and state.active_player() != null and cards.take_retry(state.active_player().peer_id):
 		# 재도전 카드: 바로 이어서 한 차례 더 → 그 차례에 던질 다트를 새로 준다.
@@ -639,12 +659,117 @@ func _advance_turn() -> void:
 		# 차례 바꾸기 카드로 섞인 순서는 라운드가 끝나면 자리 순서로 돌아간다.
 		state.players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
 		if state.round_number >= config.rounds:
-			_set_phase(MatchState.Phase.FINISHED, 0)
+			_begin_punish()
 			return
 		state.round_number += 1
 		_begin_table()
 		return
 	_begin_turn()
+
+
+## 경기 끝 벌칙 시작(2026-11-23 사용자 요청). 꼴찌를 점수 과녁판에 묶고 판을 돌린다 → 나머지가 거기에 던진다.
+## 벌칙을 끈 방·혼자 하는 방은 그냥 끝낸다. 다트 단계를 그대로 쓰므로 차례·시간 제한·봇 투척이 평소와 같다.
+func _begin_punish() -> void:
+	var loser: MatchPlayer = _punish_loser()
+	if not room_settings.punishment or loser == null or state.players.size() < 2:
+		_set_phase(MatchState.Phase.FINISHED, 0)
+		return
+	state.punish_target = loser.peer_id
+	state.punish_angle = 0.0
+	state.punish_spin = 0.0
+	state.punish_dir = 1
+	var throwers: int = state.players.size() - 1
+	var each: int = maxi(2, ceili(float(PUNISH_TOTAL_DARTS) / float(throwers)))
+	for player in state.players:
+		player.clear_effects()
+		player.hand.clear()
+		player.pending_card = -1
+		player.pending_slot = -1
+		player.punish_hits = 0
+		player.speed_scale = 1.0
+		player.darts = 0 if player.peer_id == loser.peer_id else each
+	notice = "벌칙 · 꼴찌 %s 과녁판에 묶였다 — 한 사람 %d발 · 맞을 때마다 토큰 −%d (꼴찌는 A·D 로 판을 돌린다)" % [loser.display_name, each, PlayerWallet.PUNISH_COST]
+	add_feed(feed_entry("dizzy", loser, "꼴찌 · 과녁판에 묶였다"))
+	state.turn_index = -1
+	_advance_punish()
+
+
+## 벌칙 회전을 한 프레임 굴린다. 방장과 손님이 같은 식으로 굴리고, 방장이 보내는 스냅샷이 틈틈이 다시 맞춘다.
+## 가속이 있어서 묶인 사람이 방향을 바꿔도 곧바로 뒤집히지 않는다(다트가 날아오는 동안 홱 피하지 못하게).
+func _tick_punish_spin(delta: float) -> void:
+	state.punish_spin = move_toward(state.punish_spin, float(state.punish_dir) * PUNISH_SPIN_SPEED, PUNISH_SPIN_ACCEL * delta)
+	state.punish_angle += state.punish_spin * delta
+
+
+## 묶인 사람이 판을 돌릴 방향을 바꾼다(-1 = 왼쪽 · 1 = 오른쪽). 손님은 방장에게 부탁한다.
+func request_punish_spin(direction: int) -> void:
+	if multiplayer.is_server() or session == null:
+		_accept_punish_spin(local_peer_id, direction)
+	else:
+		session.request_game_action.rpc_id(1, "punish_spin", [state.match_id, direction])
+
+
+## 방장만: 지금 과녁판에 묶여 있는 사람이 보낸 방향만 받는다.
+func _accept_punish_spin(sender: int, direction: int) -> void:
+	if not multiplayer.is_server() or state.punish_target == 0 or sender != state.punish_target or direction == 0:
+		return
+	var want: int = 1 if direction > 0 else -1
+	if want == state.punish_dir:
+		return
+	state.punish_dir = want
+	_publish()
+
+
+## 벌칙 대상 = 점수가 가장 낮은 사람. 동점이면 자리 순서상 뒤쪽(F6 RoundRules.loser 와 같은 규칙).
+func _punish_loser() -> MatchPlayer:
+	var rows: Array[Dictionary] = state.ranking()
+	return rows[rows.size() - 1].player if not rows.is_empty() else null
+
+
+## 벌칙 차례 넘기기: 묶인 꼴찌는 건너뛰고, 한 바퀴를 다 돌면 경기를 끝낸다.
+func _advance_punish() -> void:
+	state.turn_index += 1
+	while state.turn_index < state.players.size() and state.players[state.turn_index].peer_id == state.punish_target:
+		state.turn_index += 1
+	if state.turn_index >= state.players.size():
+		state.turn_index = 0
+		var victim: MatchPlayer = state.find_player(state.punish_target)
+		if victim != null:
+			notice = "벌칙 끝 · %s 가 %d대 맞았다 (토큰 %+d)" % [victim.display_name, victim.punish_hits,
+				PlayerWallet.match_reward(0, true, victim.punish_hits)]
+		_set_phase(MatchState.Phase.FINISHED, 0)
+		return
+	_begin_turn()
+
+
+## 벌칙 한 발. 점수는 없다 — 돌아가는 판 위의 몸에 맞았는지만 센다.
+## 판정은 회전을 되돌린 자리(BoardChaos.locate)로 한다 → 몸은 판과 함께 돌지만 치수는 고정이다.
+func _land_punish_dart() -> void:
+	var victim: MatchPlayer = state.find_player(state.punish_target)
+	var thrower: MatchPlayer = state.active_player()
+	var shape: Dictionary = BoardChaos.spun(state.punish_angle)
+	var struck: bool = false
+	for flight: Dictionary in _pending_hit.get("flights", [_pending_hit]):
+		if bool(flight.get("shutter_hit", false)) or bool(flight.get("infill_hit", false)):
+			continue
+		var aim := Vector2(float(flight.x), float(flight.y))
+		if BoardVictim.hit(BoardChaos.locate(aim, shape, BoardView.BoardArt.BACKING_RATIO)):
+			struck = true
+	_pending_hit.points = 0
+	if struck and victim != null:
+		victim.punish_hits += 1
+		_pending_hit.reason = "%s 명중! 토큰 −%d" % [victim.display_name, PlayerWallet.PUNISH_COST]
+		if thrower != null:
+			add_feed(feed_entry("dizzy", thrower, "벌칙 명중", victim))
+	else:
+		_pending_hit.reason = "벌칙 · 빗나감"
+	state.last_hit = _pending_hit.duplicate()
+	_pending_hit.clear()
+	if state.darts_left > 0 and _now() < _turn_end:
+		_set_phase(MatchState.Phase.AIMING, _turn_end - _now())
+	else:
+		state.darts_left = 0
+		_set_phase(MatchState.Phase.SETTLING, config.settle_seconds)
 
 
 ## 라운드 사이 테이블 집합. 지난 라운드의 슬로우는 여기서 풀어, 자리로 걸어올 때는 정상 속도다.
@@ -846,7 +971,12 @@ func restart() -> void:
 	for player in state.players:
 		player.score = 0
 		player.speed_scale = 1.0
+		player.punish_hits = 0
 		player.hand.clear()
+	state.punish_target = 0
+	state.punish_angle = 0.0
+	state.punish_spin = 0.0
+	state.punish_dir = 1
 	state.round_number = 1
 	state.turn_index = 0
 	state.last_hit = {}
@@ -868,7 +998,7 @@ func _publish() -> void:
 	snapshot["config"] = config.to_snapshot()
 	snapshot["seconds"] = remaining_seconds()
 	snapshot["notice"] = notice
-	snapshot["chaos"] = cards.chaos_ages() if cards != null else {}
+	snapshot["chaos"] = board_ages()
 	if session != null:
 		session.receive_game_event.rpc("match", snapshot)
 	changed.emit()
@@ -890,11 +1020,27 @@ func _receive_state(snapshot: Dictionary) -> void:
 ## 지금 다트 머신 과녁 모양(BoardChaos.pose). 방장은 직접 세고, 손님은 받은 값에 흐른 시간을 더한다.
 ## 다트 단계(조준·비행)가 아니면 늘 제자리 모양이다.
 func chaos_shape() -> Dictionary:
-	if state.phase not in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]:
+	if state.phase not in DART_PHASES:
 		return BoardChaos.rest()
+	# 벌칙 회전은 방장이 적분해 보낸 각도를 모두가 같이 굴린다(_tick_punish_spin) — 손님도 제 화면에서 이어 돌린다.
+	if state.punish_target != 0:
+		return BoardChaos.spun(state.punish_angle)
 	if multiplayer.is_server() or session == null:
-		return cards.shape_now() if cards != null else BoardChaos.rest()
+		return shape_at(0.0)
 	return BoardChaos.from_ages(_chaos_ages, _now() - _received_at)
+
+
+## 방장이 보는 elapsed 초 뒤 과녁 모양. 비행 판정이 "다트가 닿을 때의 판"을 보는 데 쓴다.
+## 벌칙 회전은 묶인 사람이 도중에 바꿀 수 있으므로 이 예측은 어림이다 — **맞았는지는 꽂히는 순간의 각도로 센다**(_land_punish_dart).
+func shape_at(elapsed: float) -> Dictionary:
+	if state.punish_target != 0:
+		return BoardChaos.spun(state.punish_angle + state.punish_spin * elapsed)
+	return BoardChaos.from_ages(board_ages(), elapsed)
+
+
+## 방장이 세는 카드 과녁 효과 시각. 벌칙 회전은 여기 들어가지 않는다(상태의 punish_angle 이 소유한다).
+func board_ages() -> Dictionary:
+	return cards.chaos_ages() if cards != null else {}
 
 
 func _now() -> float:

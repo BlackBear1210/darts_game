@@ -17,6 +17,7 @@ const Cursor = preload("res://ui/dart_cursor.gd")
 const Icon = preload("res://ui/ui_icon.gd")
 const Logo = preload("res://ui/darty_logo.gd")
 const Backdrop = preload("res://lobby/lobby_backdrop.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
 const THEME_NAMES: Array[String] = ["따뜻한 펍", "네온 오락실"]
 const THEME_NOTES: Array[String] = ["나무 바·당구대·바텐더", "인형뽑기·가챠·농구 오락기"]
 const PRESET_ICONS: Array[String] = ["casual", "party", "classic"]
@@ -150,6 +151,17 @@ func _corner_items() -> void:
 	badge.position = Vector2(16, 12)
 	login.add_child(badge)
 	login.alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# 토큰(2026-11-23): 로그인 버튼 위에 지금 잔액. 경기를 하지 않아도 여기서 바로 보인다.
+	var tokens := Style.label(self, "토큰 %d개" % PlayerWallet.tokens, 19, Style.PINK if PlayerWallet.tokens < 0 else Style.GOLD)
+	tokens.name = "TokenCount"
+	tokens.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	tokens.offset_left = -440
+	tokens.offset_right = -48
+	tokens.offset_top = -132
+	tokens.offset_bottom = -102
+	tokens.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	tokens.add_theme_color_override("font_outline_color", Style.INK)
+	tokens.add_theme_constant_override("outline_size", 6)
 	var version := Style.label(self, "DARTY  ·  프로토타입 2026.10  ·  LAN 1–4명", 17, Style.MUTED)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	version.offset_left = 48
@@ -172,6 +184,11 @@ func _process(delta: float) -> void:
 	var tip := get_node_or_null("BoardTip") as Label
 	if tip != null:
 		tip.visible = _page == "home" and _backdrop != null
+	# 경기를 마치고 돌아오면 바뀐 토큰을 다시 쓴다.
+	var tokens := get_node_or_null("TokenCount") as Label
+	if tokens != null:
+		tokens.text = "토큰 %d개" % PlayerWallet.tokens
+		tokens.add_theme_color_override("font_color", Style.PINK if PlayerWallet.tokens < 0 else Style.GOLD)
 	for popup in _popups.duplicate():
 		popup.age += delta
 		var label: Label = popup.label

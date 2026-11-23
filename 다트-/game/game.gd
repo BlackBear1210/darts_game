@@ -41,6 +41,14 @@ const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
 ## 몸으로 막기(2026-11-02): 몸 캡슐 판정과 머리 위 스턴 별은 카드 라운드 시연과 같은 것을 쓴다.
 const BodyHit = preload("res://game/dart/body_hit.gd")
 const StunStars = preload("res://game/card_round/fx/stun_stars.gd")
+const PlayerWallet = preload("res://app/player_wallet.gd")
+## 경기 끝 벌칙(2026-11-23): 지금 과녁판에 묶여 있는 사람의 peer id(0 = 없음) · 토큰을 이미 정산한 경기 번호.
+## 마지막 경기에서 내 토큰이 얼마나 바뀌었는지(결과 화면이 읽는다).
+var strapped_id: int = 0
+var token_change: int = 0
+var _tokens_claimed_match: int = 0
+## 묶인 동안 방장에게 마지막으로 보낸 회전 방향(0 = 아직 안 보냄). 같은 방향을 거듭 보내지 않는다.
+var _punish_turn_sent: int = 0
 ## 몸으로 막은 사람이 옆으로 튕기는 세기(m/s). 감속 9 m/s² 라 약 0.9m 밀려난다 —
 ## 다트가 지나는 한가운데에서 벗어나므로 다음 발은 다시 들어와 서야 막을 수 있다(계속 서서 막는 것 방지).
 const BODY_KNOCKBACK: float = 4.0
@@ -457,6 +465,14 @@ func _physics_process(delta: float) -> void:
 			axis = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 				float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))).limit_length()
 			crouch = Input.is_physical_key_pressed(KEY_CTRL)
+		# 벌칙으로 과녁판에 묶였으면 A·D 가 판을 돌리는 방향이 된다(2026-11-23 사용자 요청).
+		# D = 시계 방향(각도가 줄어든다) · A = 반시계. 방향이 바뀔 때만 방장에게 보낸다.
+		if strapped_id == controller.local_peer_id:
+			var turn: int = -signi(roundi(axis.x))
+			if turn != 0 and turn != _punish_turn_sent:
+				_punish_turn_sent = turn
+				controller.request_punish_spin(turn)
+			axis = Vector2.ZERO
 		var local: PlayerView = actors.get(controller.local_peer_id)
 		if local != null and local.seated and axis.y > 0:
 			_yaw -= MOTION_INTERVAL * 0.65
@@ -805,6 +821,7 @@ func _process(delta: float) -> void:
 	# 화면 카드(정전·딸꾹질·유체이탈·망원경·원샷). 조준(아래 aim_at)보다 먼저 — 카메라가 흔들리면 조준도 흔들린다.
 	if _card_screen != null:
 		_card_screen.apply(camera, local, state.active_player(), delta)
+	_punish_camera()
 	if seat_cards != null:
 		seat_cards.show_peek(local, delta)
 	if lounge != null:
@@ -898,6 +915,8 @@ func _apply_state() -> void:
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id
 		_clear_darts()
+	_sync_punishment()
+	_claim_tokens()
 	# 몸으로 막힌 한 발: 모든 화면이 같은 스냅샷을 보고 맞은 사람 머리 위에 별을 띄운다.
 	var hit: Dictionary = controller.state.last_hit
 	var victim_id: int = int(hit.get("victim", 0))
@@ -906,6 +925,68 @@ func _apply_state() -> void:
 		_shown_block = key
 		_show_body_hit(victim_id, hit.get("target", Vector3.ZERO))
 	_show_score_popup(hit)
+
+
+## 벌칙(2026-11-23 사용자 요청): 꼴찌를 돌아가는 점수 과녁판에 묶는다.
+## 모든 화면이 같은 스냅샷(state.punish_target)을 보고 같은 그림을 만든다 — 묶는 것은 방장이 정한다.
+## 묶인 사람의 실제 몸은 숨긴다: 판 위의 복사본만 남아 다트가 두 번 맞지 않는다.
+func _sync_punishment() -> void:
+	var state := controller.state
+	var target: int = state.punish_target if state.phase in MatchController.DART_PHASES else 0
+	if target == strapped_id:
+		return
+	if strapped_id != 0:
+		if table != null and table.board != null:
+			table.board.release_victim()
+		var freed := actors.get(strapped_id) as PlayerView
+		if freed != null:
+			freed.visible = true
+	strapped_id = target
+	_punish_turn_sent = 0
+	if target == 0:
+		return
+	var victim := actors.get(target) as PlayerView
+	if victim == null or victim.identity == null or table == null or table.board == null:
+		strapped_id = 0
+		return
+	victim.visible = false
+	var model: Node3D = PlayerLook.character(victim.identity.seat)
+	PlayerOutfit.dress(model, victim.look)
+	table.board.strap_victim(model)
+	# 팔다리를 벌린 자세로 굳힌다(트리에 붙인 뒤에 불러야 한다 — character_motion.gd freeze).
+	CharacterMotion.freeze(model, "Wheel_Spread")
+
+
+## 벌칙으로 묶였으면 내 시점을 과녁판 위로 옮긴다 — 판이 돌면 펍이 통째로 돈다(2026-11-23).
+## 내 몸은 숨겨져 있고 판 위의 복사본이 돌고 있으므로, 그 복사본의 눈에서 던지는 쪽을 본다.
+func _punish_camera() -> void:
+	if strapped_id != controller.local_peer_id or table == null or table.board == null:
+		return
+	var eye: Transform3D = table.board.victim_eye()
+	if is_zero_approx(eye.basis.y.length()):
+		return
+	camera.global_position = eye.origin
+	camera.look_at(eye.origin + eye.basis.z, eye.basis.y)
+	# 숨긴 내 몸 레이어를 가릴 필요가 없다(판 위 복사본은 보통 레이어다).
+	camera.cull_mask = 0xfffff
+
+
+## 경기가 끝나면 내 토큰을 한 번만 정산한다(app/player_wallet.gd).
+## 순위·벌칙 맞은 횟수는 방장이 보낸 같은 값이므로 모든 화면이 같은 결과를 낸다.
+func _claim_tokens() -> void:
+	var state := controller.state
+	if state.phase != MatchState.Phase.FINISHED or state.match_id == _tokens_claimed_match:
+		return
+	if controller.local_peer_id == 0:
+		return
+	_tokens_claimed_match = state.match_id
+	for row: Dictionary in state.ranking():
+		var player: MatchPlayer = row.player
+		if player.peer_id != controller.local_peer_id:
+			continue
+		token_change = PlayerWallet.match_reward(int(row.rank), player.peer_id == state.punish_target, player.punish_hits)
+		PlayerWallet.grant(token_change)
+		return
 
 
 ## 과녁(또는 벽)에 꽂힌 한 발의 점수를 그 자리에 3D 글자로 띄운다. 판정은 방장이 이미 끝냈다(MatchState.last_hit = 결과).
@@ -1033,6 +1114,9 @@ func freeze_player(peer_id: int, seconds: float) -> void:
 
 
 func _frozen(peer_id: int) -> bool:
+	# 벌칙으로 과녁판에 묶인 사람은 움직일 수 없다(2026-11-23).
+	if peer_id == strapped_id:
+		return true
 	if controller._now() < float(_stun_until.get(peer_id, 0.0)):
 		return true
 	return lounge != null and lounge.is_stunned(peer_id)
