@@ -63,7 +63,6 @@ var body: Node3D
 var _face: MeshInstance3D
 var _back: MeshInstance3D
 var _glow: MeshInstance3D
-var _key: Label3D
 
 
 func _init() -> void:
@@ -106,25 +105,6 @@ func set_shadow(enabled: bool) -> void:
 func set_layers(mask: int) -> void:
 	for node in find_children("*", "VisualInstance3D", true, false):
 		(node as VisualInstance3D).layers = mask
-
-
-## 1인칭 부채 카드 왼쪽 위에 숫자 키(1~7) 표시.
-func show_key(text: String) -> void:
-	if _key == null:
-		_key = Label3D.new()
-		_key.name = "Key"
-		_key.font = CardFaces.bold_font()
-		_key.font_size = 72
-		_key.pixel_size = 0.0004
-		_key.outline_size = 18
-		_key.outline_modulate = Color("122b27")
-		_key.modulate = Color("ffe3a3")
-		_key.rotation.x = -PI / 2
-		# 왼쪽 위 모서리: 부채에서 다음 카드가 오른쪽을 덮어도 보인다.
-		_key.position = Vector3(-SIZE.x / 2.0 + 0.013, THICKNESS / 2.0 + 0.0006, -SIZE.y / 2.0 + 0.016)
-		_key.double_sided = false
-		body.add_child(_key)
-	_key.text = text
 
 
 ## 꺼내 든(대기) 카드의 테두리 빛. strength 0 이면 끈다.
@@ -186,7 +166,7 @@ func mark_used(style: int) -> Tween:
 func clear_mark() -> void:
 	mark_style = -1
 	for child in body.get_children():
-		if child != _face and child != _back and child != _glow and child != _key:
+		if child != _face and child != _back and child != _glow:
 			child.queue_free()
 	if type >= 0:
 		set_type(type)

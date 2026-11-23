@@ -14,13 +14,24 @@ const MAKE_ROOM_DEGREES: float = 6.0
 const REWARD_GLOW := Color("ffcf4a")
 const READY_GLOW := Color("8cf0a0")
 
+## 1인칭 손패가 차지하는 화면 영역(왼쪽, 위, 너비, 높이).
+const HAND_RECT := Rect2(0.023, 0.725, 0.43, 0.272)
+const ROW_DEPTH := 0.42
+var row_camera: Camera3D
+
+func configure_screen_row(camera: Camera3D) -> void:
+	row_camera = camera
+	transform = Transform3D.IDENTITY
+	cast_shadows = false
+	lit = false
+
+
 var spread_degrees: float = 44.0
 var radius: float = 0.12
 var card_scale: float = 1.0
 var lift_height: float = 0.065
 var lift_scale: float = 1.25
 var lift_forward: float = 0.03
-var show_keys: bool = false
 var layer_mask: int = 1
 var cast_shadows: bool = true
 ## false = 조명을 받지 않는다(1인칭 부채 — 방이 어두워도 글자가 읽힌다).
@@ -44,9 +55,7 @@ func set_card(slot: int, card_type: int, reward: bool = false) -> void:
 	card.set_shadow(cast_shadows)
 	card.set_lit(lit)
 	card.set_meta("reward", reward)
-	if show_keys:
-		card.show_key(str(slot + 1))
-	card.position = Vector3(0, radius * 0.4, 0)
+	card.position = row_camera.to_local(row_camera.project_position(row_camera.get_viewport().get_visible_rect().size * Vector2(HAND_RECT.position.x, HAND_RECT.end.y), ROW_DEPTH)) if row_camera != null else Vector3(0, radius * 0.4, 0)
 	card.scale = Vector3.ONE * 0.001
 	cards[slot] = card
 	if reward:
@@ -90,18 +99,36 @@ func _process(delta: float) -> void:
 	for i in range(count):
 		var card: Node3D = cards[order[i]]
 		var lifted: bool = i == lifted_index
-		var t: float = 0.5 if count == 1 else float(i) / (count - 1)
-		var angle: float = deg_to_rad(lerpf(spread_degrees * 0.5, -spread_degrees * 0.5, t))
-		if lifted_index >= 0 and not lifted:
-			angle += deg_to_rad(MAKE_ROOM_DEGREES) * signf(lifted_index - i)
-		if lifted:
-			angle *= 0.2
-		var turn := Basis(Vector3.BACK, angle)
-		var spot: Vector3 = turn * Vector3(0, radius, 0) + Vector3(0, 0, i * 0.0016)
-		var size: float = card_scale
-		if lifted:
-			spot += turn * Vector3(0, lift_height, 0) + Vector3(0, 0, lift_forward)
-			size *= lift_scale
+		var turn := Basis.IDENTITY
+		var spot: Vector3
+		var size := card_scale
+		if row_camera != null:
+			var viewport_size := row_camera.get_viewport().get_visible_rect().size
+			var rect := Rect2(HAND_RECT.position * viewport_size, HAND_RECT.size * viewport_size)
+			var width := minf(rect.size.y * CardView.SIZE.x / CardView.SIZE.y, rect.size.x * 0.36)
+			var height := width * CardView.SIZE.y / CardView.SIZE.x
+			var step := (rect.size.x - width) / maxi(6, count - 1)
+			step -= maxf(width - step, 0.0) * 0.21
+			var center := Vector2(rect.position.x + width * 0.5 + step * i, rect.end.y - height * 0.5)
+			var depth := ROW_DEPTH - 0.003 * i
+			if lifted:
+				center.y -= height * 0.17
+				depth -= 0.034
+			spot = row_camera.to_local(row_camera.project_position(center, depth))
+			var right := row_camera.to_local(row_camera.project_position(center + Vector2.RIGHT * width, depth))
+			size = right.distance_to(spot) / CardView.SIZE.x
+		else:
+			var t: float = 0.5 if count == 1 else float(i) / (count - 1)
+			var angle: float = deg_to_rad(lerpf(spread_degrees * 0.5, -spread_degrees * 0.5, t))
+			if lifted_index >= 0 and not lifted:
+				angle += deg_to_rad(MAKE_ROOM_DEGREES) * signf(lifted_index - i)
+			if lifted:
+				angle *= 0.2
+			turn = Basis(Vector3.BACK, angle)
+			spot = turn * Vector3(0, radius, 0) + Vector3(0, 0, i * 0.0016)
+			if lifted:
+				spot += turn * Vector3(0, lift_height, lift_forward)
+				size *= lift_scale
 		card.position = card.position.lerp(spot, weight)
 		card.quaternion = card.quaternion.slerp((turn * Basis(Vector3.RIGHT, PI / 2)).get_rotation_quaternion(), weight)
 		card.scale = card.scale.lerp(Vector3.ONE * size, weight)

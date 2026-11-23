@@ -286,18 +286,8 @@ func _prepare_hand_fan() -> void:
 		return
 	_fan = HandFan.new()
 	_fan.name = "HandFan"
-	_fan.show_keys = true
-	_fan.card_scale = 0.75
-	_fan.radius = 0.2
-	_fan.spread_degrees = 64.0
-	_fan.cast_shadows = false
-	# 펍이 어두워도 내 카드 글자가 읽히게 조명을 받지 않는다(2026-11-02).
-	_fan.lit = false
 	camera.add_child(_fan)
-	# 7장 부채의 왼쪽·오른쪽 끝을 참고 화면 너비의 약 5%와 43%에 맞춘다.
-	_fan.position = Vector3(-0.25, -0.394, -0.42)
-	_fan.rotation_degrees.z = -1.0
-	_fan.scale = Vector3.ONE * 1.1
+	_fan.configure_screen_row(camera)
 	_sync_hand_fan()
 	# 테이블 매트 카드도 카드 그림을 쓰므로 굽기 뒤에 만든다(굽기 전에 그림을 부르면 단색 그림으로 굳는다).
 	seat_cards = SeatCards.new()

@@ -30,7 +30,7 @@ static func build(ctx: Context, players_root: Node3D, mover: SeatMover, presente
 		if rig != null:
 			rig.holding_cards = true
 		presenter.attach_status(view)
-	_setup_local_fan(ctx.local_fan)
+	ctx.local_fan.configure_screen_row(ctx.local_fan.get_parent() as Camera3D)
 
 
 ## 왼손 카드 부채: 캐릭터 몸짓이 왼손을 따라가게 해 걷고 앉아도 손에 들려 있다.
@@ -49,14 +49,3 @@ static func _left_hand_fan(view: PlayerView, seat: int) -> HandFan:
 	# 카드 앞면이 든 사람 눈 쪽을 본다 → 뒤로 돌아가 보면 상대 카드가 보인다(기획: "걸어가서 상대 왼손 카드 보기").
 	(view.get("_rig") as CharacterMotion).attach_cards(fan)
 	return fan
-
-
-## 1인칭 부채: 꼭지를 화면 아래로 내리고 넓게 펼쳐 카드끼리 덜 겹치게(숫자 키가 보이게) 한다.
-static func _setup_local_fan(fan: HandFan) -> void:
-	fan.show_keys = true
-	fan.card_scale = 0.75
-	fan.radius = 0.2
-	fan.spread_degrees = 64.0
-	fan.cast_shadows = false
-	# 1인칭 부채는 조명을 받지 않는다(어두운 방에서도 글자가 읽히게, 2026-11-02).
-	fan.lit = false
