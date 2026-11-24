@@ -1,6 +1,9 @@
 extends RefCounted
 ## 실행 중에만 정적 메시를 재질·공간 구역별로 합쳐 그리기 호출을 줄인다(펍 전경 3,445 → 1,747회).
-## 에디터에서 여는 .tscn 원본은 바꾸지 않는다. 원래 메시는 숨기기만 한다.
+## 에디터에서 여는 .tscn 원본은 바꾸지 않는다.
+## [2026-11-24 저사양 최적화] 합친 원본은 **지운다**(예전에는 숨기기만 해서 568개가 트리에 남아 매 프레임 순회 대상이었다).
+##   자식이 달린 원본만 숨긴 채 남긴다 — 지우면 묶기에서 빠진 자식까지 같이 사라지기 때문이다.
+##   묶은 뒤에 묶음 하나만 되돌리는 길은 원래도 없었다. 방 일부를 빼야 하면 TableView.rebuild_pub 이 씬에서 통째로 다시 만든다.
 ## 다트판과 캐릭터는 묶지 않는다 — 카드 효과(과녁 변형)·애니메이션을 붙일 자리라서다.
 ## 캐릭터에 관절 애니메이션을 넣으면 그 캐릭터는 optimize() 대상에서 빼야 한다.
 
@@ -109,7 +112,10 @@ static func _batch_group(root: Node3D, group: Dictionary, container: Node3D, bat
 			var index := indices[i] if not indices.is_empty() else i
 			surface.set_normal((normal_basis * normals[index]).normalized())
 			surface.add_vertex(transform * vertices[index])
-		mesh_instance.hide()
+		if mesh_instance.get_child_count() == 0:
+			mesh_instance.queue_free()
+		else:
+			mesh_instance.hide()
 	var batch := MeshInstance3D.new()
 	batch.name = "Batch_%03d" % batch_index
 	batch.mesh = surface.commit()

@@ -145,6 +145,9 @@ static func pub_only_blocks() -> Array[AABB]:
 
 ## 정적 메시 묶기(그리기 호출 줄이기). class_name 이 없는 도구라 preload 로 부른다.
 const StaticBatch = preload("res://art/static_batch.gd")
+## 이만큼보다 작은 소품은 그림자를 만들지 않는다(2026-11-24). 어두운 펍에서 20cm 짜리 물건의 그림자는 보이지 않는데
+## 그림자 패스에는 큰 벽과 똑같이 한 번씩 올라간다. 다트머신 부품의 절반, 방 소품의 1/5 이 여기 해당한다.
+const SHADOW_MIN_SIZE: float = 0.2
 ## 아수라장 다트 머신 몸체(셔터·테두리 조명·상태 화면). 과녁 그림(BoardView)은 그대로 $Board 가 그린다.
 ## class_name 을 새로 만들지 않고 preload 로 부른다(열린 편집기가 새 class_name 을 못 읽어 파스 오류가 나는 함정).
 const DartMachine = preload("res://art/dart_machine/dart_machine.gd")
@@ -430,6 +433,54 @@ func _prepare_pub() -> void:
 	if DisplayServer.get_name() != "headless":
 		if spread_batching: StaticBatch.optimize_spread(pub)
 		else: StaticBatch.optimize(pub)
+		# 다트머신·방 소품까지 한 번에 본다(그림자 조명은 Pub/Lights 아래에 있다).
+		trim_shadow_casters(self)
+
+
+## 그림자를 만들지 않는 메시는 그림자 패스에서 뺀다(2026-11-24 저사양 최적화).
+## 방에 그림자를 만드는 조명은 둘뿐인데(카드 테이블 펜던트·과녁 스포트) 메시 2,100여 개가 전부 그림자 패스에 올라가 있었다.
+## 두 조명 모두 사정거리가 있으므로, 어느 조명의 사정거리에도 닿지 않는 메시는 그림자를 켜 둘 이유가 없다.
+## 그림자를 만드는 DirectionalLight3D(해)가 있으면 방 전체가 사정거리 안이므로 거리로는 아무것도 끄지 않는다.
+func trim_shadow_casters(branch: Node3D) -> int:
+	var lights: Array[Dictionary] = []
+	for light: Light3D in _find_lights(branch, []):
+		if not light.shadow_enabled:
+			continue
+		if light is DirectionalLight3D:
+			lights.clear()
+			break
+		var reach: float = light.spot_range if light is SpotLight3D else light.omni_range
+		lights.append({"at": light.global_position, "reach": reach})
+	var trimmed: int = 0
+	for mesh: MeshInstance3D in _find_meshes(branch, []):
+		if mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF or mesh.mesh == null:
+			continue
+		var box: AABB = mesh.global_transform * mesh.mesh.get_aabb()
+		var center: Vector3 = box.get_center()
+		var radius: float = box.size.length() / 2.0
+		var lit: bool = box.size.length() >= SHADOW_MIN_SIZE
+		if lit and not lights.is_empty():
+			lit = false
+			for light: Dictionary in lights:
+				if center.distance_to(Vector3(light.at)) <= float(light.reach) + radius:
+					lit = true
+					break
+		if not lit:
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			trimmed += 1
+	return trimmed
+
+
+func _find_lights(node: Node, found: Array[Light3D]) -> Array[Light3D]:
+	if node is Light3D: found.append(node)
+	for child in node.get_children(): _find_lights(child, found)
+	return found
+
+
+func _find_meshes(node: Node, found: Array[MeshInstance3D]) -> Array[MeshInstance3D]:
+	if node is MeshInstance3D: found.append(node)
+	for child in node.get_children(): _find_meshes(child, found)
+	return found
 
 
 ## 방 한 칸을 덮는 판(바닥·천장). 가장자리는 벽 두께만큼 넉넉히 덮는다.

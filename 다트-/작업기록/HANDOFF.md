@@ -1,3 +1,16 @@
+# 2026-11-24 인수인계 — 저사양 최적화
+
+- **묶은 원본은 이제 지워진다**(`art/static_batch.gd`). 묶인 메시를 이름으로 찾아 쓰면 안 된다.
+  묶기에서 빼야 하는 소품은 `NO_BATCH_NAMES` / `NO_BATCH_PREFIXES` 에 넣을 것.
+- **그림자는 `TableView.trim_shadow_casters()` 가 묶기 직후에 걸러낸다.**
+  새로 넣은 소품이 그림자를 꼭 만들어야 하면 `SHADOW_MIN_SIZE`(0.2m)보다 크거나 그림자 조명 사정거리 안에 있어야 한다.
+  방에 그림자 `DirectionalLight3D` 를 추가하면 거리 기준은 저절로 꺼진다(크기 기준만 남는다).
+- **성능을 잴 때는 전체 프레임 시간이 아니라 GPU 시간을 따로 볼 것** — 이 PC 는 CPU 쪽에 묻혀서 GPU 변화가 안 보인다.
+  `RenderingServer.viewport_set_measure_render_time(rid, true)` 뒤 `viewport_get_measured_render_time_gpu(rid)`.
+- 아직 안 본 것: 런타임 텍스처 약 1GB(디스크 임포트는 194MB) · 조명 24개 · 실제 저사양 PC.
+
+---
+
 # 2026-11-24 인수인계 — 벌칙 회전 조종 · 토큰 표시
 
 - **결과 창은 두 개다.** 타이틀 화면에서 만든 방은 늘 `social_lobby = true` 이므로 실제로 보이는 것은
