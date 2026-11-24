@@ -4529,7 +4529,7 @@ size = Vector3(13.48, 0.06, 12.629999)
 size = Vector3(22.279999, 0.06, 9.129999)
 
 [node name="PubGame" type="Node3D"]
-metadata/layout_signature = "[\"round_table_v1\", \"dart_machine_v1\", Vector3(0, 2.9, -10.8), 2.5, Array[Vector3]([Vector3(-1.4, 0, 4.4), Vector3(0, 0, 5.8), Vector3(1.4, 0, 4.4), Vector3(0, 0, 3)]), Rect2(-6.6, -12.5, 13.2, 12.5), Rect2(-8.4, 0, 22, 9), 0.3, 4.8, -3.7, -3.6, 1.2, Vector2(-5.2, -4.5), Vector3(0, 0, 4.4), Vector2(2.15, 1.55), 0.85, Array[Vector3]([Vector3(-5.7, 0, -11.8), Vector3(5.6, 0, -12.2), Vector3(-5.7, 0, -3.1), Vector3(5.6, 0, -3.15)]), 0.4, Array[Vector3]([Vector3(6, 0, -11.15), Vector3(-6.15, 0, -2.4), Vector3(5.1, 0, -2.5), Vector3(6, 0, -2.3)]), 0.2, AABB(-5.85, 0, 0, 0.95, 1.2, 7.4), AABB(4.95, 0, 3.3, 1.65, 0.85, 1.5), Array[Vector3]([Vector3(5.8, 0, 2.6), Vector3(5.8, 0, 5.5)]), AABB(10.4, 0, 2.8, 1.5, 0.8, 2.55), Vector3(-7.5, 0, 0.95), Vector3(-7.8, 0, 6.3), Vector3(-3.4, 0, -11.6), Vector3(5.9, 0, -5), Vector3(-3.1, 0, 8.35), Vector3(12.75, 0, 1), Vector3(12.85, 0, 2.05), Vector3(6.95, 0, 8.35), Vector3(6.35, 0, 8.5), 1.1, Array[Vector3]([Vector3(-5.2, 1.1, 1.4), Vector3(-5.2, 1.1, 1.9), Vector3(-5.2, 1.1, 6.2), Vector3(-5.2, 1.1, 6.7)]), Array[float]([3.1, 3.58, 4.06, 4.54, 5.02]), Vector3(-5.375, 0, 8.12), Vector3(0.95, 1.95, 1.44), Array[float]([0.95, 2.5, 5.6]), AABB(7.4, 0, 7.55, 2, 2.95, 1.45)]"
+metadata/layout_signature = "[\"round_table_v1\", \"dart_machine_v1\", Vector3(0, 2.6, -10.8), 2.5, Array[Vector3]([Vector3(-1.4, 0, 4.4), Vector3(0, 0, 5.8), Vector3(1.4, 0, 4.4), Vector3(0, 0, 3)]), Rect2(-6.6, -12.5, 13.2, 12.5), Rect2(-8.4, 0, 22, 9), 0.3, 4.8, -3.7, -3.6, 1.2, Vector2(-5.2, -4.5), Vector3(0, 0, 4.4), Vector2(2.15, 1.55), 0.85, Array[Vector3]([Vector3(-5.7, 0, -11.8), Vector3(5.6, 0, -12.2), Vector3(-5.7, 0, -3.1), Vector3(5.6, 0, -3.15)]), 0.4, Array[Vector3]([Vector3(6, 0, -11.15), Vector3(-6.15, 0, -2.4), Vector3(5.1, 0, -2.5), Vector3(6, 0, -2.3)]), 0.2, AABB(-5.85, 0, 0, 0.95, 1.2, 7.4), AABB(4.95, 0, 3.3, 1.65, 0.85, 1.5), Array[Vector3]([Vector3(5.8, 0, 2.6), Vector3(5.8, 0, 5.5)]), AABB(10.4, 0, 2.8, 1.5, 0.8, 2.55), Vector3(-7.5, 0, 0.95), Vector3(-7.8, 0, 6.3), Vector3(-3.4, 0, -11.6), Vector3(5.9, 0, -5), Vector3(-3.1, 0, 8.35), Vector3(12.75, 0, 1), Vector3(12.85, 0, 2.05), Vector3(6.95, 0, 8.35), Vector3(6.35, 0, 8.5), 1.1, Array[Vector3]([Vector3(-5.2, 1.1, 1.4), Vector3(-5.2, 1.1, 1.9), Vector3(-5.2, 1.1, 6.2), Vector3(-5.2, 1.1, 6.7)]), Array[float]([3.1, 3.58, 4.06, 4.54, 5.02]), Vector3(-5.375, 0, 8.12), Vector3(0.95, 1.95, 1.44), Array[float]([0.95, 2.5, 5.6]), AABB(7.4, 0, 7.55, 2, 2.95, 1.45)]"
 
 [node name="Shell" type="Node3D" parent="."]
 editor_description = "만든 곳: 바닥·천장·벽(징두리·난간·코니스·코브·기둥·아치 틀)·창 구멍 — art/pub/room/room_shell.gd build_shell
@@ -5533,47 +5533,47 @@ material_override = SubResource("StandardMaterial3D_2nv7m")
 mesh = SubResource("ArrayMesh_hqajs")
 
 [node name="ChalkFrame" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 2.8000002, -12.27)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 2.5, -12.27)
 material_override = SubResource("StandardMaterial3D_2nv7m")
 mesh = SubResource("ArrayMesh_eybce")
 
 [node name="ChalkBoard" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 2.8000002, -12.24)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 2.5, -12.24)
 material_override = SubResource("StandardMaterial3D_0cdwo")
 mesh = SubResource("ArrayMesh_4gvmh")
 
 [node name="ChalkPin" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 1.9200001, -12.235)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 1.6199999, -12.235)
 material_override = SubResource("StandardMaterial3D_4ra1o")
 mesh = SubResource("ArrayMesh_svh87")
 
 [node name="ChalkPin2" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 3.68, -12.235)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 3.3799999, -12.235)
 material_override = SubResource("StandardMaterial3D_4ra1o")
 mesh = SubResource("ArrayMesh_svh87")
 
 [node name="ChalkFrame2" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 2.8000002, -12.27)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 2.5, -12.27)
 material_override = SubResource("StandardMaterial3D_2nv7m")
 mesh = SubResource("ArrayMesh_eybce")
 
 [node name="ChalkBoard2" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 2.8000002, -12.24)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 2.5, -12.24)
 material_override = SubResource("StandardMaterial3D_0cdwo")
 mesh = SubResource("ArrayMesh_4gvmh")
 
 [node name="ChalkPin3" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 1.9200001, -12.235)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 1.6199999, -12.235)
 material_override = SubResource("StandardMaterial3D_4ra1o")
 mesh = SubResource("ArrayMesh_svh87")
 
 [node name="ChalkPin4" type="MeshInstance3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 3.68, -12.235)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 3.3799999, -12.235)
 material_override = SubResource("StandardMaterial3D_4ra1o")
 mesh = SubResource("ArrayMesh_svh87")
 
 [node name="ChalkScores" type="Label3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 2.8500001, -12.23)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.05, 2.55, -12.23)
 pixel_size = 0.0036
 modulate = Color(0.9019608, 0.8901961, 0.8392157, 1)
 text = "점 수
@@ -5583,7 +5583,7 @@ font_size = 28
 outline_size = 0
 
 [node name="ChalkRules" type="Label3D" parent="BoardWall"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 2.8500001, -12.23)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.05, 2.55, -12.23)
 pixel_size = 0.0036
 modulate = Color(0.9019608, 0.8901961, 0.8392157, 1)
 text = "하 우 스  룰
@@ -9677,7 +9677,7 @@ light_energy = 0.35
 omni_range = 3.2
 
 [node name="BoardSpot" type="SpotLight3D" parent="Lights"]
-transform = Transform3D(1, 0, 0, 0, 0.72701323, 0.68662345, 0, -0.68662345, 0.72701323, 0, 4.6, -9)
+transform = Transform3D(1, 0, 0, 0, 0.6689648, 0.7432941, 0, -0.7432941, 0.6689648, 0, 4.6, -9)
 light_color = Color(1, 0.9019608, 0.76862746, 1)
 light_energy = 2.2
 shadow_enabled = true

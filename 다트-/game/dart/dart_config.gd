@@ -6,7 +6,11 @@ extends Resource
 @export var minimum_speed: float = 7.0
 @export var maximum_speed: float = 16.0
 @export var flight_limit: float = 2.0
-@export_range(0.0, 30.0) var gravity: float = 9.8
+## 2026-11-24 사용자 요청 "좀 더 포물선으로 날라가게": 9.8 → 14.0.
+## 방장이 도착 시각을 맞춰 위로 던지므로(initial_velocity) 중력이 클수록 같은 자리에 꽂히면서 더 높이 솟는다.
+## 7.26m 거리에서 꽉 충전한 한 발이 직선보다 0.25m → 0.36m 위로 지난다.
+## 대신 충전이 모자라면 더 떨어진다(70% 충전 −0.25m → −0.35m). 점수 원 반지름이 0.75m 라 아직 판 안이다.
+@export_range(0.0, 30.0) var gravity: float = 14.0
 @export var timing_offset: Vector2 = Vector2(0.14, 0.15)
 @export_range(0.01, 10.0) var miss_lifetime: float = 0.25
 

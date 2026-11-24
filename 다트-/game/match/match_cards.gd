@@ -40,6 +40,7 @@ var _round_overrides: Dictionary = {}
 const Actions = preload("res://game/match/match_card_actions.gd")
 var actions: RefCounted
 ## 지뢰 심기 카드가 심은 숫자 구역(0~19, 경기 끝까지 남는다 — 라운드가 바뀌어도 지우지 않는다). 아무에게도 공개하지 않는다.
+## 같은 칸이 여러 번 들어갈 수 있다(겹쳐 심기) — 그 칸을 맞히면 겹친 수만큼 벌점이 곱해진다.
 var mines: Array[int] = []
 ## 이번 라운드에 마지막으로 과녁에 꽂힌 자리(과녁 정규화 좌표, 좌표 고정 카드). 없으면 INF.
 var last_landing := Vector2.INF
@@ -471,7 +472,8 @@ func landing_points(hit: Dictionary) -> int:
 		total += points
 		if region >= 0 and region < 80:
 			sectors.append(region / 4)
-			if region / 4 in mines: mine_hits += 1
+			# 같은 칸에 겹쳐 심은 지뢰는 겹친 수만큼 터진다(2026-11-24).
+			mine_hits += mines.count(region / 4)
 		# 좌표 고정 카드가 다시 노릴 자리 = 마지막으로 과녁(판 위)에 꽂힌 곳.
 		if region >= 0: last_landing = aim
 	hit["hit_sectors"] = sectors

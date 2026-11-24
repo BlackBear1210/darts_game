@@ -1,3 +1,18 @@
+# 2026-11-24 인수인계 — 구역 팝업과 다섯 가지 수치
+
+- **구역 카드는 `ui/sector_picker.gd` 팝업을 쓴다.** 새 구역 카드를 만들면 `"choice": "sector"` 를 주면 자동으로 뜬다.
+  팝업이 떠 있는 동안 마우스가 풀리고(`MOUSE_MODE_VISIBLE`) 닫으면 다시 잡는다.
+  **그림은 팝업의 `_draw` 한 곳에서 그린다** — 자식 Control 의 draw 신호나 자식 ColorRect 막을 쓰면 어긋난다(겪어 봤다).
+- **지뢰는 겹쳐 심을 수 있다.** `MatchCards.mines` 에 같은 칸이 여러 번 들어가고 `landing_points` 가 `count()` 로 센다.
+  `in` 으로 되돌리면 겹치기가 조용히 사라진다.
+- **`DartMachine.BOARD_Y` 를 바꾸면 `layout_signature` 가 바뀐다.** 반드시
+  `pub_builder.gd -- --game-room-only` 로 `pub_game.tscn` 을 다시 만들 것.
+- **투척 중력은 `game/dart/dart_config.gd` 한 곳**이다(판정·그림·F6 시연이 같이 쓴다). 올리면 포물선이 커지는 대신
+  충전 부족 벌이 같이 커진다 — `.godot/check_arc.gd` 로 재 보고 고를 것.
+- 차례 팝업은 라운지 HUD 에만 있다(실제 경기는 늘 사교 방이다). 예전 `ui/game_hud.gd` 에는 없다.
+
+---
+
 # 2026-11-24 인수인계 — 저사양 최적화
 
 - **묶은 원본은 이제 지워진다**(`art/static_batch.gd`). 묶인 메시를 이름으로 찾아 쓰면 안 된다.

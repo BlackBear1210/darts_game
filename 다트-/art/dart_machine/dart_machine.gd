@@ -5,7 +5,8 @@ const BoardChaos = preload("res://game/board/board_chaos.gd")
 const Pedestal = preload("res://art/dart_machine/dart_pedestal.gd")
 const Drive = preload("res://art/dart_machine/dart_drive.gd")
 const FlipGuard = preload("res://art/dart_machine/flip_guard.gd")
-const BOARD_Y := 2.9
+## 과녁 중심 높이(m). 2026-11-24 사용자 요청으로 2.9 → 2.6 으로 내렸다 — 눈높이 1.65m 에서 너무 올려다봐야 했다.
+const BOARD_Y := 2.6
 const BOARD_SCALE := 2.5
 const SCORE_RADIUS := BoardLayout.RADIUS * BOARD_SCALE
 const WINDOW := BoardChaos.WINDOW_RADIUS * SCORE_RADIUS

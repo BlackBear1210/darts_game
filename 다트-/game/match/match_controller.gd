@@ -68,9 +68,10 @@ const BODY_STUN_SECONDS: float = 3.0
 ## 인원이 몇이든 전체 발수를 이만큼 안팎으로 맞춘다 → 벌칙 길이가 늘 비슷하다(한 사람 최소 2발).
 const PUNISH_TOTAL_DARTS: int = 6
 ## 벌칙 회전(라디안/초)과 방향을 바꿀 때의 가속(라디안/초²).
-## 가속이 있어서 **방향을 홱 뒤집지 못한다** — 반대로 돌아서는 데 1초가 걸린다(다트가 날아오는 시간보다 길다).
-const PUNISH_SPIN_SPEED: float = 1.1
-const PUNISH_SPIN_ACCEL: float = 2.2
+## 2026-11-24 사용자 요청 "좀 더 속도감있게": 1.1 → 2.0(약 19초에 한 바퀴 → 3.1초에 한 바퀴).
+## 가속도 같이 올려 방향 전환이 1초 안에 끝나게 둔다 — 다트 비행(0.4초)보다는 길어서 홱 피하지는 못한다.
+const PUNISH_SPIN_SPEED: float = 2.0
+const PUNISH_SPIN_ACCEL: float = 4.0
 const BoardVictim = preload("res://game/board/board_victim.gd")
 const PlayerWallet = preload("res://app/player_wallet.gd")
 ## 다트에 이만큼 맞으면 쓰러진다(줄 끊긴 인형). 횟수는 라운드마다 0 으로 돌아간다(2026-11-15 사용자 요청 "2번 맞으면").

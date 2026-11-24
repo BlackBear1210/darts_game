@@ -22,6 +22,9 @@ const Rules = preload("res://game/card_round/rules/round_rules.gd")
 const MatchCards = preload("res://game/match/match_cards.gd")
 ## 위 가운데 라운드·남은 시간 표시(2026-10-31 저녁 — 다트 라운드 → 다음 카드 충전 라운드).
 const RoundBanner = preload("res://ui/round_banner.gd")
+const SectorPicker = preload("res://ui/sector_picker.gd")
+## 내 차례 알림이 떠 있는 시간(초).
+const TURN_POPUP_SECONDS: float = 2.2
 ## 카드별 "지금 쓸 수 있나" 조건 — 방장(MatchCards._use)과 같은 함수(2026-11-21).
 const CardActions = preload("res://game/match/match_card_actions.gd")
 ## N 키로 키 안내를 숨기거나 다시 켤 때 잠깐 뜨는 알림(초).
@@ -76,6 +79,16 @@ var _time: float = 0.0
 var _pick: int = 0
 var _hint_toast: Label
 var _hint_toast_until: float = 0.0
+## 내 차례 알림(2026-11-24 사용자 요청 "차례 표시 더 부각되게").
+## 차례가 바뀔 때마다 한 번만 뜬다 — 이미 알린 turn_id 를 적어 두고 비교한다.
+var _turn_popup: Control
+var _turn_popup_title: Label
+var _turn_popup_note: Label
+var _turn_popup_age: float = TURN_POPUP_SECONDS
+var _turn_popup_shown: int = -1
+## 구역 고르기 팝업(2026-11-24). 떠 있는 동안 마우스를 풀어 클릭할 수 있게 한다.
+var _picker: Control
+var _picker_card: int = -1
 
 
 func _ready() -> void:
@@ -97,6 +110,8 @@ func _ready() -> void:
 	_root.add_child(_banner)
 	_build_room_corner()
 	_build_bottom()
+	_build_turn_popup()
+	_build_picker()
 	_build_result()
 	_build_link_dialog()
 
@@ -212,6 +227,68 @@ func _build_card_panel() -> void:
 	_card_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
+## 구역 고르기 팝업(2026-11-24 사용자 요청). 꺼내 든 카드가 구역을 고르는 카드면 다트판을 띄운다.
+## 예전 Z·X 로 넘기는 길은 그대로 둔다(홀짝·정밀 조정처럼 판이 필요 없는 카드가 쓴다).
+func _build_picker() -> void:
+	_picker = SectorPicker.new()
+	_picker.name = "SectorPicker"
+	_picker.visible = false
+	_picker.picked.connect(func(sector: int) -> void:
+		game.controller.request_card("choice", sector)
+		_close_picker())
+	_picker.closed.connect(_close_picker)
+	_root.add_child(_picker)
+
+
+## 꺼내 든 카드가 구역 카드인 동안 팝업을 띄우고, 아니면 닫는다.
+func _update_picker(me: MatchPlayer) -> void:
+	var wants: int = -1
+	if me != null and me.pending_card >= 0 and str(Catalog.card(me.pending_card).get("choice", "")) == "sector":
+		wants = me.pending_card
+	if wants == _picker_card:
+		return
+	_picker_card = wants
+	if wants < 0:
+		_close_picker()
+		return
+	var card: Dictionary = Catalog.card(wants)
+	var is_bomb: bool = str(card.effect) == "mine"
+	var active: MatchPlayer = game.controller.state.active_player()
+	var board: Array[int] = active.layout.numbers if active != null else BoardLayout.DEFAULT_NUMBERS
+	var hint: String = "왼쪽 버튼으로 칸 선택 · 오른쪽 버튼 또는 Esc 로 닫기"
+	if is_bomb:
+		hint = "지뢰 %d개째 · 같은 칸에 겹쳐 심으면 벌점도 겹칩니다 · %s" % [
+			int(me.card_effects.get("mine_count", 0)) + 1, hint]
+	_picker.show_board(board, is_bomb, "%s · 구역을 고르세요" % str(card.name), hint)
+	_picker.visible = true
+	# 팝업을 누르려면 마우스가 풀려 있어야 한다. 닫을 때 다시 잡는다.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _close_picker() -> void:
+	if not _picker.visible:
+		return
+	_picker.visible = false
+	_picker_card = -1
+	if game != null and game.wardrobe == null:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## 내 차례 알림(2026-11-24). 화면 위쪽 1/3 에 크게 뜬다 — 조준점과 아래 키 안내를 가리지 않는 자리다.
+func _build_turn_popup() -> void:
+	_turn_popup = VBoxContainer.new()
+	_turn_popup.name = "TurnPopup"
+	_turn_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	(_turn_popup as VBoxContainer).alignment = BoxContainer.ALIGNMENT_CENTER
+	(_turn_popup as VBoxContainer).add_theme_constant_override("separation", 2)
+	_turn_popup.visible = false
+	_root.add_child(_turn_popup)
+	_turn_popup_title = Style.heading(_turn_popup, "내 차례!", 64, Style.GOLD)
+	_turn_popup_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_turn_popup_note = Style.hud_label(_turn_popup, "", 22, Style.CREAM)
+	_turn_popup_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
 func _build_result() -> void:
 	_result = PanelContainer.new()
 	_result.add_theme_stylebox_override("panel", Style.card(Style.PANEL, Style.INK, Vector2(0, 10), 4, 22, 28))
@@ -285,6 +362,8 @@ func _process(delta: float) -> void:
 	_update_scores(state, waiting)
 	_update_phase(state, room, waiting, finished, delta)
 	_banner.position = Vector2((width - _banner.size.x) / 2, 18)
+	_update_turn_popup(state, width, height, delta)
+	_update_picker(state.find_player(game.controller.local_peer_id))
 	# 오른쪽 위: 방 정보 → 초대 버튼 → 킬로그.
 	_room.text = "%s\n%s  ·  %s  ·  %d/%d명" % [room.settings.room_name, "초대 전용" if room.settings.private_room else "공개 접속",
 		"암호 있음" if room.has_password else "암호 없음", room.players.size(), room.settings.capacity]
@@ -552,6 +631,30 @@ func _update_prompt() -> void:
 		child.queue_free()
 	for pair in pairs:
 		_prompt_box.add_child(_key_chip(str(pair[0]), str(pair[1])))
+
+
+## 내 차례가 시작되면 크게 알린다. 차례마다 한 번, TURN_POPUP_SECONDS 동안 커졌다가 사라진다.
+func _update_turn_popup(state: MatchState, width: float, height: float, delta: float) -> void:
+	var active: MatchPlayer = state.active_player()
+	var mine: bool = active != null and active.peer_id == game.controller.local_peer_id
+	var playing: bool = state.phase in MatchController.DART_PHASES and state.punish_target == 0
+	if mine and playing and _turn_popup_shown != state.turn_id:
+		_turn_popup_shown = state.turn_id
+		_turn_popup_age = 0.0
+		_turn_popup_note.text = "다트 %d발 · 왼쪽 버튼을 누르고 놓으세요" % maxi(state.darts_left, 1)
+		_turn_popup_title.add_theme_color_override("font_color", PlayerLook.COLORS[active.seat % PlayerLook.COLORS.size()].lightened(0.45))
+	if _turn_popup_age >= TURN_POPUP_SECONDS:
+		_turn_popup.visible = false
+		return
+	_turn_popup_age += delta
+	_turn_popup.visible = true
+	# 0.18초 동안 커지며 나타나고, 마지막 0.5초 동안 사라진다.
+	var grow: float = clampf(_turn_popup_age / 0.18, 0.0, 1.0)
+	_turn_popup.scale = Vector2.ONE * lerpf(0.72, 1.0, ease(grow, 0.3))
+	_turn_popup.modulate.a = grow * clampf((TURN_POPUP_SECONDS - _turn_popup_age) / 0.5, 0.0, 1.0)
+	_turn_popup.size = Vector2(width, 0)
+	_turn_popup.pivot_offset = Vector2(width / 2.0, 0)
+	_turn_popup.position = Vector2(0, height * 0.22)
 
 
 ## 키캡 + 할 일. 키캡은 크림색 작은 카드, 할 일은 그림자 진 글자.

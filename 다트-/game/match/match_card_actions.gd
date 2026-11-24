@@ -60,7 +60,9 @@ static func context_problem(type: int, caster: int, state: MatchState, target: i
 		"pickpocket":
 			var victim: MatchPlayer = state.find_player(target)
 			if victim != null and victim.hand.is_empty(): return "그 사람은 카드가 없다"
-	if Catalog.card(type).has("choice") and not aiming:
+	# 구역을 고르는 카드는 지금 던지는 사람의 판을 바꾸므로 조준 중에만 쓴다.
+	# 지뢰 심기는 예외다 — 경기 끝까지 남는 카드라 아무 때나 심고, 칸만 고르면 된다.
+	if Catalog.card(type).has("choice") and str(Catalog.card(type).effect) != "mine" and not aiming:
 		return "조준 중일 때만 쓸 수 있다"
 	return ""
 
@@ -83,14 +85,15 @@ func apply(effect, caster: int, target: int) -> String:
 	var state: MatchState = controller.state
 	match str(effect.kind):
 		"mine":
-			var free: Array[int] = []
-			for sector in range(20):
-				if sector not in cards.mines: free.append(sector)
-			if free.is_empty():
-				return "지뢰 자리가 없다"
-			cards.mines.append(free[_random.randi_range(0, free.size() - 1)])
+			# 2026-11-24: 무작위 칸이 아니라 쓴 사람이 고른 칸에 심는다. 같은 칸에 겹쳐 심을 수 있다
+			# (겹친 만큼 벌점이 곱해진다 — MatchCards.landing_points 가 같은 칸의 개수를 센다).
+			var spot: int = int(effect.choice)
+			if spot < 0 or spot > 19:
+				spot = _random.randi_range(0, 19)
+			cards.mines.append(spot)
+			var stacked: int = cards.mines.count(spot)
 			effect.result = "지뢰 %d개째" % cards.mines.size()
-			return "보이지 않는 지뢰를 심음"
+			return "보이지 않는 지뢰를 심음" if stacked == 1 else "같은 칸에 지뢰 %d겹" % stacked
 		"swap_turn":
 			return _swap_turn(caster)
 		"skip_turn":
