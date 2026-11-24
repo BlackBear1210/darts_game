@@ -48,6 +48,7 @@ const CAPSULE_BURST: float = 4.0
 ## 마시기 몸짓(2026-10-31 사용자 요청 — 예전엔 킬로그만 뜨고 아무 동작이 없었다).
 ## 한 모금 = DRINK_SECONDS 동안 병을 입으로 올려(HOLD → MOUTH) 병목이 얼굴 쪽으로 DRINK_TIP 만큼 기울었다가 내려온다.
 ## 박자는 CharacterRig.drink_curve 하나로 맞춘다(팔·고개·1인칭 카메라·병이 같이 움직인다). 마시기 쿨다운(1.5초)보다 짧아야 한다.
+const MugMotion = preload("res://art/characters/mug_motion.gd")
 const DRINK_SECONDS: float = 1.3
 ## 든 소품 자리(눈 기준, 몸 방향): 평소 = 오른손 앞 아래, 마실 때 = 입 앞.
 const HOLD_OFFSET := Vector3(0.3, -0.25, -0.55)
@@ -458,11 +459,16 @@ func _accept(sender: int, action: String, value: Variant) -> void:
 	var index: int = held(sender)
 	if action == "take" and index == -1 and hit.get("kind") == "prop":
 		index = int(hit.index)
+		objects[index].erase("set_down")
+		objects[index].erase("drank")
 		objects[index].holder = sender
 		objects[index].lying = false
 	elif action == "drink" and index >= 0 and objects[index].kind in DRINKS:
 		if time - float(objects[index].get("drank", -10.0)) < 1.5: return
 		objects[index].drank = time
+		if objects[index].kind == "mug":
+			var spot := MugMotion.table_spot(actor)
+			if spot.is_finite(): objects[index].set_down = spot
 		if session.room.settings.alcohol:
 			intoxication[sender] = minf(5, float(intoxication.get(sender, 0)) + 1.0)
 		feed("drink", actor, "한 모금")
@@ -530,6 +536,7 @@ func _launch(index: int, from: Vector3, velocity: Vector3, owner: int, powered: 
 		if int(projectile.index) == index: _projectiles.erase(projectile)
 	var object: Dictionary = objects[index]
 	object.holder = 0
+	object.erase("set_down")
 	object.position = from
 	object.lying = false
 	object.rest_at = now()
@@ -561,6 +568,19 @@ func _physics_process(delta: float) -> void:
 	for index in range(objects.size()):
 		var object: Dictionary = objects[index]
 		if int(object.holder) != 0 and not game.actors.has(int(object.holder)): object.holder = 0
+		if object.has("set_down"):
+			var owner: PlayerView = game.actors.get(int(object.holder))
+			var spot: Vector3 = object.set_down
+			if owner == null or Vector2(spot.x-owner.position.x,spot.z-owner.position.z).length()>0.68:
+				object.erase("set_down")
+		if object.has("set_down") and time-float(object.drank)>=DRINK_SECONDS:
+			object.position = object.set_down
+			object.holder = 0
+			object.lying = false
+			object.spin = 0.0
+			object.erase("drank")
+			object.erase("set_down")
+			_publish()
 		# 깨진 소품은 잠시 뒤 제자리에 새것으로.
 		if float(object.get("broken", 0.0)) > 0.0 and time >= float(object.broken):
 			object.broken = 0.0
@@ -1062,7 +1082,9 @@ func _process(delta: float) -> void:
 	_time += delta
 	var time: float = now()
 	# 마시는 몸짓은 병을 든 사람에게만 아래에서 다시 넣는다.
-	for view: PlayerView in game.actors.values(): view.drink_pose = 0.0
+	for view: PlayerView in game.actors.values():
+		view.drink_pose = 0.0
+		if view._rig != null: view._rig.mug_weight = 0.0
 	for index in range(mini(objects.size(), visuals.size())):
 		var object: Dictionary = objects[index]
 		var visual: Node3D = visuals[index]
@@ -1072,7 +1094,17 @@ func _process(delta: float) -> void:
 		if actor != null:
 			var progress: float = drink_progress(object, time)
 			actor.drink_pose = progress
-			visual.transform = _held_transform(actor, progress)
+			if object.kind == "mug" and actor._rig != null and actor._rig._layer.prop_grip != null:
+				var carry := actor._model.to_global(Vector3(0.15,actor.eye_position().y-actor.global_position.y-0.39,-0.38))
+				var base := carry
+				if object.has("set_down"):
+					base = carry.lerp(object.set_down,smoothstep(0.38,0.61,progress))
+				var grasp := 1.0
+				if object.has("set_down"):
+					grasp -= smoothstep(0.92,1.0,progress)
+				visual.global_transform = MugMotion.place(actor,actor._rig,base,progress,grasp)
+			else:
+				visual.transform = _held_transform(actor, progress)
 			continue
 		var target: Vector3 = object.position
 		visual.position = target if visual.position.distance_to(target) > 1.5 else visual.position.lerp(target, minf(1.0, delta * 20.0))

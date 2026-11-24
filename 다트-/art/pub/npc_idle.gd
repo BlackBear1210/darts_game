@@ -13,6 +13,7 @@ extends Node3D
 ## 만드는 곳: art/pub/room/room_guests.gd·room_bar.gd(펍 손님·바텐더 → pub_game.tscn 에 저장), game/lounge/arcade/arcade_room.gd(주스 가게 직원).
 
 const CHARACTER_SCENE := "res://art/characters/rigged/player_character.tscn"
+const PUB_CHARACTER_SCENE := preload("res://art/characters/rigged/approved_player.tscn")
 const SCRIPT_PATH := "res://art/pub/npc_idle.gd"
 ## 의상 부품(class_name 대신 preload — 열린 편집기가 새 class_name 을 못 읽는 함정).
 const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
@@ -36,6 +37,9 @@ const SEAT_TOP := 0.6
 var walk_ratio: float = 0.0
 var reaching: bool = false
 
+const MugMotion = preload("res://art/characters/mug_motion.gd")
+var _mug: Node3D
+var _mug_base: Vector3
 var _motion: CharacterMotion
 var _time: float = 0.0
 ## 시가 피우기 부품(style 4).
@@ -88,7 +92,7 @@ static var _anger_texture: Texture2D
 ## NPC 한 명을 만든다. at = 서 있는(앉은 의자) 바닥 자리, look = 바라볼 곳.
 ## seat_top = 앉을 의자 윗면 높이(높은 바 스툴이면 그 차이만큼 몸을 올린다).
 static func spawn(parent: Node, node_name: String, at: Vector3, look: Vector3, shirt_color: Color, sit: bool,
-		act := 0, phase := 0.0, seat_top := SEAT_TOP, wear_glasses := false, dress_as := 0) -> Node3D:
+		act := 0, phase := 0.0, seat_top := SEAT_TOP, wear_glasses := false, dress_as := 0, character_scene: PackedScene = null) -> Node3D:
 	var holder := Node3D.new()
 	holder.name = node_name
 	holder.set_script(load(SCRIPT_PATH))
@@ -100,7 +104,9 @@ static func spawn(parent: Node, node_name: String, at: Vector3, look: Vector3, s
 	holder.set("outfit", dress_as)
 	# 캐릭터를 먼저 넣고 나서 부모에 붙인다: 부모가 이미 화면 트리 안이면(오락실 주스 직원) 붙이는 순간 _ready 가 도는데,
 	# 그때 "Character" 가 없으면 몸짓·옷이 꺼진 채 T자 자세로 서 있었다(2026-11-08 미리보기에서 발견).
-	var model := (load(CHARACTER_SCENE) as PackedScene).instantiate() as Node3D
+	if character_scene == null:
+		character_scene = load(CHARACTER_SCENE) as PackedScene
+	var model := character_scene.instantiate() as Node3D
 	model.name = "Character"
 	holder.add_child(model)
 	parent.add_child(holder)
@@ -118,6 +124,13 @@ func _ready() -> void:
 	_dress(model)
 	_motion = CharacterMotion.new(model, phase_seconds)
 	_time = phase_seconds
+	if seated and style == 0 and _motion._layer.prop_grip != null:
+		_mug_base = MugMotion.table_spot(self)
+		if _mug_base.is_finite():
+			_mug = preload("res://art/props/mug.tscn").instantiate()
+			add_child(_mug,false,Node.INTERNAL_MODE_BACK)
+			_mug.top_level = true
+			_mug.global_transform = Transform3D(global_basis,_mug_base)
 	if style == 4:
 		_setup_cigar(model)
 
@@ -144,6 +157,10 @@ func _process(delta: float) -> void:
 			_motion.drinking = 0.0
 		4:
 			_motion.drinking = _smoke_lift(ratio)
+	if _mug != null:
+		var progress := _motion.drinking
+		var grip := smoothstep(0.0,0.08,progress)*(1.0-smoothstep(0.92,1.0,progress))
+		_mug.global_transform = MugMotion.place(self,_motion,_mug_base,progress,grip)
 	var posture := CharacterMotion.Posture.SEAT if seated else CharacterMotion.Posture.STAND
 	# 시선은 아주 천천히 위아래로(살아 있는 느낌만).
 	_motion.animate(delta, walk_ratio, posture, false, sin(_time * 0.37) * 0.06, false)
@@ -159,6 +176,9 @@ func react(mode: String, target: Node3D) -> void:
 		_home = transform
 		_home_seated = seated
 	reacting = true
+	if _mug != null:
+		_motion.mug_weight = 0.0
+		_mug.global_transform = Transform3D(global_basis,_mug_base)
 	_react_mode = mode
 	_react_time = 0.0
 	_react_target = target

@@ -92,7 +92,7 @@ static func build_guests(p: Node3D) -> void:
 	]
 	for i in range(spots.size()):
 		var spot: Array = spots[i]
-		NpcIdle.spawn(p, "Guest_%d" % (i + 1), spot[0], spot[1], Color(spot[3]), spot[2], int(spot[7]), i * 1.7, spot[5], spot[4], spot[6])
+		NpcIdle.spawn(p, "Guest_%d" % (i + 1), spot[0], spot[1], Color(spot[3]), spot[2], int(spot[7]), i * 1.7, spot[5], spot[4], spot[6], NpcIdle.PUB_CHARACTER_SCENE)
 
 
 ## 도면의 당구대(요청서 P08 "곡면 모서리"). 충돌은 TableView.POOL_TABLE_BOX.

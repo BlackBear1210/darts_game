@@ -55,6 +55,7 @@ var color: Color
 ## 지금 이 사람이 조준 중인지. GameView 가 매 프레임 넣고, 몸짓이 오른팔을 든다(모든 화면에서 보인다).
 var aiming: bool = false
 var ready_pose: bool = false
+var waiting_at_attention := false
 ## 봇이 사람을 약 올리는 중(두 팔 번쩍). 싱글 플레이 봇 행동(game/player/bot_social.gd)이 넣는다 — 보이기만.
 var taunting: bool = false
 ## 앉아서 A·D 로 기울인 양(-1 = 왼쪽 끝, +1 = 오른쪽 끝). 방장이 정하고 위치와 함께 모두에게 보낸다.
@@ -112,7 +113,7 @@ func _ready() -> void:
 	add_child(_collision)
 
 
-func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false) -> void:
+func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false, lobby_wait: bool = false) -> void:
 	identity = player
 	# 자리 뒤에 선 채로 시작한다. 뒷벽에 붙은 자리도 있어 방 안으로 당긴다.
 	position = TableView.standing_spot(player.seat)
@@ -121,9 +122,12 @@ func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false
 	# 캐릭터마다 고유 렌더 레이어. 각 카메라에서 자기 몸만 제외한다(모델의 모든 조각 + 이름표).
 	_set_layers(self, 1 << (player.seat + 1))
 	if player.is_bot:
-		position = TableView.seat_spot(player.seat)
-		seated = true
-		look_at(Vector3(TableView.BOARD_CENTER.x, position.y, TableView.BOARD_CENTER.z))
+		waiting_at_attention = lobby_wait
+		seated = not lobby_wait
+		if seated:
+			position = TableView.seat_spot(player.seat)
+		var target := TableView.TABLE_CENTER if lobby_wait else TableView.BOARD_CENTER
+		look_at(Vector3(target.x, position.y, target.z))
 	show_state(player)
 
 
@@ -152,8 +156,11 @@ func _process(delta: float) -> void:
 	var posture := CharacterMotion.Posture.SEAT if seated else (CharacterMotion.Posture.CROUCH if crouched else CharacterMotion.Posture.STAND)
 	var ground_speed := Vector2(velocity.x, velocity.z).length() / SPEED
 	var airborne := not seated and position.y > 0.05
-	_rig.cheering = ready_pose or taunting
+	_rig.standing_at_attention = waiting_at_attention
+	_rig.cheering = (ready_pose or taunting) and not waiting_at_attention
 	_rig.drinking = drink_pose
+	if _rig._layer.prop_grip != null and identity != null:
+		_rig._layer.prop_grip.large = bool(identity.card_effects.get("large",false))
 	_shown_lean = lerpf(_shown_lean, seat_lean if seated else 0.0, 1.0 - exp(-18.0 * delta))
 	# 왕머리·엿보기는 시각 표현만 바꾼다. 충돌 캡슐은 움직이지 않는다.
 	# 오락실 캡슐 왕머리(head_scale)와 왕머리 카드(card_effects.head_scale) 중 큰 쪽.
@@ -203,6 +210,7 @@ func fall(push: Vector3) -> void:
 	_collision.set_deferred("disabled", true)
 	# 1) 애니메이터 끄기 → 2) 래그돌 켜기(순서가 반대면 첫 프레임에 애니메이션이 물리 자세를 덮는다).
 	_rig.set_animator_enabled(false)
+	if _rig._layer.prop_grip != null: _rig._layer.prop_grip.projectile.hide()
 	_ragdoll.start(push, global_position + Vector3.UP * 1.1)
 
 
@@ -310,6 +318,8 @@ func _dress(seat: int) -> void:
 	_model.scale = Vector3.ONE * body_scale
 	# 네 명이 같은 박자로 움직이지 않게 자리마다 시작 시각을 다르게 준다.
 	_rig = CharacterMotion.new(_model, seat * 0.9)
+	if _rig._layer.prop_grip != null:
+		_rig._layer.prop_grip.enable_dart(_model,color)
 	PlayerOutfit.dress(_model, look)
 
 

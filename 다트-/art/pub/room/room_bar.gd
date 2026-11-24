@@ -73,7 +73,7 @@ static func build_bar(p: Node3D) -> void:
 	#   가운데 꼭지에서 맥주를 따르고, 뒤돌아 조리대 커피 머신에서 커피를 · 전자레인지에서 음식을 꺼내
 	#   바 스툴 손님 앞(바 윗면)에 놓고, 다 먹은 잔·접시는 치운다(art/pub/pub_service.gd — 실행 중에만 움직인다).
 	var stand := Vector3(BAR_LANE_X, 0, mid)
-	var bartender := NpcIdle.spawn(p, "Bartender", stand, stand + Vector3(3.0, 0, 0), Color("e9e2d0"), false, 3, 0.4, NpcIdle.SEAT_TOP, false, NpcOutfit.Outfit.BARTENDER)
+	var bartender := NpcIdle.spawn(p, "Bartender", stand, stand + Vector3(3.0, 0, 0), Color("e9e2d0"), false, 3, 0.4, NpcIdle.SEAT_TOP, false, NpcOutfit.Outfit.BARTENDER, NpcIdle.PUB_CHARACTER_SCENE)
 	var counter_top: Vector3 = TableView.BACK_COUNTER_AT + Vector3(0.22, 1.0, 0)
 	var foods := PackedStringArray(["plate+steak@1.15", "plate+pancakes@0.62", "plate+hotdog@0.72", "plate+burger_ready@0.7",
 		"plate+roast_chicken@0.75", "plate+eggs_ready@0.62", "dish_2@0.62", "dish_6@0.62"])

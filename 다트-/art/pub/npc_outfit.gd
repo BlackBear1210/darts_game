@@ -34,15 +34,31 @@ static func dress(model: Node3D, outfit: int, accent: Color, glasses: bool) -> v
 		return
 	match outfit:
 		Outfit.BARTENDER:
-			_bartender(skeleton)
+			_bartender(model, skeleton)
 		Outfit.JUICE_VENDOR:
 			_juice_vendor(skeleton, accent)
 		Outfit.GUEST_BEANIE:
-			_beanie(_on_bone(skeleton, "head"), accent)
+			_beanie(_fit_head(model, skeleton, "hat", Vector3(HEAD_AXIS.x, HAT_BASE_Y, 0.0)), accent)
 		Outfit.GUEST_CAP:
-			_cap(_on_bone(skeleton, "head"), accent)
+			_cap(_fit_head(model, skeleton, "hat", Vector3(HEAD_AXIS.x, HAT_BASE_Y, 0.0)), accent)
 	if glasses:
-		_glasses(_on_bone(skeleton, "head"))
+		_glasses(_fit_head(model, skeleton, "eyes", Vector3(HEAD_AXIS.x, 1.57, -0.245)))
+
+
+
+## 승인 모델의 눈·머리·입 기준점에 기존 의상 부품을 맞춘다.
+static func _fit_head(model: Node3D, skeleton: Skeleton3D, kind: String, origin: Vector3) -> Node3D:
+	var head := _on_bone(skeleton, "head")
+	var anchors: Dictionary = model.get_meta("face_anchors", {})
+	if not anchors.has(kind):
+		return head
+	var fit := Node3D.new()
+	fit.name = "Fit_" + kind
+	var amount: float = model.get_meta("hat_fit_scale" if kind == "hat" else "face_fit_scale", 1.0)
+	var target: Vector3 = anchors[kind]
+	fit.transform = Transform3D(Basis.from_scale(Vector3.ONE * amount), target - origin * amount)
+	head.add_child(fit)
+	return fit
 
 
 ## 뼈 하나에 붙는 "의상 받침" 노드. 이 노드 아래 좌표 = 뼈대 공간(쉬는 자세 기준)이라 위 치수표 숫자를 그대로 쓴다.
@@ -72,9 +88,15 @@ static func _clay(key: String, color: String, rough := 0.8, metal := 0.0) -> Sta
 
 # ─────────────────────────────── 바텐더 ───────────────────────────────
 
-static func _bartender(skeleton: Skeleton3D) -> void:
+static func _bartender(model: Node3D, skeleton: Skeleton3D) -> void:
 	var chest := _on_bone(skeleton, "chest")
-	var head := _on_bone(skeleton, "head")
+	if model.has_meta("face_anchors"):
+		# 승인 모델의 가슴이 기존 모델보다 앞쪽에 있어 조끼와 셔츠 앞판을 옮긴다.
+		var fitted_chest := Node3D.new()
+		fitted_chest.name = "ApprovedVest"
+		fitted_chest.position = Vector3(0, 0.035, -0.09)
+		chest.add_child(fitted_chest)
+		chest = fitted_chest
 	var vest := _clay("vest", "2e1f26", 0.62)
 	vest.cull_mode = BaseMaterial3D.CULL_DISABLED
 	MeshKit.mesh_node(chest, "Vest", _vest_mesh(), Vector3.ZERO, vest)
@@ -127,8 +149,8 @@ static func _bartender(skeleton: Skeleton3D) -> void:
 		var piece := PackedVector2Array([Vector2(lerpf(-0.07, -0.058, (y0 - 1.09) / 0.08), y0), Vector2(lerpf(-0.07, -0.058, (y0 + 0.012 - 1.09) / 0.08), y0 + 0.012)])
 		MeshKit.mesh_node(chest, "TowelStripe", RoundKit.sweep_mesh("outfit_towel_stripe_%d" % k, RoundKit.rounded_rect_profile(Vector2(0.118, 0.015), 0.005, 3),
 			_drape_rails(piece, TOWEL_X, Vector2(0.09, 1.2))), Vector3.ZERO, stripe)
-	bowler(head)
-	mustache(head)
+	bowler(_fit_head(model, skeleton, "hat", Vector3(HEAD_AXIS.x, HAT_BASE_Y, 0.0)))
+	mustache(_fit_head(model, skeleton, "mouth", Vector3(-0.012, 1.37, -0.207)))
 	# 긴 앞치마(허리 → 무릎, 검정, 다리를 따라 살짝 둥글게) — 바 앞에서 보면 대부분 카운터에 가린다. 엉덩이 뼈에 붙인다.
 	_curved_apron(_on_bone(skeleton, "hips"), "Apron", 0.4, 0.86, _clay("apron", "1c1a20", 0.85))
 

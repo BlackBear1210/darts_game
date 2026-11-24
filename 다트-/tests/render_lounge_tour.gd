@@ -35,9 +35,11 @@ func _run() -> void:
 	await create_timer(0.8).timeout
 	game = main._game
 	game.force_seat(1)
-	# 봇은 준비 완료 상태다. 실제 리그의 양팔 보간이 끝날 때까지 기다린다.
+	# 준비 완료한 봇도 경기 전에는 양팔을 내리고 서 있다.
 	await create_timer(0.8).timeout
-	assert(game.actors[-1].ready_pose and game.actors[-2].ready_pose)
+	for actor: PlayerView in game.actors.values():
+		if actor.identity.is_bot:
+			assert(actor.waiting_at_attention and not actor.seated and not actor.ready_pose)
 	game.set_process(false)
 	game.set_physics_process(false)
 	game.camera.cull_mask = 0xfffff

@@ -200,7 +200,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		view.look = PlayerOutfit.sanitize(room_player.look if room_player != null else {})
 		if player.peer_id == local_peer_id and not player.is_bot:
 			view.look = PlayerOutfit.sanitize(Preferences.look)
-		view.configure(player)
+		view.configure(player, 0.0, false, _bots_waiting_in_lobby())
 		actors[player.peer_id] = view
 		if player.peer_id == local_peer_id:
 			camera.cull_mask = 0xfffff & ~(1 << (player.seat + 1))
@@ -502,6 +502,14 @@ func _physics_process(delta: float) -> void:
 ## 사람과 같은 PlayerView.simulate 를 거치므로 이동·충돌·속도 규칙이 같다.
 func _drive_bot(actor: PlayerView, delta: float) -> void:
 	var state := controller.state
+	if _bots_waiting_in_lobby():
+		if actor.seated:
+			actor.seated = false
+			actor.position = TableView.standing_spot(actor.identity.seat)
+			actor.look_at(Vector3(TableView.TABLE_CENTER.x, actor.position.y, TableView.TABLE_CENTER.z))
+			actor.update_posture()
+		actor.simulate(delta, {})
+		return
 	var active := state.active_player()
 	var mine: bool = active != null and active.peer_id == actor.identity.peer_id
 	var playing: bool = mine and state.phase in [MatchState.Phase.AIMING, MatchState.Phase.FLIGHT, MatchState.Phase.SETTLING]
@@ -697,6 +705,10 @@ func _accept_seat(sender: int) -> void:
 
 
 ## 테이블 집합 제한시간이 끝났을 때 방장이 거리와 관계없이 자리로 옮긴다(MatchController._close_table).
+func _bots_waiting_in_lobby() -> bool:
+	return session != null and session.room.phase == RoomState.Phase.LOBBY and controller.state.phase == MatchState.Phase.WAITING and not controller.card_test_active
+
+
 func force_seat(id: int) -> void:
 	var actor := actors.get(id) as PlayerView
 	if actor != null and not actor.seated:
@@ -828,7 +840,7 @@ func _process(delta: float) -> void:
 			get_viewport().msaa_3d = Viewport.MSAA_2X if _last_quality == 2 else Viewport.MSAA_DISABLED
 		for actor: PlayerView in actors.values():
 			var identity: RoomPlayer = session.room.find_player(actor.identity.peer_id)
-			actor.ready_pose = session.room.phase == RoomState.Phase.LOBBY and identity != null and identity.is_ready
+			actor.ready_pose = session.room.phase == RoomState.Phase.LOBBY and identity != null and identity.is_ready and not identity.is_bot
 		var current: MatchPlayer = state.active_player()
 		if current != null:
 			table.board.show_layout(current.layout)
@@ -858,6 +870,7 @@ func _process(delta: float) -> void:
 	for id: int in actors:
 		var actor := actors[id] as PlayerView
 		var effects: Dictionary = actor.identity.card_effects
+		actor.waiting_at_attention = actor.identity.is_bot and _bots_waiting_in_lobby()
 		# 목소리 변조·강제 음소거 카드(2026-11-21) → 재생 높낮이·중계 차단. 마이크 그림도 꺼진 모양.
 		if voice != null: voice.set_card_voice(id, float(effects.get("voice_pitch", 1.0)), bool(effects.get("mute", false)))
 		var mic: int = -1
@@ -1557,7 +1570,7 @@ func sync_room(room: RoomState) -> void:
 			if actors.has(player.peer_id): continue
 			var view := PLAYER_SCENE.instantiate() as PlayerView
 			_players_root.add_child(view)
-			view.configure(player)
+			view.configure(player, 0.0, false, _bots_waiting_in_lobby())
 			actors[player.peer_id] = view
 	_apply_state()
 	if lounge != null: lounge.apply_theme()

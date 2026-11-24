@@ -81,7 +81,7 @@ const SMALL_BARREL_HEIGHT: float = 0.5
 const BAR_BOX := AABB(Vector3(-5.85, 0, 0.0), Vector3(0.95, 1.2, 7.4))
 const NPC_TABLE_BOX := AABB(Vector3(4.95, 0, 3.3), Vector3(1.65, 0.85, 1.5))
 ## 2026-11-08: 둘째 의자를 z 6.3 → 5.5 로(테이블 가운데에서 첫째 의자와 같은 거리 — 예전엔 테이블에서 1.5m 떨어져 앉아 앞 접시가 멀었다).
-const NPC_STOOLS: Array[Vector3] = [Vector3(5.8, 0, 2.6), Vector3(5.8, 0, 5.5)]
+const NPC_STOOLS: Array[Vector3] = [Vector3(5.8, 0, 2.97), Vector3(5.8, 0, 5.13)]
 const STOOL_RADIUS: float = 0.3
 const STOOL_HEIGHT: float = 0.6
 const POOL_TABLE_BOX := AABB(Vector3(10.4, 0, 2.8), Vector3(1.5, 0.8, 2.55))

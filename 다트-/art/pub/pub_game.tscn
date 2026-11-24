@@ -21,7 +21,7 @@
 [ext_resource type="ArrayMesh" path="res://art/vendor/rg_poly/meshes/soda_can_e.res" id="19_aedgu"]
 [ext_resource type="ArrayMesh" path="res://art/vendor/rg_poly/meshes/soda_can_a.res" id="20_isgyy"]
 [ext_resource type="Script" path="res://art/pub/npc_idle.gd" id="21_lqwvo"]
-[ext_resource type="PackedScene" path="res://art/characters/rigged/player_character.tscn" id="22_25vfg"]
+[ext_resource type="PackedScene" path="res://art/characters/rigged/approved_player.tscn" id="22_25vfg"]
 [ext_resource type="Script" path="res://art/pub/pub_service.gd" id="23_2v4ao"]
 [ext_resource type="Script" path="res://art/pub/npc_table_food.gd" id="24_t0or0"]
 [ext_resource type="Texture2D" path="res://art/pub/pictures/poster_bullseye.svg" id="25_m45jf"]
@@ -4529,7 +4529,7 @@ size = Vector3(13.48, 0.06, 12.629999)
 size = Vector3(22.279999, 0.06, 9.129999)
 
 [node name="PubGame" type="Node3D"]
-metadata/layout_signature = "[\"round_table_v1\", \"dart_machine_v1\", Vector3(0, 2.6, -10.8), 2.5, Array[Vector3]([Vector3(-1.4, 0, 4.4), Vector3(0, 0, 5.8), Vector3(1.4, 0, 4.4), Vector3(0, 0, 3)]), Rect2(-6.6, -12.5, 13.2, 12.5), Rect2(-8.4, 0, 22, 9), 0.3, 4.8, -3.7, -3.6, 1.2, Vector2(-5.2, -4.5), Vector3(0, 0, 4.4), Vector2(2.15, 1.55), 0.85, Array[Vector3]([Vector3(-5.7, 0, -11.8), Vector3(5.6, 0, -12.2), Vector3(-5.7, 0, -3.1), Vector3(5.6, 0, -3.15)]), 0.4, Array[Vector3]([Vector3(6, 0, -11.15), Vector3(-6.15, 0, -2.4), Vector3(5.1, 0, -2.5), Vector3(6, 0, -2.3)]), 0.2, AABB(-5.85, 0, 0, 0.95, 1.2, 7.4), AABB(4.95, 0, 3.3, 1.65, 0.85, 1.5), Array[Vector3]([Vector3(5.8, 0, 2.6), Vector3(5.8, 0, 5.5)]), AABB(10.4, 0, 2.8, 1.5, 0.8, 2.55), Vector3(-7.5, 0, 0.95), Vector3(-7.8, 0, 6.3), Vector3(-3.4, 0, -11.6), Vector3(5.9, 0, -5), Vector3(-3.1, 0, 8.35), Vector3(12.75, 0, 1), Vector3(12.85, 0, 2.05), Vector3(6.95, 0, 8.35), Vector3(6.35, 0, 8.5), 1.1, Array[Vector3]([Vector3(-5.2, 1.1, 1.4), Vector3(-5.2, 1.1, 1.9), Vector3(-5.2, 1.1, 6.2), Vector3(-5.2, 1.1, 6.7)]), Array[float]([3.1, 3.58, 4.06, 4.54, 5.02]), Vector3(-5.375, 0, 8.12), Vector3(0.95, 1.95, 1.44), Array[float]([0.95, 2.5, 5.6]), AABB(7.4, 0, 7.55, 2, 2.95, 1.45)]"
+metadata/layout_signature = "[\"round_table_v1\", \"dart_machine_v1\", Vector3(0, 2.6, -10.8), 2.5, Array[Vector3]([Vector3(-1.4, 0, 4.4), Vector3(0, 0, 5.8), Vector3(1.4, 0, 4.4), Vector3(0, 0, 3)]), Rect2(-6.6, -12.5, 13.2, 12.5), Rect2(-8.4, 0, 22, 9), 0.3, 4.8, -3.7, -3.6, 1.2, Vector2(-5.2, -4.5), Vector3(0, 0, 4.4), Vector2(2.15, 1.55), 0.85, Array[Vector3]([Vector3(-5.7, 0, -11.8), Vector3(5.6, 0, -12.2), Vector3(-5.7, 0, -3.1), Vector3(5.6, 0, -3.15)]), 0.4, Array[Vector3]([Vector3(6, 0, -11.15), Vector3(-6.15, 0, -2.4), Vector3(5.1, 0, -2.5), Vector3(6, 0, -2.3)]), 0.2, AABB(-5.85, 0, 0, 0.95, 1.2, 7.4), AABB(4.95, 0, 3.3, 1.65, 0.85, 1.5), Array[Vector3]([Vector3(5.8, 0, 2.97), Vector3(5.8, 0, 5.13)]), AABB(10.4, 0, 2.8, 1.5, 0.8, 2.55), Vector3(-7.5, 0, 0.95), Vector3(-7.8, 0, 6.3), Vector3(-3.4, 0, -11.6), Vector3(5.9, 0, -5), Vector3(-3.1, 0, 8.35), Vector3(12.75, 0, 1), Vector3(12.85, 0, 2.05), Vector3(6.95, 0, 8.35), Vector3(6.35, 0, 8.5), 1.1, Array[Vector3]([Vector3(-5.2, 1.1, 1.4), Vector3(-5.2, 1.1, 1.9), Vector3(-5.2, 1.1, 6.2), Vector3(-5.2, 1.1, 6.7)]), Array[float]([3.1, 3.58, 4.06, 4.54, 5.02]), Vector3(-5.375, 0, 8.12), Vector3(0.95, 1.95, 1.44), Array[float]([0.95, 2.5, 5.6]), AABB(7.4, 0, 7.55, 2, 2.95, 1.45)]"
 
 [node name="Shell" type="Node3D" parent="."]
 editor_description = "만든 곳: 바닥·천장·벽(징두리·난간·코니스·코브·기둥·아치 틀)·창 구멍 — art/pub/room/room_shell.gd build_shell
@@ -7022,13 +7022,13 @@ mesh = SubResource("ArrayMesh_rymlk")
 script = ExtResource("24_t0or0")
 
 [node name="FoodSpot_1" type="Marker3D" parent="NpcCorner/NpcTable/TableFood"]
-transform = Transform3D(-0.9998514, 0, 0.017239107, 0, 1, 0, -0.017239107, 0, -0.9998514, 0.006723291, 0.85400003, -0.38994205)
+transform = Transform3D(-0.9997322, 0, 0.023142569, 0, 1, 0, -0.023142569, 0, -0.9997322, 0.009025565, 0.85400003, -0.38989556)
 
 [node name="FoodSpot_2" type="Marker3D" parent="NpcCorner/NpcTable/TableFood"]
-transform = Transform3D(0.9998514, 0, 0.017239213, 0, 1, 0, -0.017239213, 0, 0.9998514, 0.006723293, 0.85400003, 0.38994205)
+transform = Transform3D(0.9997322, 0, 0.02314248, 0, 1, 0, -0.02314248, 0, 0.9997322, 0.009025567, 0.85400003, 0.38989556)
 
 [node name="NpcStool_1" type="Node3D" parent="NpcCorner"]
-transform = Transform3D(-0.9998514, 0, 0.017239107, 0, 1, 0, -0.017239107, 0, -0.9998514, 5.8, 0, 2.6)
+transform = Transform3D(-0.9997322, 0, 0.023142569, 0, 1, 0, -0.023142569, 0, -0.9997322, 5.8, 0, 2.97)
 
 [node name="Cushion" type="MeshInstance3D" parent="NpcCorner/NpcStool_1"]
 material_override = SubResource("StandardMaterial3D_dv6o6")
@@ -7093,7 +7093,7 @@ material_override = SubResource("StandardMaterial3D_4ra1o")
 mesh = SubResource("ArrayMesh_oggfi")
 
 [node name="NpcStool_2" type="Node3D" parent="NpcCorner"]
-transform = Transform3D(0.9998514, 0, 0.017239213, 0, 1, 0, -0.017239213, 0, 0.9998514, 5.8, 0, 5.5)
+transform = Transform3D(0.9997322, 0, 0.02314248, 0, 1, 0, -0.02314248, 0, 0.9997322, 5.8, 0, 5.13)
 
 [node name="Cushion" type="MeshInstance3D" parent="NpcCorner/NpcStool_2"]
 material_override = SubResource("StandardMaterial3D_dv6o6")
@@ -7162,7 +7162,7 @@ editor_description = "만든 곳: 앉은 손님 NPC — art/pub/room/room_guests
 생성물이다 — 직접 고치지 말고 생성기를 고친 뒤 다시 만든다(art/pub/room/README.md)."
 
 [node name="Guest_1" type="Node3D" parent="Guests"]
-transform = Transform3D(-0.9998514, 0, 0.017239107, 0, 1, 0, -0.017239107, 0, -0.9998514, 5.8, 0, 2.6)
+transform = Transform3D(-0.9997322, 0, 0.023142569, 0, 1, 0, -0.023142569, 0, -0.9997322, 5.8, 0, 2.97)
 script = ExtResource("21_lqwvo")
 seated = true
 shirt = Color(0.72156864, 0.40392157, 0.2901961, 1)
@@ -7171,7 +7171,7 @@ outfit = 3
 [node name="Character" type="Node3D" parent="Guests/Guest_1" instance=ExtResource("22_25vfg")]
 
 [node name="Guest_2" type="Node3D" parent="Guests"]
-transform = Transform3D(0.9998514, 0, 0.017239215, 0, 1, 0, -0.017239215, 0, 0.9998514, 5.8, 0, 5.5)
+transform = Transform3D(0.9997322, 0, 0.023142481, 0, 1, 0, -0.023142481, 0, 0.9997322, 5.8, 0, 5.13)
 script = ExtResource("21_lqwvo")
 phase_seconds = 1.7
 seated = true

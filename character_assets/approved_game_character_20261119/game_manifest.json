@@ -2,7 +2,7 @@
   "source": "character_assets\\approved_rig_20261119\\character_source.blend",
   "source_sha256": "6024434afeb61ae95e41497dd543fa36b626ee94b9b513f14cc8ac87b3a32b5f",
   "game_asset": "다트-\\art\\characters\\rigged\\approved_character.glb",
-  "game_asset_sha256": "f1e8f10441ff05e370742abfcc3a9cbc8077aa27bce619de374c8f87a6367726",
+  "game_asset_sha256": "63c5cf7768a4c21c733002799998d4cd64b273b58469eef72548f84629ad2ce0",
   "scale": 1.8370432589508672,
   "transform": [
     [
@@ -30,7 +30,7 @@
       1.0
     ]
   ],
-  "uniform_placement_only": true,
+  "uniform_placement_only": false,
   "bind_inverse_transform_errors": {
     "Body": 1.2036781326982014e-07,
     "Top_01": 9.245927368097646e-08,
@@ -123,5 +123,6 @@
   "postprocessed_skin_weights": [
     "Bottom_01",
     "Shoes_01"
-  ]
+  ],
+  "postprocessed_neck": "neck_review_patch.py"
 }

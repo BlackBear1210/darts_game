@@ -11,7 +11,7 @@ var _legs:Array=[]
 var _physical_fall:bool=false
 static var _bounds_cache:Dictionary={}
 const NECK_LIMIT: float = 0.18
-const WRIST_LIMIT: float = 1.13
+var wrist_limit: float = 1.13
 
 func _init(rig: Skeleton3D,model:Node3D,physical_fall:bool=false) -> void:
 	_rig=rig
@@ -112,8 +112,8 @@ func _limit_wrist(fore:int,hand:int) -> bool:
 	var hand_pose:Transform3D=_rig.get_bone_global_pose(hand)
 	var along:Vector3=hand_pose.basis.y.normalized()
 	var angle:float=forearm.angle_to(along)
-	if angle>WRIST_LIMIT:
-		var target:Vector3=forearm.slerp(along,WRIST_LIMIT/angle).normalized()
+	if angle>wrist_limit:
+		var target:Vector3=forearm.slerp(along,wrist_limit/angle).normalized()
 		var facing:Quaternion=Quaternion(along,target)*hand_pose.basis.get_rotation_quaternion()
 		_rig.set_bone_pose_rotation(hand,_rig.get_bone_global_pose(fore).basis.get_rotation_quaternion().inverse()*facing)
 		return true

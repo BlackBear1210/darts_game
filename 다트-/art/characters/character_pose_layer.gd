@@ -14,6 +14,8 @@ var head_tilt := 0.0
 var head_scale := 1.0
 var left: Arm
 var right: Arm
+var seated_arms := 0.0
+var _rest_arms: Array = []
 ## 앉은 다리 자세 비율(0 = 모션 그대로, 1 = 허벅지는 방석 위에 수평 · 정강이는 아래로 · 발은 의자 발걸이 위).
 ## 2026-11-08 사용자 지적 "의자에 앉아 있는 모션이 이상하다": Seated_Stool 모션은 낮은 의자용이라 허벅지가
 ## 35도 아래로 기울어 무릎(높이 0.43m)이 앉는 면 0.6m 의자 방석을 뚫었다. CharacterMotion 이 넣는다.
@@ -50,6 +52,8 @@ var _neck: int
 var _head: int
 ## [허벅지, 정강이, 발, 좌우 부호] — 왼쪽 -1, 오른쪽 +1.
 var _legs: Array = []
+const PropGrip = preload("res://art/characters/character_prop_grip.gd")
+var prop_grip: PropGrip
 var pose_safety: RefCounted
 
 
@@ -99,6 +103,8 @@ func setup(rig: Skeleton3D, left_arm: Arm, right_arm: Arm) -> void:
 	_head = rig.find_bone("head")
 	_legs.clear()
 	for side: String in ["L", "R"]:
+		_rest_arms.append([rig.find_bone("upper_arm." + side), rig.find_bone("forearm." + side),
+			rig.find_bone("hand." + side), -1.0 if side == "L" else 1.0])
 		var bones := [rig.find_bone("thigh." + side), rig.find_bone("shin." + side), rig.find_bone("foot." + side), -1.0 if side == "L" else 1.0]
 		if bones[0] >= 0 and bones[1] >= 0 and bones[2] >= 0:
 			_legs.append(bones)
@@ -108,6 +114,15 @@ func _process_modification() -> void:
 	var rig := get_skeleton()
 	if rig == null or left == null:
 		return
+	# Set the hanging pose underneath the prop layers, so lowering a prop blends back to it.
+	if seated_arms > 0.001:
+		for chain: Array in _rest_arms:
+			for index in range(3):
+				var bone: int = chain[index]
+				var rest := rig.get_bone_rest(bone).basis.get_rotation_quaternion()
+				rig.set_bone_pose_rotation(bone, rig.get_bone_pose_rotation(bone).slerp(rest, seated_arms))
+			_aim(rig, chain[0], chain[1], Vector3(0.16 * chain[3], -1, 0.04), seated_arms)
+			_aim(rig, chain[1], chain[2], Vector3(0.05 * chain[3], -1, -0.24), seated_arms)
 	for arm: Arm in [left, right]:
 		if arm.weight > 0.001:
 			for index in range(arm.bones.size()):
@@ -131,6 +146,8 @@ func _process_modification() -> void:
 		_reach_right_hand(rig)
 	if pose_safety != null:
 		pose_safety.apply()
+	if prop_grip != null:
+		prop_grip.apply(self)
 
 
 ## 두 눈 사이 점(스켈레톤 기준, 쉬는 자세)을 알려 주면 reach 를 쓸 수 있다.

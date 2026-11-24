@@ -76,6 +76,9 @@ const CARD_FAN_FACING := Vector3(0.45, 0.55, 0.7)
 
 ## 왼손에 카드를 들고 있는지. 켜면 걷거나 앉아도 왼팔은 카드 든 자세를 유지한다.
 var holding_cards := false
+var standing_at_attention := false
+var mug_weight := 0.0
+var mug_frame := Transform3D.IDENTITY
 var pointing := false
 var cheering := false
 ## 마시는 몸짓 진행(0 = 안 마심, 0~1 = 진행). PlayerView 가 매 프레임 넣는다.
@@ -133,6 +136,7 @@ func _init(model: Node3D, seed_offset := 0.0) -> void:
 	_layer.setup(rig, CharacterPoseLayer.Arm.new(rig, LEFT_ARM, path), CharacterPoseLayer.Arm.new(rig, RIGHT_ARM, path))
 	if _approved_walk_sit:
 		_layer.pose_safety = preload("res://art/characters/character_pose_safety.gd").new(rig,model)
+		_layer.prop_grip = preload("res://art/characters/character_prop_grip.gd").new(rig,model)
 	_setup_seat_pin(rig, path)
 	_setup_reach(rig)
 	# 네 명이 같은 박자로 숨쉬고 깜빡이지 않게 자리마다 시작 시각을 다르게 준다.
@@ -146,6 +150,7 @@ func attach_cards(fan: Node3D) -> void:
 	_model.add_child(fan)
 	fan.basis = Basis.looking_at(-CARD_FAN_FACING, Vector3.UP)
 	_card_fan = fan
+	if _layer.prop_grip != null: _layer.prop_grip.fan = fan
 
 
 ## 던지기 동작을 재생한다(GameView 가 다트를 띄우는 순간에 부른다).
@@ -196,6 +201,8 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	var pin_target: float = 1.0 if posture == Posture.SEAT and not emote_clip.is_empty() else 0.0
 	_layer.seat_pin = lerpf(_layer.seat_pin, pin_target, 1.0 - exp(-SEAT_PIN_RATE * delta))
 	_update_body(speed_ratio, posture, airborne)
+	var rest_arms := _approved_walk_sit and (posture == Posture.SEAT or standing_at_attention) and emote_clip.is_empty()
+	_layer.seated_arms = lerpf(_layer.seated_arms, float(rest_arms), amount)
 	var drink: Vector2 = CharacterRig.drink_curve(drinking)
 	if not emote_clip.is_empty():
 		_layer.right.follow(_layer.right.pose, 0.0, amount)
@@ -203,6 +210,9 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	else:
 		_update_right_arm(delta, amount, aiming, drink.x)
 	_update_left_arm(amount)
+	if _layer.pose_safety != null:
+		_layer.pose_safety.wrist_limit = lerpf(1.13, deg_to_rad(16.0),
+			maxf(_layer.seated_arms, maxf(_layer.left.weight, _layer.right.weight)))
 	var head_pitch: float = 0.0 if not emote_clip.is_empty() else clampf(look_pitch * 0.6, -0.45, 0.5) + drink.y * DRINK_HEAD_BACK
 	_layer.look_pitch = lerpf(_layer.look_pitch, head_pitch, amount)
 	_layer.lean = lean
@@ -212,7 +222,14 @@ func animate(delta: float, speed_ratio: float, posture: Posture, airborne: bool,
 	var seat_leg_target: float = 1.0 if posture == Posture.SEAT and not _approved_walk_sit else 0.0
 	_layer.seat_legs = lerpf(_layer.seat_legs, seat_leg_target, 1.0 - exp(-SEAT_LEGS_RATE * delta))
 	_layer.head_scale = lerpf(_layer.head_scale, head_scale, minf(1.0, delta * HEAD_SCALE_RATE))
-	if is_instance_valid(_card_fan):
+	if _layer.prop_grip != null:
+		var grip := _layer.prop_grip
+		grip.card = _layer.left.weight if holding_cards else lerpf(grip.card,0.0,amount)
+		grip.dart = _layer.right.weight if aiming and _throw_time < 0 and mug_weight == 0.0 else 0.0
+		grip.pitch = look_pitch
+		grip.mug = mug_weight
+		grip.mug_frame = mug_frame
+	elif is_instance_valid(_card_fan):
 		_card_fan.position = _model.to_local(_card_socket.global_position)
 	_blink()
 
@@ -310,14 +327,14 @@ func _update_right_arm(delta: float, amount: float, aiming: bool, drink_lift: fl
 		if _throw_time < THROW_END:
 			arm.pose = arm.sample(_player.get_animation(THROW), _throw_time)
 			arm.weight = 1.0
-			_layer.reach_offset = AIM_REACH
+			_layer.reach_offset = Vector3(0.20,-0.13,-0.17) if _approved_walk_sit else AIM_REACH
 			_layer.reach = 1.0 - smoothstep(THROW_START, THROW_RELEASE, _throw_time)
 			return
 		_throw_time = -1.0
 		_aim_time = 0.0
 	var reach_goal := 0.0
 	if aiming:
-		_layer.reach_offset = AIM_REACH
+		_layer.reach_offset = Vector3(0.20,-0.13,-0.17) if _approved_walk_sit else AIM_REACH
 		reach_goal = 1.0
 	elif drink_lift > 0.0:
 		_layer.reach_offset = DRINK_REACH

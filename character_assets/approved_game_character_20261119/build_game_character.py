@@ -142,10 +142,12 @@ bpy.context.view_layer.objects.active=rig
 DEST=PROJECT/'art/characters/rigged/approved_character.glb'
 for i,image in enumerate(bpy.data.images):image.name='skin_color_%02d'%(i+1)
 bpy.ops.export_scene.gltf(filepath=str(DEST),export_format='GLB',use_selection=True,export_skins=True,export_animations=True,export_animation_mode='ACTIONS',export_force_sampling=True,export_bake_animation=True,export_frame_range=False,export_optimize_animation_size=False,export_all_influences=True,export_extras=True)
-# 실제 게임 전체 모션 검수에서 확정한 가중치/동작 보정. 기본 정점·법선·UV는 유지한다.
+# 실제 게임 검수에서 확정한 가중치·동작·목 연결부 보정.
 import importlib.util
 spec=importlib.util.spec_from_file_location('motion_review_patch',HERE/'motion_review_patch.py');review=importlib.util.module_from_spec(spec);spec.loader.exec_module(review)
 review.ankle_weights(DEST);review.apply_cached_clips(HERE/'reviewed_clips.npz',DEST)
+neck_spec=importlib.util.spec_from_file_location('neck_review_patch',HERE/'neck_review_patch.py');neck_review=importlib.util.module_from_spec(neck_spec);neck_spec.loader.exec_module(neck_review)
+neck_review.refine_neck(DEST,review)
 vec=lambda a:'Vector3('+', '.join(format(v,'.9g') for v in a)+')'
 face_dict='{'+', '.join('"'+k+'": '+vec(v) for k,v in anchors.items())+'}'
 wrapper='[gd_scene load_steps=2 format=3]\n\n[ext_resource type="PackedScene" path="res://art/characters/rigged/approved_character.glb" id="1"]\n\n[node name="ApprovedPlayer" instance=ExtResource("1")]\nmetadata/approved_walk_sit = true\nmetadata/face_anchors = '+face_dict+'\nmetadata/face_fit_scale = 0.78\nmetadata/hat_fit_scale = 0.93\n'
@@ -153,4 +155,6 @@ wrapper='[gd_scene load_steps=2 format=3]\n\n[ext_resource type="PackedScene" pa
 report={'source':str(SOURCE.relative_to(ROOT)),'source_sha256':hashlib.sha256(SOURCE.read_bytes()).hexdigest(),'game_asset':str(DEST.relative_to(ROOT)),'game_asset_sha256':hashlib.sha256(DEST.read_bytes()).hexdigest(),'scale':scale,'transform':[list(row) for row in T],'uniform_placement_only':True,'bind_inverse_transform_errors':rest_errors,'uv_errors':uv_errors,'approved_motion_transform_errors':primary_errors,'approved_core_bones':22,'compatibility_extra_bones':len(extra),'game_bones':len(bone_names),'animations':sorted(new_actions),'visible_parts':list(parts),'seat_bottom_before_adjustment':seat_bottom,'seat_root_up':seat_up,'seat_root_forward':seat_forward,'seat_joint_rotations_unchanged':True,'face_anchors_godot':anchors,'generator':str(Path(__file__).relative_to(ROOT))}
 report['reviewed_motion_cache'] = 'reviewed_clips.npz'
 report['postprocessed_skin_weights'] = ['Bottom_01', 'Shoes_01']
+report['uniform_placement_only'] = False
+report['postprocessed_neck'] = 'neck_review_patch.py'
 (HERE/'game_manifest.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');(OUT/'game_manifest.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8');print('GAME_CHARACTER_GENERATED',json.dumps(report),flush=True)
