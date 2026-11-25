@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://mmmhipv3sk01"
-path="res://.godot/imported/approved_character_neck_skin_ramp.png-70d8fc2651fd25581a5f1e97a5e328fa.ctex"
+path.s3tc="res://.godot/imported/approved_character_neck_skin_ramp.png-70d8fc2651fd25581a5f1e97a5e328fa.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "4305881722d4201f77ae538e1ed8c2e9"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://art/characters/rigged/approved_character_neck_skin_ramp.png"
-dest_files=["res://.godot/imported/approved_character_neck_skin_ramp.png-70d8fc2651fd25581a5f1e97a5e328fa.ctex"]
+dest_files=["res://.godot/imported/approved_character_neck_skin_ramp.png-70d8fc2651fd25581a5f1e97a5e328fa.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0
