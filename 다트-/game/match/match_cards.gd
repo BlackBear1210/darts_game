@@ -527,6 +527,7 @@ func _sync() -> void:
 			player.pending_slot = rules.seats[seat].slots.slice(0, raw).filter(func(card) -> bool: return card != null).size()
 		player.card_effects = modifiers(player.peer_id)
 		player.card_effects["details"] = _effect_details(seat)
+		player.card_effects["active_cards"] = _effect_cards(seat)
 		player.card_effects["choice"] = pending.choice if pending != null else -1
 		player.card_effects["retry_used"] = rules.seats[seat].retry_used
 		player.card_effects["extra_turn"] = rules.seats[seat].extra_turn
@@ -534,6 +535,21 @@ func _sync() -> void:
 		player.card_effects["cancellable"] = rules.cancellable(rules.seats[seat].last_effect)
 		player.card_effects["repeat_ready"] = last_landing.is_finite()
 		player.card_effects["mine_count"] = mines.size()
+
+
+## 지금 걸려 있는 효과의 **카드 종류**(2026-11-25 사용자 요청 "무슨 카드가 적용됐는지 모른다").
+## HUD 가 이 번호로 카드 그림을 띄운다(ui/active_cards.gd). 겹친 효과는 번호가 그만큼 여러 번 들어간다.
+## 범위가 공개되지 않는 효과(카드 번호가 없는 것)는 뺀다 — 글 줄은 _effect_details 가 따로 낸다.
+func _effect_cards(seat: int) -> Array[int]:
+	var types: Array[int] = []
+	for effect in rules.effects:
+		if effect.target != seat or effect.card_type < 0:
+			continue
+		var next_dart: bool = effect.timing == Catalog.Timing.NEXT_DART and effect.state == Rules.EffectState.QUEUED
+		var turn: bool = effect.timing in [Catalog.Timing.TURN, Catalog.Timing.ROUND] and effect.state == Rules.EffectState.ACTIVE
+		if next_dart or turn:
+			types.append(int(effect.card_type))
+	return types
 
 
 ## 같은 효과는 횟수를 합쳐 실제 유효한 효과와 남은 범위만 공개한다.

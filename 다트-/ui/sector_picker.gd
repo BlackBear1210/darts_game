@@ -22,6 +22,8 @@ const BOMB_RADIUS: float = 13.0
 var numbers: Array[int] = BoardLayout.DEFAULT_NUMBERS.duplicate()
 ## 지뢰 심기면 포인터가 폭탄이 되고 안내 글이 바뀐다.
 var bomb: bool = false
+## 이미 고른 칸(-1 = 아직). 다시 열었을 때 어디를 골랐는지 보여 준다.
+var chosen: int = -1
 var _hover: int = -1
 var _face: Control
 var _mouse := Vector2.INF
@@ -50,6 +52,15 @@ func _ready() -> void:
 	column.add_child(_face)
 	_note = Style.label(column, "", 19, Style.CREAM)
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## 지금 팝업을 띄워야 하는가(2026-11-25). 부르는 쪽이 매 프레임 묻는다.
+##   wants  = 꺼내 든 구역 카드(-1 = 구역 카드가 아니거나 안 꺼냄)
+##   opened = 지금 띄워 둔 카드 · done = 이 카드는 이미 고르거나 닫았다
+## 닫을 때 opened 만 비우면 다음 프레임에 wants != opened 가 되어 **곧바로 다시 열린다**(겪은 버그).
+## 그래서 닫은 카드를 done 에 적어 두고 여기서 같이 본다.
+static func should_open(wants: int, opened: int, done: int) -> bool:
+	return wants >= 0 and wants != opened and wants != done
 
 
 ## 지금 판의 숫자와 카드 종류를 받아 다시 그린다. 팝업을 띄울 때마다 부른다.
@@ -108,6 +119,8 @@ func _draw() -> void:
 			var angle: float = from + TAU / 20.0 * step / 8.0
 			points.append(center + Vector2(sin(angle), -cos(angle)) * RADIUS)
 		var tint: Color = Style.PANEL_HI if sector % 2 == 0 else Style.PANEL
+		if sector == chosen:
+			tint = Style.MINT
 		if sector == _hover:
 			tint = Style.PINK if bomb else Style.GOLD
 		draw_colored_polygon(points, tint)
@@ -119,7 +132,7 @@ func _draw() -> void:
 		var at: Vector2 = center + Vector2(sin(angle), -cos(angle)) * NUMBER_RADIUS
 		var text: String = str(numbers[sector % numbers.size()])
 		var extent: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
-		var ink: Color = Style.INK if sector == _hover else Style.CREAM
+		var ink: Color = Style.INK if sector == _hover or sector == chosen else Style.CREAM
 		draw_string(font, at - Vector2(extent.x / 2.0, -8.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink)
 	draw_arc(center, RADIUS, 0, TAU, 64, Style.GOLD, 2.0, true)
 	_draw_bomb()

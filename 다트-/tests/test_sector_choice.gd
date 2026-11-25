@@ -13,6 +13,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_cards_with_choice()
 	_picker_angles()
+	_picker_open_close()
 	await _mine_stacking()
 	print("PASS: 구역 고르기 카드 · 지뢰 겹쳐 심기")
 	quit()
@@ -38,6 +39,22 @@ func _picker_angles() -> void:
 		var sector: int = BoardLayout.sector_at(Vector2(screen.x, -screen.y))
 		assert(sector == int(case[1]), "화면 %s → %d번 칸이어야 한다(실제 %d)" % [str(screen), int(case[1]), sector])
 	assert(SectorPicker.RADIUS > 0.0, "팝업 판 반지름")
+
+
+## 팝업은 고르거나 닫은 뒤 다시 열리지 않아야 한다(2026-11-25 "닫히지도 않아").
+func _picker_open_close() -> void:
+	var card: int = 7
+	var other: int = 9
+	# 아무것도 안 띄운 상태에서 구역 카드를 꺼내 들면 띄운다.
+	assert(SectorPicker.should_open(card, -1, -1), "처음 꺼내 들면 띄운다")
+	# 띄워 둔 동안에는 다시 띄우지 않는다(매 프레임 묻는다).
+	assert(not SectorPicker.should_open(card, card, -1), "이미 띄워 둔 카드")
+	# 고르거나 닫은 뒤(opened 는 비고 done 에 적힌다) 다시 열리면 안 된다 — 이게 버그였다.
+	assert(not SectorPicker.should_open(card, -1, card), "닫은 카드는 다시 안 띄운다")
+	# 다른 구역 카드를 꺼내 들면 띄운다.
+	assert(SectorPicker.should_open(other, -1, card), "다른 카드는 띄운다")
+	# 구역 카드가 아니면 띄우지 않는다.
+	assert(not SectorPicker.should_open(-1, -1, -1), "구역 카드가 아니면 안 띄운다")
 
 
 ## 같은 칸에 겹쳐 심으면 그 칸을 맞혔을 때 겹친 수만큼 터진다.

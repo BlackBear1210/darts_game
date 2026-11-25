@@ -1,3 +1,17 @@
+# 2026-11-25 인수인계 — 구역 팝업과 적용 카드 줄
+
+- **팝업을 다시 띄울지는 `SectorPicker.should_open(wants, opened, done)` 하나가 정한다.**
+  닫을 때 `opened` 만 비우면 다음 프레임에 되살아난다(겪은 버그). 닫은 카드는 반드시 `done` 에 남길 것.
+- **Esc 는 `GameView.close_popups()` 가 먼저 먹는다.** 화면 위 팝업을 더 만들면 여기에 같이 넣어야
+  Esc 가 설정 창을 열어 버리지 않는다.
+- **`lounge_hud` 는 GameView 가 아니라 GameHUD 의 자식**이다(`ui/game_hud.gd` 가 만든다).
+  `game.find_child("LoungeHUD")` 로는 못 찾는다 — `game.lounge_hud` 를 쓸 것.
+- **적용 중 카드 그림은 `card_effects["active_cards"]`**(카드 번호 배열, 겹치면 여러 번)를 본다.
+  글 줄(`details`)과 같은 조건으로 고르므로 둘이 어긋나지 않게 `_effect_cards` 와 `_effect_details` 를 같이 고칠 것.
+- 오른쪽 위 자리 순서는 **카드 그림 → 킬로그**다. `_process` 에서 카드 줄이 먼저 자리를 잡고 킬로그를 민다.
+
+---
+
 # 2026-11-24 인수인계 — 구역 팝업과 다섯 가지 수치
 
 - **구역 카드는 `ui/sector_picker.gd` 팝업을 쓴다.** 새 구역 카드를 만들면 `"choice": "sector"` 를 주면 자동으로 뜬다.

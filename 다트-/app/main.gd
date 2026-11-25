@@ -260,6 +260,10 @@ func _process(_delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(settings_panel): return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		# 화면 위 팝업(구역 고르기)이 떠 있으면 설정 대신 그것부터 닫는다.
+		if _game != null and _game.close_popups():
+			get_viewport().set_input_as_handled()
+			return
 		if _account_open:
 			_account_open = false
 			_refresh_screen()

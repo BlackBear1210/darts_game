@@ -23,6 +23,7 @@ const MatchCards = preload("res://game/match/match_cards.gd")
 ## 위 가운데 라운드·남은 시간 표시(2026-10-31 저녁 — 다트 라운드 → 다음 카드 충전 라운드).
 const RoundBanner = preload("res://ui/round_banner.gd")
 const SectorPicker = preload("res://ui/sector_picker.gd")
+const ActiveCards = preload("res://ui/active_cards.gd")
 ## 내 차례 알림이 떠 있는 시간(초).
 const TURN_POPUP_SECONDS: float = 2.2
 ## 카드별 "지금 쓸 수 있나" 조건 — 방장(MatchCards._use)과 같은 함수(2026-11-21).
@@ -39,6 +40,8 @@ var _scores: ScoreList
 var _phase_title: Label
 var _phase_detail: Label
 var _effects: Label
+## 오른쪽 위: 지금 걸려 있는 카드 그림(2026-11-25).
+var _active_cards: Control
 var _drowsy_hint: Label
 var _timer_bar: ProgressBar
 var _banner: RoundBanner
@@ -89,6 +92,9 @@ var _turn_popup_shown: int = -1
 ## 구역 고르기 팝업(2026-11-24). 떠 있는 동안 마우스를 풀어 클릭할 수 있게 한다.
 var _picker: Control
 var _picker_card: int = -1
+## 이 카드에 대해서는 이미 고르거나 닫았다 — 카드를 내렸다 다시 꺼낼 때까지 팝업을 다시 띄우지 않는다.
+## (2026-11-25: 닫을 때 _picker_card 만 비워서 다음 프레임에 곧바로 다시 열리는 고리가 있었다.)
+var _picker_done: int = -1
 
 
 func _ready() -> void:
@@ -159,6 +165,10 @@ func _build_room_corner() -> void:
 		_copy.text = "복사했어요 ✓")
 	_copy.icon = null
 	_copy.custom_minimum_size = Vector2(210, 48)
+	_active_cards = ActiveCards.new()
+	_active_cards.name = "ActiveCards"
+	_active_cards.visible = false
+	_root.add_child(_active_cards)
 	_feed = KillFeed.new()
 	_feed.name = "KillFeed"
 	_root.add_child(_feed)
@@ -245,33 +255,45 @@ func _update_picker(me: MatchPlayer) -> void:
 	var wants: int = -1
 	if me != null and me.pending_card >= 0 and str(Catalog.card(me.pending_card).get("choice", "")) == "sector":
 		wants = me.pending_card
-	if wants == _picker_card:
-		return
-	_picker_card = wants
 	if wants < 0:
+		# 카드를 내렸다 → 다시 꺼내면 또 띄운다.
+		_picker_done = -1
 		_close_picker()
 		return
+	if not SectorPicker.should_open(wants, _picker_card, _picker_done):
+		return
+	_picker_card = wants
 	var card: Dictionary = Catalog.card(wants)
 	var is_bomb: bool = str(card.effect) == "mine"
 	var active: MatchPlayer = game.controller.state.active_player()
 	var board: Array[int] = active.layout.numbers if active != null else BoardLayout.DEFAULT_NUMBERS
-	var hint: String = "왼쪽 버튼으로 칸 선택 · 오른쪽 버튼 또는 Esc 로 닫기"
+	var hint: String = "왼쪽 버튼으로 칸 선택 · 오른쪽 버튼으로 닫기 · Z · X 로도 고를 수 있어요"
 	if is_bomb:
 		hint = "지뢰 %d개째 · 같은 칸에 겹쳐 심으면 벌점도 겹칩니다 · %s" % [
 			int(me.card_effects.get("mine_count", 0)) + 1, hint]
+	_picker.chosen = int(me.card_effects.get("choice", -1))
 	_picker.show_board(board, is_bomb, "%s · 구역을 고르세요" % str(card.name), hint)
 	_picker.visible = true
 	# 팝업을 누르려면 마우스가 풀려 있어야 한다. 닫을 때 다시 잡는다.
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-func _close_picker() -> void:
+## 팝업을 닫는다. 닫은 카드는 _picker_done 에 적어 두어 다음 프레임에 다시 열리지 않게 한다.
+## 닫혔으면(또는 원래 안 열려 있었으면) false 를 돌려준다 — Esc 를 누가 먹을지 정하는 데 쓴다(GameView.close_popups).
+func _close_picker() -> bool:
 	if not _picker.visible:
-		return
+		return false
 	_picker.visible = false
+	_picker_done = _picker_card
 	_picker_card = -1
 	if game != null and game.wardrobe == null:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	return true
+
+
+## 바깥(Esc)에서 팝업을 닫을 때 부른다.
+func close_sector_picker() -> bool:
+	return _close_picker()
 
 
 ## 내 차례 알림(2026-11-24). 화면 위쪽 1/3 에 크게 뜬다 — 조준점과 아래 키 안내를 가리지 않는 자리다.
@@ -381,6 +403,10 @@ func _process(delta: float) -> void:
 	_room.visible = waiting
 	_feed.visible = not game.throw_input.charging and not finished
 	if not waiting: _feed.position.y = TOP
+	# 오른쪽 위는 위에서부터 "적용 중" 카드 그림 → 킬로그 순서다(2026-11-25). 카드 줄이 자리를 먼저 잡는다.
+	_update_active_cards(state, width, waiting or finished)
+	if _active_cards.visible:
+		_feed.position.y = maxf(_feed.position.y, _active_cards.position.y + _active_cards.size.y + 12)
 	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
 	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
@@ -418,6 +444,19 @@ func _update_effects(state: MatchState, hidden: bool) -> void:
 		if state.phase == MatchState.Phase.FLIGHT:
 			text = text.replace("다음 한 발", "이번 비행")
 		_effects.text = "적용 중 · %s\n%s" % [active.display_name, text]
+
+
+## 오른쪽 위 카드 그림(2026-11-25). 지금 던지는 사람에게 걸린 카드를 보인다 —
+## 방해 카드는 남이 걸어도 효과는 던지는 사람에게 가므로, 내 차례면 곧 "나에게 걸린 카드"다.
+func _update_active_cards(state: MatchState, width: float, hidden: bool) -> void:
+	var active: MatchPlayer = state.active_player()
+	var types: Array = active.card_effects.get("active_cards", []) if active != null else []
+	if hidden or active == null:
+		types = []
+	_active_cards.show_cards(types, active.display_name if active != null else "")
+	if not _active_cards.visible:
+		return
+	_active_cards.position = Vector2(width - EDGE - _active_cards.size.x, TOP)
 
 
 ## 점수판: 라운지에서만 "DARTY 라운지" 머리글, 경기 중에는 이름·점수 줄만(라운드는 위 가운데 배너).

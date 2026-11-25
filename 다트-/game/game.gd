@@ -960,6 +960,14 @@ func _sync_punishment() -> void:
 	CharacterMotion.freeze(model, "Wheel_Spread")
 
 
+## Esc 로 닫을 수 있는 화면 위 팝업을 닫는다(2026-11-25). 닫은 게 있으면 true —
+## 그러면 Main 은 설정 창을 열지 않는다(app/main.gd _input).
+func close_popups() -> bool:
+	if lounge_hud != null and lounge_hud.has_method("close_sector_picker"):
+		return bool(lounge_hud.close_sector_picker())
+	return false
+
+
 ## 벌칙으로 묶였으면 내 시점을 과녁판 위로 옮긴다 — 판이 돌면 펍이 통째로 돈다(2026-11-23).
 ## 내 몸은 숨겨져 있고 판 위의 복사본이 돌고 있으므로, 그 복사본의 눈에서 던지는 쪽을 본다.
 func _punish_camera() -> void:
