@@ -10,7 +10,8 @@ func _initialize() -> void:
 func _run() -> void:
 	var settings := RoomSettings.from_snapshot({"rounds": -10, "capacity": 99, "dart_seconds": INF, "special_chance": NAN, "card_weights": {"plus_10": "bad"}, "disabled_cards": [77, "not_a_card"], "solo": false})
 	assert(settings.rounds == 1 and settings.capacity == 4)
-	assert(settings.dart_seconds == 30 and settings.special_chance == 12.5)
+	# 2026-11-25: 다트 턴 기본값이 30 → 60 초로 바뀌었다(RoomSettings.dart_seconds · 사용자 요청).
+	assert(settings.dart_seconds == 60 and settings.special_chance == 12.5)
 	assert(settings.disabled_cards.is_empty() and settings.card_weights.plus_10 == 1.0)
 	var random := RandomNumberGenerator.new()
 	random.seed = 129

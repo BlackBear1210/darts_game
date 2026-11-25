@@ -1,3 +1,18 @@
+# 2026-11-25 인수인계 — 피드백 네 가지
+
+- **벌칙 카메라는 `GameView.PUNISH_VIEW` 고정 자리**다. 1인칭(판과 함께 도는 눈)은 어지러워서 버렸고
+  `BoardView.victim_eye` 와 `BoardVictim.EYE_FORWARD` 는 지웠다 — 되살리지 말 것.
+- **휠은 손패 넘기기에 쓴다**(`ui/lounge_hud.gd _unhandled_input` 맨 앞). F5 에서 휠을 쓰는 곳이 여기뿐이니
+  새로 휠을 쓰려면 여기와 부딪히지 않는지 먼저 볼 것.
+- 적용 카드 크기는 `ui/active_cards.gd CARD_SIZE` 하나다. 키우면 `MAX_CARDS` 도 같이 줄여야 줄이 화면을 안 넘는다.
+- 턴 제한시간은 `RoomSettings.dart_seconds`(기본 60)에서 `MatchConfig.turn_seconds` 로 넘어간다.
+  기본값을 또 바꾸면 `tests/test_lounge_rules.gd` 의 되돌림 값 검사도 같이 고쳐야 한다.
+- ⚠️ **`tests/test_arcade.gd` 가 깨져 있다**(큐대가 안 부러진다). 팀원 커밋 `de2b4c5`(소품 잡기)부터다.
+  선행 런타임 오류 없이 `lounge._launch` 뒤 0.8초 안에 `broken` 이 서지 않는다 — `lounge_world.gd` 의
+  `_launch` / `_physics_process` / `_process` 변경을 볼 것.
+
+---
+
 # 2026-11-25 인수인계 — 구역 팝업과 적용 카드 줄
 
 - **팝업을 다시 띄울지는 `SectorPicker.should_open(wants, opened, done)` 하나가 정한다.**

@@ -20,7 +20,8 @@ const DESCRIPTIONS: Array[String] = [
 @export var win_mode: int = 0 # 0 누적, 1 목표 도달, 2 카운트다운
 @export var target_score: int = 300
 @export var rounds: int = 5
-@export var dart_seconds: float = 30.0
+## 한 사람 다트 차례 제한시간(초). 2026-11-25 사용자 요청으로 30 → 60.
+@export var dart_seconds: float = 60.0
 @export var cards_enabled: bool = true
 @export var special_cards: bool = false
 @export var special_chance: float = 12.5
@@ -64,7 +65,7 @@ func sanitize() -> void:
 	win_mode = clampi(win_mode, 0, 2)
 	target_score = clampi(target_score, 50, 1000)
 	rounds = clampi(rounds, 1, 20)
-	dart_seconds = clampf(dart_seconds, 5, 120) if is_finite(dart_seconds) else 30.0
+	dart_seconds = clampf(dart_seconds, 5, 120) if is_finite(dart_seconds) else 60.0
 	special_chance = clampf(special_chance, 0, 100) if is_finite(special_chance) else 12.5
 	intoxication = clampf(intoxication, 0, 3) if alcohol and is_finite(intoxication) else 0.0
 	drink_on_deal = drink_on_deal and alcohol

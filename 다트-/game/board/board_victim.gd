@@ -14,8 +14,6 @@ const HEAD_Y: float = 0.80
 const HEAD_RADIUS: float = 0.30
 ## 선수 캐릭터 키(m). 위 치수에 맞춰 모델을 줄일 때 쓴다.
 const CHARACTER_HEIGHT: float = 1.85
-## 묶인 사람의 1인칭 눈이 판 앞면에서 떨어지는 거리(정규화). 자기 머리 안에서 보지 않을 만큼만 띄운다.
-const EYE_FORWARD: float = 0.5
 
 
 ## 판 위 한 점(회전을 되돌린 정규화 좌표)이 묶인 몸에 맞았는지.

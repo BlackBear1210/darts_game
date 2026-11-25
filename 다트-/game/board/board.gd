@@ -114,16 +114,6 @@ func strap_victim(model: Node3D) -> void:
 	_spin.add_child(model)
 
 
-## 묶인 사람의 1인칭 눈(벌칙 카메라). 원점 = 눈 자리, basis.z = 판 앞면 방향(던지는 쪽), basis.y = 판과 함께 도는 위쪽.
-## 묶인 사람이 없으면 크기 0 인 Transform3D 를 돌려준다(부르는 쪽이 basis.y 로 판별한다).
-func victim_eye() -> Transform3D:
-	if _spin == null or _spin.get_node_or_null(VICTIM_NAME) == null:
-		return Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
-	var axes := Basis(_spin.global_basis.x.normalized(), _spin.global_basis.y.normalized(), _spin.global_basis.z.normalized())
-	var local := Vector3(0.0, BoardVictim.HEAD_Y * BoardLayout.RADIUS, BoardVictim.EYE_FORWARD * BoardLayout.RADIUS)
-	return Transform3D(axes, _spin.to_global(local))
-
-
 func release_victim() -> void:
 	if _spin == null:
 		return

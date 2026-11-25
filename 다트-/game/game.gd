@@ -42,6 +42,9 @@ const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
 const BodyHit = preload("res://game/dart/body_hit.gd")
 const StunStars = preload("res://game/card_round/fx/stun_stars.gd")
 const PlayerWallet = preload("res://app/player_wallet.gd")
+## 벌칙으로 묶였을 때 보는 자리(2026-11-25). 레인 왼쪽 옆, 과녁보다 조금 앞·위에서 판을 본다 —
+## 던지는 사람과 날아오는 다트가 함께 보이고, 방이 돌지 않아 어지럽지 않다.
+const PUNISH_VIEW := Vector3(-2.9, 2.6, TableView.BOARD_CENTER.z + 3.2)
 ## 경기 끝 벌칙(2026-11-23): 지금 과녁판에 묶여 있는 사람의 peer id(0 = 없음) · 토큰을 이미 정산한 경기 번호.
 ## 마지막 경기에서 내 토큰이 얼마나 바뀌었는지(결과 화면이 읽는다).
 var strapped_id: int = 0
@@ -973,12 +976,11 @@ func close_popups() -> bool:
 func _punish_camera() -> void:
 	if strapped_id != controller.local_peer_id or table == null or table.board == null:
 		return
-	var eye: Transform3D = table.board.victim_eye()
-	if is_zero_approx(eye.basis.y.length()):
-		return
-	camera.global_position = eye.origin
-	camera.look_at(eye.origin + eye.basis.z, eye.basis.y)
-	# 숨긴 내 몸 레이어를 가릴 필요가 없다(판 위 복사본은 보통 레이어다).
+	# 2026-11-25 사용자 요청: 예전에는 묶인 사람 눈에서 봐서 화면이 통째로 빙글빙글 돌아 어지러웠다.
+	# 이제 레인 옆에 고정한 자리에서 3인칭으로 본다 — 방은 가만히 있고 판 위의 내 몸만 돈다.
+	camera.global_position = PUNISH_VIEW
+	camera.look_at(TableView.BOARD_CENTER, Vector3.UP)
+	# 3인칭이므로 내 몸 레이어도 보이게 둔다(판 위 복사본은 보통 레이어다).
 	camera.cull_mask = 0xfffff
 
 

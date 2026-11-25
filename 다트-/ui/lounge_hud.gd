@@ -844,7 +844,7 @@ func _prompt_for(focus: Dictionary) -> Array:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	var card_keys: Array = []
 	if me != null and _card_phase(state) and not me.hand.is_empty():
-		card_keys = [[key, "카드 쓰기"]] if me.pending_card >= 0 else [["Q · E", "카드 꺼내기"]]
+		card_keys = [[key, "카드 쓰기"]] if me.pending_card >= 0 else [["휠 · Q · E", "카드 꺼내기"]]
 		if not _blocked_card_reason(me).is_empty(): card_keys = [["Q · E", "다른 카드 선택"]]
 	if game.is_seated(game.controller.local_peer_id):
 		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
@@ -868,6 +868,18 @@ func _voice_keys() -> Array:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 마우스 휠로도 손패를 넘긴다(2026-11-25 사용자 요청). Q·E 와 같은 동작이다.
+	# F5 에서 휠을 쓰는 곳이 여기뿐이라 다른 조작과 부딪히지 않는다.
+	if event is InputEventMouseButton and event.pressed and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var wheel: int = (event as InputEventMouseButton).button_index
+		if wheel in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			var state_now: MatchState = game.controller.state
+			if not _card_phase(state_now): return
+			var holder: MatchPlayer = state_now.find_player(game.controller.local_peer_id)
+			if holder == null: return
+			_browse_card(holder, -1 if wheel == MOUSE_BUTTON_WHEEL_UP else 1)
+			get_viewport().set_input_as_handled()
+			return
 	if not event is InputEventKey or not event.pressed or event.echo or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED: return
 	var state: MatchState = game.controller.state
 	if event.keycode == KEY_B and game.lounge.focus(game.controller.local_peer_id).get("kind") == "link":

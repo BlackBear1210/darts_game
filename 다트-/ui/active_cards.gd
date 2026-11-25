@@ -11,11 +11,12 @@ const Style = preload("res://ui/lounge_style.gd")
 const CardFaces = preload("res://game/card_round/cards/card_faces.gd")
 const Catalog = preload("res://game/card_round/rules/card_catalog.gd")
 
-## 카드 한 장 크기(화면 픽셀). 원본 그림은 400×600 이라 같은 비율로 줄인다.
-const CARD_SIZE := Vector2(62, 93)
-const CARD_GAP: int = 6
-## 한 줄에 이만큼까지만 보이고 넘치면 "+N" 으로 줄인다.
-const MAX_CARDS: int = 5
+## 카드 한 장 크기(화면 픽셀). 원본 그림은 400×600 이라 같은 비율로 키운다.
+## 2026-11-25 사용자 요청 "좀 더 키우기": 62×93 → 96×144.
+const CARD_SIZE := Vector2(96, 144)
+const CARD_GAP: int = 7
+## 한 줄에 이만큼까지만 보이고 넘치면 "+N" 으로 줄인다(커진 만큼 줄 폭을 지키려고 하나 줄였다).
+const MAX_CARDS: int = 4
 
 var _title: Label
 var _row: HBoxContainer
@@ -27,7 +28,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	alignment = BoxContainer.ALIGNMENT_END
 	add_theme_constant_override("separation", 4)
-	_title = Style.hud_label(self, "", 16, Style.PINK)
+	_title = Style.hud_label(self, "", 19, Style.PINK)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_row = HBoxContainer.new()
 	_row.alignment = BoxContainer.ALIGNMENT_END
@@ -85,7 +86,7 @@ func _card(type: int, count: int) -> Control:
 	edge.add_theme_stylebox_override("panel", Style.flat(Color(0, 0, 0, 0), Color(Style.INK, 0.85), 2, 6, 0))
 	holder.add_child(edge)
 	if count > 1:
-		var badge := Style.hud_label(holder, "×%d" % count, 17, Style.GOLD)
-		badge.position = Vector2(CARD_SIZE.x - 26, CARD_SIZE.y - 24)
+		var badge := Style.hud_label(holder, "×%d" % count, 22, Style.GOLD)
+		badge.position = Vector2(CARD_SIZE.x - 34, CARD_SIZE.y - 32)
 	holder.tooltip_text = str(Catalog.card(type).name)
 	return holder
