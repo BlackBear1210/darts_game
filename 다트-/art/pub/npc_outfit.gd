@@ -25,6 +25,8 @@ const HEAD_AXIS := Vector3(-0.025, 0.0, 0.0)
 const HAT_BASE_Y: float = 1.70
 ## 머리가 앞뒤로 길다(앞뒤 0.40m · 좌우 0.36m) → 모자를 앞뒤로 이만큼 늘려 머리카락이 뚫고 나오지 않게.
 const HAT_DEPTH_SCALE: float = 1.12
+## 승인 모델(approved_player.tscn)의 가슴 앞면은 위 Tripo 치수보다 앞·위에 있다 → 가슴에 붙는 옷 부품을 이만큼 옮긴다.
+const APPROVED_CHEST_OFFSET := Vector3(0, 0.035, -0.09)
 
 
 ## model(캐릭터 씬)에 outfit 의상을 입힌다. accent = 손님 모자색·주스 직원 가게 색. glasses = 안경.
@@ -36,7 +38,7 @@ static func dress(model: Node3D, outfit: int, accent: Color, glasses: bool) -> v
 		Outfit.BARTENDER:
 			_bartender(model, skeleton)
 		Outfit.JUICE_VENDOR:
-			_juice_vendor(skeleton, accent)
+			_juice_vendor(model, skeleton, accent)
 		Outfit.GUEST_BEANIE:
 			_beanie(_fit_head(model, skeleton, "hat", Vector3(HEAD_AXIS.x, HAT_BASE_Y, 0.0)), accent)
 		Outfit.GUEST_CAP:
@@ -94,7 +96,7 @@ static func _bartender(model: Node3D, skeleton: Skeleton3D) -> void:
 		# 승인 모델의 가슴이 기존 모델보다 앞쪽에 있어 조끼와 셔츠 앞판을 옮긴다.
 		var fitted_chest := Node3D.new()
 		fitted_chest.name = "ApprovedVest"
-		fitted_chest.position = Vector3(0, 0.035, -0.09)
+		fitted_chest.position = APPROVED_CHEST_OFFSET
 		chest.add_child(fitted_chest)
 		chest = fitted_chest
 	var vest := _clay("vest", "2e1f26", 0.62)
@@ -358,9 +360,16 @@ static func _basis_along(direction: Vector3) -> Basis:
 
 # ─────────────────────────────── 주스 가게 직원 ───────────────────────────────
 
-static func _juice_vendor(skeleton: Skeleton3D, accent: Color) -> void:
-	_cap(_on_bone(skeleton, "head"), accent)
+static func _juice_vendor(model: Node3D, skeleton: Skeleton3D, accent: Color) -> void:
+	_cap(_fit_head(model, skeleton, "hat", Vector3(HEAD_AXIS.x, HAT_BASE_Y, 0.0)), accent)
 	var chest := _on_bone(skeleton, "chest")
+	if model.has_meta("face_anchors"):
+		# 승인 모델은 가슴이 기존 모델보다 앞쪽에 있다 → 바텐더 조끼와 같은 만큼 가슴판·목끈을 옮긴다.
+		var fitted_chest := Node3D.new()
+		fitted_chest.name = "ApprovedApron"
+		fitted_chest.position = APPROVED_CHEST_OFFSET
+		chest.add_child(fitted_chest)
+		chest = fitted_chest
 	var cloth := RoundKit.clay("outfit_juice_apron_" + accent.to_html(false), accent.to_html(false), 0.85)
 	# 가슴 앞치마: 아래 치마(허리 앞) + 가슴판(위로 갈수록 몸에 붙게 뒤로 기운다) + 목끈 두 줄 + 앞주머니.
 	_curved_apron(_on_bone(skeleton, "hips"), "ApronSkirt", 0.47, 0.9, cloth)

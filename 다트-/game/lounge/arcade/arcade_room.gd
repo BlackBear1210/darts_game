@@ -611,7 +611,7 @@ func _juice_service() -> void:
 		var z: float = TableView.BAR_STOOLS_Z[i]
 		var look: Array = looks[0 if i == 0 else 1]
 		NpcIdle.spawn(self, "ArcadeGuest_%d" % i, Vector3(front + 0.45, 0, z), Vector3(box.position.x, 0, z), Color(look[0]), true, 0, i * 2.1,
-			0.8, look[1], look[2])
+			0.8, look[1], look[2], NpcIdle.PUB_CHARACTER_SCENE)
 		customers.append([z, Vector3(front - 0.22, top_y, z - 0.17), Vector3(front - 0.22, top_y, z + 0.15)])
 	var foods := PackedStringArray(["plate+hotdog@0.72", "plate+burger_ready@0.7", "pizza_plate@0.6", "plate+donut@0.95", "plate+cake_slice@0.55",
 		"plate+pancakes@0.62", "dish_5@0.52"])
@@ -625,10 +625,12 @@ func _juice_service() -> void:
 
 ## 주스 가게 직원(2026-11-08): 펍 바텐더·손님과 같은 리깅 캐릭터(art/pub/npc_idle.gd)에 청록 셔츠만 입힌다.
 ## 예전에는 옛 상자 바텐더 모델(chr_bartender)의 옷을 갈아입혔다 — 선수와 생김새가 달라 보인다는 사용자 지적으로 바꿨다.
+## 2026-11-25: 손님과 함께 펍과 같은 승인 캐릭터(approved_player.tscn)로 바꿨다(이전 기본값은 옛 Tripo 모델).
 ## 카운터 뒤에 서서 방 쪽(+X)을 보고, 가끔 손님 쪽을 가리킨다. 충돌 없음(지나갈 수 있다).
 func _juice_vendor(at: Vector3) -> Node3D:
 	# 2026-11-08: 가게 색 야구 모자 + 가슴 앞치마(art/pub/npc_outfit.gd) — 손님·선수와 구분된다. 몸짓 3 = 서빙(PubService 가 움직인다).
-	return NpcIdle.spawn(self, "JuiceVendor", at, at + Vector3(3.0, 0, 0), Color("2fc6b6"), false, 3, 0.9, NpcIdle.SEAT_TOP, false, NpcOutfit.Outfit.JUICE_VENDOR)
+	return NpcIdle.spawn(self, "JuiceVendor", at, at + Vector3(3.0, 0, 0), Color("2fc6b6"), false, 3, 0.9, NpcIdle.SEAT_TOP, false,
+		NpcOutfit.Outfit.JUICE_VENDOR, NpcIdle.PUB_CHARACTER_SCENE)
 
 
 ## 바 끝 냉장고 자리(TableView.BAR_FRIDGE_AT): 하얀 음료 냉장고 + 빛나는 유리문 + 색색 캔 4칸 + "COLD DRINKS".
