@@ -13,6 +13,10 @@ const SIZE := Vector2(0.096, 0.144)
 const THICKNESS: float = 0.0016
 const PAINT_COLOR := Color("c3261f")
 const GLOW_COLOR := Color("ffd27a")
+## 후광이 카드 가장자리 밖으로 번지는 폭(m). 이 폭 안에서 빛이 서서히 0이 된다.
+const GLOW_SPREAD: float = 0.018
+## 후광 안쪽 둥근 사각형의 모서리 반지름(m). 바깥으로 갈수록 모서리가 더 둥글게 풀린다.
+const GLOW_CORNER_RADIUS: float = 0.009
 const BURN_SECONDS: float = 1.3
 const BURN_SHADER := """
 shader_type spatial;
@@ -115,7 +119,7 @@ func set_glow(strength: float, color: Color = GLOW_COLOR) -> void:
 		_glow = MeshInstance3D.new()
 		_glow.name = "Glow"
 		var mesh := PlaneMesh.new()
-		mesh.size = SIZE * 1.22
+		mesh.size = SIZE + Vector2.ONE * GLOW_SPREAD * 2.0
 		_glow.mesh = mesh
 		_glow.position.y = -THICKNESS
 		_glow.material_override = glow_material().duplicate()
@@ -256,7 +260,7 @@ static func glow_material() -> StandardMaterial3D:
 		_glow_material = StandardMaterial3D.new()
 		_glow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_glow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_glow_material.albedo_texture = _soft_rect()
+		_glow_material.albedo_texture = _soft_rounded_rect()
 		_glow_material.albedo_color = GLOW_COLOR
 	return _glow_material
 
@@ -281,13 +285,21 @@ static func burn_shader() -> Shader:
 	return _burn_shader
 
 
-## 가장자리로 갈수록 투명해지는 둥근 사각형(빛 번짐).
-static func _soft_rect() -> ImageTexture:
-	var image := Image.create(48, 72, false, Image.FORMAT_RGBA8)
-	for y in range(72):
-		for x in range(48):
-			var edge: float = minf(minf(x, 47 - x) / 6.0, minf(y, 71 - y) / 6.0)
-			image.set_pixel(x, y, Color(1, 1, 1, clampf(edge, 0.0, 1.0)))
+## 후광 텍스처: 카드 크기의 둥근 사각형 안은 꽉 차고, 밖으로 GLOW_SPREAD 만큼 가며 부드럽게 0이 된다.
+## 거리는 미터 단위(둥근 사각형까지의 거리)라 가로·세로 번지는 폭이 같고, 모서리는 거리만큼 더 둥글어진다.
+static func _soft_rounded_rect() -> ImageTexture:
+	var plane := SIZE + Vector2.ONE * GLOW_SPREAD * 2.0
+	var width: int = 128
+	var height: int = roundi(width * plane.y / plane.x)
+	var inner_half := SIZE / 2.0 - Vector2.ONE * GLOW_CORNER_RADIUS
+	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
+	for y in range(height):
+		for x in range(width):
+			var point := Vector2(absf((x + 0.5) / width - 0.5) * plane.x, absf((y + 0.5) / height - 0.5) * plane.y)
+			var outside := point - inner_half
+			var distance: float = outside.max(Vector2.ZERO).length() + minf(maxf(outside.x, outside.y), 0.0) - GLOW_CORNER_RADIUS
+			var alpha: float = 1.0 - smoothstep(0.0, GLOW_SPREAD, distance)
+			image.set_pixel(x, y, Color(1, 1, 1, alpha))
 	return ImageTexture.create_from_image(image)
 
 
