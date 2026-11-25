@@ -260,10 +260,18 @@ func _run() -> void:
 	main.session.room.settings.theme_id = 0
 	lounge.apply_theme()
 	assert(game.table.get_node("Pub").get_node_or_null("PoolTable") != null, "펍으로 돌아오면 당구대 그림이 다시 생긴다")
+	# 손님 NPC 는 2.5m/s 보다 빠르게 날아온 소품을 받아 되던진다 — 여기서 보려는 건 깨짐뿐이니 잠시 숨긴다.
+	# (숨기지 않으면 손님 의자 자리를 생성기가 조금만 옮겨도 큐대가 손님에게 걸려 이 검사가 깨진다.)
+	var npcs: Array[Node3D] = lounge._npcs()
+	for npc in npcs:
+		npc.hide()
 	var cue: int = index_of("cue")
 	lounge._launch(cue, Vector3(4, 1.5, 3.0), Vector3(10, 0.5, 0), 1, true)
 	await wait_seconds(0.8)
-	assert(float(lounge.objects[cue].broken) > lounge.now(), "파워 카드로 던진 큐대는 부러진다")
+	var broke: bool = float(lounge.objects[cue].broken) > lounge.now()
+	for npc in npcs:
+		npc.show()
+	assert(broke, "파워 카드로 던진 큐대는 부러진다")
 
 	# 8) 공개 상태(네트워크): 남은 초로 보내고 받는 쪽이 그대로 되돌린다.
 	var data: Dictionary = lounge._arcade.to_public()
