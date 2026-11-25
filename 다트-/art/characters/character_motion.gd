@@ -1,6 +1,6 @@
 class_name CharacterMotion
 extends RefCounted
-## 리깅 캐릭터의 몸짓을 정한다(선수: approved_character.glb · NPC: tripo_character.glb). 디자인 담당 소유.
+## 리깅 캐릭터의 몸짓을 정한다(선수·NPC 모두 approved_character.glb). 디자인 담당 소유.
 ## PlayerView·로비가 쓰는 겉면은 예전 CharacterRig 와 같다: 매 프레임 animate(), 던질 때 play_throw().
 ##
 ## 온몸: AnimationPlayer 가 서기·걷기·숙이기·점프·앉기·일어서기 모션을 튼다.

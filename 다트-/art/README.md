@@ -57,8 +57,8 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 
 - 경로는 절대 경로로 넘긴다. 내보낸 뒤 Godot `--headless --import` 로 다시 가져온다.
 - `character_library.glb.import` 의 `animation/remove_immutable_tracks=false` 를 유지한다. 켜면 기본 자세와 같은 뼈 트랙이 빠져 모션을 섞을 때 앞 모션 자세가 남는다.
-- 옷을 바꾸려면 에디터에서 `player_character.tscn` 을 열어 `Character_Rig/Skeleton3D` 아래 조각의 보이기를 켜고 끈다. 셔츠 자리 색은 실행 때 칠해지므로 에디터에서는 기본 색으로 보인다.
-- 모션 미리 보기: 같은 씬에서 `AnimationPlayer` 를 고르면 아래 애니메이션 패널에서 클립을 틀어 볼 수 있다.
+- 게임 캐릭터(선수·봇·펍과 오락실 NPC)는 `approved_player.tscn` 이다. 에디터로 열면 옷 없는 기본 모습이 보이고, 선수 꾸미기 옷(`characters/player_outfit.gd`)과 NPC 옷(`pub/npc_outfit.gd`)은 실행 때 뼈에 붙는다.
+- 모션 미리 보기: `approved_player.tscn` 에서 `AnimationPlayer` 를 고르면 아래 애니메이션 패널에서 클립을 틀어 볼 수 있다.
 - 게임 모션: `Walk`, `Crouch_Idle`, `Crouch_Walk`, `Jump_Air`(높이 이동 제거), `Sit_Stool`·`Seated_Stool`·`Stand_Stool`(스툴 높이 0.6m), `Cheer`, `Point_R`, `Drink_R`, `Wheel_Spread`. v18 그대로 쓰는 것: `Idle`, `Dart_Throw`, `Card_Hold_L`.
 - 실제 방에서 확인: `godot --path . --script res://tests/render_characters.gd` → `output/character_motions/`.
 
@@ -78,7 +78,7 @@ blender -b animated_base_v18/character_animated.blend --python game_ready_v19/bu
 | `board_spec.gd` | 쇼케이스 다트판의 실제 크기(m)·높이·투척 거리 | 예 |
 | `mesh_kit.gd` | 상자·원기둥·부채꼴 같은 도형 메시와 재질 캐시 | 예 |
 | `static_batch.gd` | 실행 때 움직이지 않는 메시를 묶어 그리기 호출 수를 줄인다(F5 방에도 적용) | 예 |
-| `characters/rigged/player_character.tscn` | 플레이어·봇 캐릭터 씬. 아래 GLB 를 상속해 기본 차림만 보이게 둔다. 에디터로 열면 게임과 같은 모습이다 | 예 — 조각 보이기를 켜고 끄면 게임 옷이 바뀐다 |
+| `characters/rigged/approved_player.tscn` | 선수·봇·펍과 오락실 NPC 공용 캐릭터 씬(`approved_character.glb` 상속). 옷은 실행 때 붙어 에디터에서는 기본 모습이다 | **아니오 — 생성물**. `character_assets/approved_game_character_20261119/build_game_character.py` 가 GLB 와 얼굴·모자 기준점을 만든다 |
 | `characters/rigged/character_library.glb` | v18 리깅 + 게임 모션. 옷·머리 조각이 모두 들어 있다 | **아니오 — 생성물**. 아래 "리깅 캐릭터 다시 만들기" |
 | `characters/character_motion.gd` | 위치·자세·속도로 어떤 모션을 틀지 정한다. 팔 자세 우선순위도 여기 | 예 |
 | `characters/character_pose_layer.gd` | 온몸 모션 위에 팔·고개·기울기·왕머리를 얹는 SkeletonModifier3D | 예 |

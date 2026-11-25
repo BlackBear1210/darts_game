@@ -17,7 +17,7 @@ const MAT_SIDES: Array[int] = [32, 3, 4, 4]
 const CHARACTER_NAMES: Array[String] = ["삐죽이", "바가지", "반짝이", "뽀글이"]
 ## 플레이어·봇 공용 모듈 캐릭터. 승인한 얼굴·거북목·옷·갈색 신발·곱슬머리를 사용한다.
 ## 생성기: character_assets/approved_game_character_20261119/build_game_character.py (Blender).
-## 기존 player_character.tscn/Tripo 모델은 NPC와 이전 에셋의 참조용으로 보존한다.
+## 펍·오락실 NPC도 같은 씬을 쓴다(art/pub/npc_idle.gd). 옛 player_character.tscn/Tripo 모델은 2026-11-25에 지웠다.
 const CHARACTER_SCENE: String = "res://art/characters/rigged/approved_player.tscn"
 
 

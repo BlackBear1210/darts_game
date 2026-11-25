@@ -4,7 +4,7 @@ extends Node3D
 ## 2026-11-08 사용자 지적 "바에 사람이 디자인이 다르고 의자에 앉아 있지도 않아":
 ##   예전 손님은 옛 상자 캐릭터(art/characters/chr_guest_*.tscn)라 선수(리깅 캐릭터)와 생김새가 달랐고,
 ##   앉는 자세는 옛 모델의 다리 노드 이름에만 맞아서 바 스툴(앉는 면 0.8m) 위에서는 선 채로 스툴을 뚫었다.
-##   → 선수와 같은 리깅 캐릭터(art/characters/rigged/player_character.tscn)를 쓰고, 선수와 같은 몸짓 도구
+##   → 선수와 같은 리깅 캐릭터(지금은 승인 캐릭터 approved_player.tscn)를 쓰고, 선수와 같은 몸짓 도구
 ##     CharacterMotion 으로 앉기(Seated_Stool)·서기(Idle)·마시기(Drink_R)·가리키기(Point_R)를 튼다.
 ##     높은 바 스툴은 앉는 면 높이 차이만큼 몸을 올려 앉힌다(spawn 의 seat_top).
 ## 2026-11-08(오후) 캐릭터가 Tripo 모델로 바뀌어 셔츠 색 바꾸기·안경 부품이 없어졌다 → 옷은 art/pub/npc_outfit.gd 가
@@ -12,7 +12,8 @@ extends Node3D
 ## 걷지도, 부딪히지도, 경기에 끼어들지도 않는다(충돌 없음). 캐릭터 씬은 정적 메시 묶기(art/static_batch.gd)에서 빠진다.
 ## 만드는 곳: art/pub/room/room_guests.gd·room_bar.gd(펍 손님·바텐더 → pub_game.tscn 에 저장), game/lounge/arcade/arcade_room.gd(주스 가게 직원).
 
-const CHARACTER_SCENE := "res://art/characters/rigged/player_character.tscn"
+## NPC 캐릭터 씬. spawn 에 캐릭터를 따로 넘기지 않으면 이것을 쓴다.
+## 2026-11-25: 옛 Tripo 캐릭터(player_character.tscn)를 지우고 기본값도 승인 캐릭터로 바꿨다.
 const PUB_CHARACTER_SCENE := preload("res://art/characters/rigged/approved_player.tscn")
 const SCRIPT_PATH := "res://art/pub/npc_idle.gd"
 ## 의상 부품(class_name 대신 preload — 열린 편집기가 새 class_name 을 못 읽는 함정).
@@ -105,7 +106,7 @@ static func spawn(parent: Node, node_name: String, at: Vector3, look: Vector3, s
 	# 캐릭터를 먼저 넣고 나서 부모에 붙인다: 부모가 이미 화면 트리 안이면(오락실 주스 직원) 붙이는 순간 _ready 가 도는데,
 	# 그때 "Character" 가 없으면 몸짓·옷이 꺼진 채 T자 자세로 서 있었다(2026-11-08 미리보기에서 발견).
 	if character_scene == null:
-		character_scene = load(CHARACTER_SCENE) as PackedScene
+		character_scene = PUB_CHARACTER_SCENE
 	var model := character_scene.instantiate() as Node3D
 	model.name = "Character"
 	holder.add_child(model)
