@@ -11,6 +11,11 @@ const CardView = preload("res://game/card_round/cards/card_view.gd")
 const FOLLOW: float = 14.0
 ## 꺼내 든 카드 양옆이 비켜나는 각도.
 const MAKE_ROOM_DEGREES: float = 6.0
+## 1인칭 한 줄 손패에서 꺼내 든 카드와 왼쪽·오른쪽 이웃 카드 중심 사이 거리(카드 폭 배수).
+## 앞에 선 꺼내 든 카드는 이웃을 덮는다. 오른쪽 이웃은 왼쪽 끝에 제목이 있어 한 장 폭을 다 비우고,
+## 왼쪽 이웃은 오른쪽 끝(그림 가장자리)만 조금 덮인다.
+const ROW_GAP_LEFT: float = 0.85
+const ROW_GAP_RIGHT: float = 1.04
 const REWARD_GLOW := Color("ffcf4a")
 const READY_GLOW := Color("8cf0a0")
 
@@ -109,7 +114,8 @@ func _process(delta: float) -> void:
 			var height := width * CardView.SIZE.y / CardView.SIZE.x
 			var step := (rect.size.x - width) / maxi(6, count - 1)
 			step -= maxf(width - step, 0.0) * 0.21
-			var center := Vector2(rect.position.x + width * 0.5 + step * i, rect.end.y - height * 0.5)
+			var offset := _row_offset(i, count, lifted_index, step, width, rect.size.x - width)
+			var center := Vector2(rect.position.x + width * 0.5 + offset, rect.end.y - height * 0.5)
 			var depth := ROW_DEPTH - 0.003 * i
 			if lifted:
 				center.y -= height * 0.17
@@ -138,3 +144,28 @@ func _process(delta: float) -> void:
 			card.set_glow(0.75, REWARD_GLOW)
 		else:
 			card.set_glow(0.0)
+
+
+## 1인칭 한 줄 손패에서 i번째 카드 중심의 가로 위치(첫 카드 중심 기준, 픽셀).
+## 꺼내 든 카드가 있으면 그 카드를 사이에 두고 왼쪽 무리와 오른쪽 무리가 갈라진다.
+## 갈라진 만큼 양쪽 무리는 손패 영역(max_span) 안에서 더 촘촘히 겹친다(원래 간격 step 보다 넓어지지는 않는다).
+func _row_offset(i: int, count: int, lifted_index: int, step: float, width: float, max_span: float) -> float:
+	if lifted_index < 0 or count < 2:
+		return step * i
+	var left_count: int = lifted_index
+	var right_count: int = count - 1 - lifted_index
+	var gap_left: float = ROW_GAP_LEFT * width if left_count > 0 else 0.0
+	var gap_right: float = ROW_GAP_RIGHT * width if right_count > 0 else 0.0
+	var packed: int = maxi(left_count - 1, 0) + maxi(right_count - 1, 0)
+	var tight: float = step
+	if packed > 0:
+		tight = clampf((max_span - gap_left - gap_right) / packed, 0.0, step)
+	var lifted_at: float = maxi(left_count - 1, 0) * tight + gap_left
+	var total: float = lifted_at + gap_right + maxi(right_count - 1, 0) * tight
+	# 꺼내 든 카드는 원래 자리에 가깝게 두되, 줄 전체가 손패 영역을 벗어나지 않게 민다.
+	var start: float = clampf(step * lifted_index - lifted_at, 0.0, maxf(max_span - total, 0.0))
+	if i < lifted_index:
+		return start + i * tight
+	if i == lifted_index:
+		return start + lifted_at
+	return start + lifted_at + gap_right + (i - lifted_index - 1) * tight
