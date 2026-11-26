@@ -49,6 +49,8 @@ func _ready() -> void:
 	_face.custom_minimum_size = Vector2(RADIUS * 2.0 + 16, RADIUS * 2.0 + 16)
 	_face.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 팝업을 띄운 첫 그림은 판 자리가 배치되기 전이라 왼쪽 위에 그려진다 → 자리가 정해지면 다시 그린다(2026-11-26).
+	_face.item_rect_changed.connect(queue_redraw)
 	column.add_child(_face)
 	_note = Style.label(column, "", 19, Style.CREAM)
 	_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

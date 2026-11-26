@@ -95,6 +95,15 @@ var _picker_card: int = -1
 ## 이 카드에 대해서는 이미 고르거나 닫았다 — 카드를 내렸다 다시 꺼낼 때까지 팝업을 다시 띄우지 않는다.
 ## (2026-11-25: 닫을 때 _picker_card 만 비워서 다음 프레임에 곧바로 다시 열리는 고리가 있었다.)
 var _picker_done: int = -1
+## F 로 팝업을 부른 구역 카드(-1 = 안 부름). 2026-11-26: Q·E 로 넘기다 구역 카드에 닿을 때마다 팝업이 떠서 불편하다
+## → 꺼내 들기만 해서는 안 뜨고, F 를 눌러야 뜬다.
+var _picker_request: int = -1
+## 칸을 사람이 직접 고른(Z·X 또는 팝업) 구역 카드. 규칙은 꺼내 드는 순간 무작위 칸을 기본값으로 넣으므로
+## (round_rules.lift) 값만 보고는 "아직 안 골랐다"를 알 수 없어 따로 기억한다.
+var _sector_confirmed: int = -1
+## 팝업에서 칸을 고른 카드와 그 칸. 고른 칸이 상태로 돌아오면(손님은 한 박자 늦다) 그 카드를 바로 쓴다.
+var _use_after_pick: int = -1
+var _use_after_sector: int = -1
 
 
 func _ready() -> void:
@@ -237,7 +246,7 @@ func _build_card_panel() -> void:
 	_card_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
-## 구역 고르기 팝업(2026-11-24 사용자 요청). 꺼내 든 카드가 구역을 고르는 카드면 다트판을 띄운다.
+## 구역 고르기 팝업(2026-11-24 사용자 요청). 구역을 고르는 카드를 꺼내 들고 F 를 누르면 다트판을 띄운다(2026-11-26).
 ## 예전 Z·X 로 넘기는 길은 그대로 둔다(홀짝·정밀 조정처럼 판이 필요 없는 카드가 쓴다).
 func _build_picker() -> void:
 	_picker = SectorPicker.new()
@@ -245,18 +254,30 @@ func _build_picker() -> void:
 	_picker.visible = false
 	_picker.picked.connect(func(sector: int) -> void:
 		game.controller.request_card("choice", sector)
+		_sector_confirmed = _picker_card
+		_use_after_pick = _picker_card
+		_use_after_sector = sector
 		_close_picker())
 	_picker.closed.connect(_close_picker)
 	_root.add_child(_picker)
 
 
-## 꺼내 든 카드가 구역 카드인 동안 팝업을 띄우고, 아니면 닫는다.
+## F 로 부른 구역 카드를 들고 있는 동안 팝업을 띄우고, 아니면 닫는다.
+## 팝업에서 고른 값이 상태로 돌아오면 그 카드를 바로 쓴다(F → 칸 고르기 → 끝).
 func _update_picker(me: MatchPlayer) -> void:
+	if me == null or me.pending_card != _sector_confirmed:
+		_sector_confirmed = -1
+	if me == null or me.pending_card != _use_after_pick:
+		_use_after_pick = -1
+	elif int(me.card_effects.get("choice", -1)) == _use_after_sector:
+		_use_after_pick = -1
+		use_lifted_card()
 	var wants: int = -1
-	if me != null and me.pending_card >= 0 and str(Catalog.card(me.pending_card).get("choice", "")) == "sector":
+	if me != null and me.pending_card >= 0 and me.pending_card == _picker_request and _picks_sector(me.pending_card):
 		wants = me.pending_card
 	if wants < 0:
-		# 카드를 내렸다 → 다시 꺼내면 또 띄운다.
+		# 카드를 넘기거나 내렸다 → 다음에 F 를 누르면 또 띄운다.
+		_picker_request = -1
 		_picker_done = -1
 		_close_picker()
 		return
@@ -271,7 +292,8 @@ func _update_picker(me: MatchPlayer) -> void:
 	if is_bomb:
 		hint = "지뢰 %d개째 · 같은 칸에 겹쳐 심으면 벌점도 겹칩니다 · %s" % [
 			int(me.card_effects.get("mine_count", 0)) + 1, hint]
-	_picker.chosen = int(me.card_effects.get("choice", -1))
+	# 팝업은 아직 직접 고르지 않았을 때만 뜬다 → 규칙이 넣어 둔 무작위 기본 칸은 표시하지 않는다.
+	_picker.chosen = -1
 	_picker.show_board(board, is_bomb, "%s · 구역을 고르세요" % str(card.name), hint)
 	_picker.visible = true
 	# 팝업을 누르려면 마우스가 풀려 있어야 한다. 닫을 때 다시 잡는다.
@@ -286,6 +308,7 @@ func _close_picker() -> bool:
 	_picker.visible = false
 	_picker_done = _picker_card
 	_picker_card = -1
+	_picker_request = -1
 	if game != null and game.wardrobe == null:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	return true
@@ -294,6 +317,16 @@ func _close_picker() -> bool:
 ## 바깥(Esc)에서 팝업을 닫을 때 부른다.
 func close_sector_picker() -> bool:
 	return _close_picker()
+
+
+## 다트판 팝업으로 칸을 고르는 카드인가(봉쇄 구역·더블 오어 낫싱·지뢰 심기).
+func _picks_sector(card_type: int) -> bool:
+	return str(Catalog.card(card_type).get("choice", "")) == "sector"
+
+
+## 꺼내 든 구역 카드의 칸을 아직 직접 고르지 않았다 → F 가 '쓰기' 대신 '구역 고르기'다.
+func _needs_sector_pick(me: MatchPlayer) -> bool:
+	return me.pending_card >= 0 and _picks_sector(me.pending_card) and me.pending_card != _sector_confirmed
 
 
 ## 내 차례 알림(2026-11-24). 화면 위쪽 1/3 에 크게 뜬다 — 조준점과 아래 키 안내를 가리지 않는 자리다.
@@ -617,7 +650,7 @@ func _show_card_panel(me: MatchPlayer, target: String) -> void:
 	# 2026-11-21: 준비 시간 0(Rules.READY_SECONDS) → 꺼내면 바로 "F 로 쓰기". 0 나누기를 피한다.
 	var ratio: float = 1.0 if Rules.READY_SECONDS <= 0.0 else clampf((_time - _pending_since) / Rules.READY_SECONDS, 0.0, 1.0)
 	_card_bar.value = ratio * 100.0
-	_card_status.text = "준비 중…" if ratio < 1.0 else "%s 로 쓰기" % OS.get_keycode_string(Preferences.interact_key)
+	_card_status.text = "준비 중…" if ratio < 1.0 else "%s 로 %s" % [OS.get_keycode_string(Preferences.interact_key), "구역 고르기" if _needs_sector_pick(me) else "쓰기"]
 	_card_status.add_theme_color_override("font_color", Style.GOLD if ratio < 1.0 else Style.MINT)
 	var blocked: String = _blocked_card_reason(me)
 	_card_bar.visible = blocked.is_empty()
@@ -844,7 +877,7 @@ func _prompt_for(focus: Dictionary) -> Array:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	var card_keys: Array = []
 	if me != null and _card_phase(state) and not me.hand.is_empty():
-		card_keys = [[key, "카드 쓰기"]] if me.pending_card >= 0 else [["휠 · Q · E", "카드 꺼내기"]]
+		card_keys = [[key, "구역 고르기" if _needs_sector_pick(me) else "카드 쓰기"]] if me.pending_card >= 0 else [["휠 · Q · E", "카드 꺼내기"]]
 		if not _blocked_card_reason(me).is_empty(): card_keys = [["Q · E", "다른 카드 선택"]]
 	if game.is_seated(game.controller.local_peer_id):
 		return card_keys + [["A · D", "옆자리 엿보기"], ["Space", "일어서기"], ["T", "감정표현"]] + _voice_keys()
@@ -925,6 +958,11 @@ func use_lifted_card() -> bool:
 	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
 	if me == null or me.pending_card < 0: return false
 	if not _blocked_card_reason(me).is_empty(): return true
+	# 구역 카드는 F 로 먼저 팝업을 띄운다(칸을 고르면 _update_picker 가 이어서 쓴다).
+	# 막힌 카드(발사 뒤·이미 적용 중)는 위에서 걸러 팝업부터 뜨지 않게 한다.
+	if _needs_sector_pick(me):
+		_picker_request = me.pending_card
+		return true
 	var kind: int = int(Catalog.card(me.pending_card).target)
 	var active: MatchPlayer = state.active_player()
 	var value: int = active.peer_id if active != null else 0
@@ -972,3 +1010,5 @@ func _cycle_choice(me: MatchPlayer, step: int) -> void:
 	var previous: int = int(me.card_effects.get("choice", -1))
 	var chosen: int = (0 if step > 0 else count - 1) if previous < 0 else posmod(previous + step, count)
 	game.controller.request_card("choice", chosen)
+	# Z·X 로 직접 골랐으면 F 는 팝업 없이 바로 쓴다.
+	_sector_confirmed = me.pending_card
