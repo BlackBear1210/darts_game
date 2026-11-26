@@ -66,6 +66,16 @@ var taunting: bool = false
 var seat_lean: float = 0.0
 ## 화면에 쓰는 기울기. seat_lean 은 초당 20번 오므로 그대로 쓰면 카메라가 계단처럼 튄다 → 매 프레임 부드럽게 따라간다.
 var _shown_lean: float = 0.0
+## [손님 화면 보간 — 2026-11-26 사용자 "사람들이 막 덜덜덜 떨려"] 자리·각도도 seat_lean 과 같은 문제가 있었다.
+## 방장만 simulate 를 돌리고 손님 화면은 스냅샷(GameView.MOTION_INTERVAL = 초당 20번)으로만 사람을 옮긴다 →
+## 그대로 꽂으면 144Hz 화면에서 일곱 프레임 멈췄다 한 번 순간이동하기를 되풀이해 모두가 덜덜 떨렸다.
+## 받은 자리를 목표로 두고 매 프레임 그쪽으로 좁혀 간다. 방장 화면은 이 경로를 타지 않아(call_remote) 그대로다.
+const MOTION_FOLLOW: float = 18.0
+## 이보다 멀리 떨어진 스냅샷은 보간하지 않고 바로 붙인다(자리 앉기·쓰러진 뒤 복귀 같은 순간이동).
+const MOTION_SNAP: float = 1.5
+## 방장이 보내온 자리·좌우 각도. INF = 아직 스냅샷을 받은 적 없음(방장 화면).
+var _motion_to: Vector3 = Vector3.INF
+var _motion_yaw: float = 0.0
 ## 이름표에 "엿보는 중"을 붙였는지(SeatCards.PEEK_REVEAL 만큼 기울면 켠다).
 var _peek_tagged: bool = false
 ## 마시는 몸짓 진행(0 = 안 마심, 0~1 = 병을 입에 대고 기울이는 중). LoungeWorld 가 매 프레임 넣는다(보이기만).
@@ -152,6 +162,7 @@ func _refresh_label() -> void:
 
 ## 기본 몸짓은 위치·자세·속도로 만들고, 선택 모션은 방장이 승인한 감정표현 이벤트로 시작한다.
 func _process(delta: float) -> void:
+	_follow_motion(delta)
 	if _rig == null:
 		return
 	if fallen:
@@ -443,11 +454,27 @@ func to_motion() -> Dictionary:
 
 
 func apply_motion(data: Dictionary) -> void:
-	position = data.position
-	rotation.y = data.yaw
+	var to: Vector3 = data.position
+	# 처음 받은 스냅샷 · 멀리 건너뛴 자리 · 앉고 서기는 보간하지 않고 바로 옮긴다.
+	var jump: bool = not _motion_to.is_finite() or position.distance_to(to) > MOTION_SNAP or bool(data.seated) != seated
+	_motion_to = to
+	_motion_yaw = float(data.yaw)
+	if jump:
+		position = to
+		rotation.y = _motion_yaw
 	pitch = data.pitch
 	seated = data.seated
 	seat_lean = float(data.get("seat_lean", 0))
 	crouched = data.crouched
 	velocity = data.velocity
 	update_posture()
+
+
+## 스냅샷으로 받은 자리·좌우 각도로 매 프레임 조금씩 다가간다. 방장 화면에서는 _motion_to 가 비어 있어 아무 일도 없다.
+## 보이기만 하는 보정이다 — 점수·몸 맞기 판정은 방장이 자기 시뮬레이션으로 하므로 영향받지 않는다.
+func _follow_motion(delta: float) -> void:
+	if fallen or not _motion_to.is_finite():
+		return
+	var weight: float = 1.0 - exp(-MOTION_FOLLOW * delta)
+	position = position.lerp(_motion_to, weight)
+	rotation.y = lerp_angle(rotation.y, _motion_yaw, weight)
