@@ -374,7 +374,7 @@ static func wants_capture(mode: int, phase: int) -> bool:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# 꾸미기 방이 열려 있으면 펍 조작(F·T·Tab·Enter·클릭)은 모두 쉰다 — 방 화면이 자기 입력을 받는다.
-	if wardrobe != null:
+	if wardrobe_open():
 		return
 	# T 감정표현 피자판이 먼저 받는다(열려 있으면 마우스 클릭·Esc 도 피자판 것).
 	if emotes != null and emotes.handle(event):
@@ -659,13 +659,15 @@ func _wardrobe_blocked(local: PlayerView) -> bool:
 ## 문에서 F: 화면이 검게 바뀌며 탈의실로 들어간다. 몸은 문 앞에 남고(마우스가 풀려 이동 입력 0) 이름표에 "꾸미는 중".
 func open_wardrobe() -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
-	if wardrobe != null or local == null or _wardrobe_blocked(local):
+	if wardrobe_open() or local == null or _wardrobe_blocked(local):
 		return
 	wardrobe = Wardrobe.new()
 	wardrobe.name = "Wardrobe"
 	wardrobe.seat = local.identity.seat
 	wardrobe.look = local.look.duplicate()
 	wardrobe.closed.connect(_on_wardrobe_closed)
+	# 페이드가 끝나 closed 가 오는 길 말고도, 어떤 이유로든 노드가 트리에서 빠지면 참조를 놓는다.
+	wardrobe.tree_exited.connect(_forget_wardrobe)
 	add_child(wardrobe)
 	_prop_charge_from = -1.0
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -673,6 +675,22 @@ func open_wardrobe() -> void:
 
 
 ## 탈의실에서 나왔다: 내 화면에 바로 입히고 · 다음 판을 위해 저장하고 · 방장에게 보낸다.
+## 꾸미기 방이 지금 정말로 열려 있는가. 지워진 노드는 GDScript 에서 null 이 아니므로 꼭 이걸로 본다.
+## [2026-11-26 사용자 "앉아서 엔터 누르는 순간 다트 던지기 빼고 아무 키도 안 먹는다"]
+## 방이 닫히는 길은 _process 페이드가 끝나며 보내는 closed 신호 하나뿐이었다(close_now 는 부르는 데가 없다).
+## 그 신호 없이 노드가 지워지면 wardrobe 가 지워진 객체를 가리킨 채 남아 _unhandled_input 이 통째로 쉬었다
+## → 시점·이동·Space·F·Enter 가 전부 죽고, _input 으로 받는 다트 던지기만 살아남는다.
+func wardrobe_open() -> bool:
+	if wardrobe != null and not is_instance_valid(wardrobe):
+		wardrobe = null
+	return wardrobe != null
+
+
+## 꾸미기 방 노드가 트리에서 빠지면 참조를 놓는다(페이드가 끝나지 못한 경우까지).
+func _forget_wardrobe() -> void:
+	wardrobe = null
+
+
 func _on_wardrobe_closed(look: Dictionary) -> void:
 	wardrobe = null
 	var clean: Dictionary = PlayerOutfit.sanitize(look)
@@ -849,7 +867,7 @@ func _process(delta: float) -> void:
 	var state := controller.state
 	var own_turn: bool = state.active_player() != null and state.active_player().peer_id == controller.local_peer_id
 	# 꾸미기 방에 있는데 내 차례·테이블 집합·쓰러짐이 오면 바로 나온다(고른 것은 입고 나온다).
-	if wardrobe != null and _wardrobe_blocked(local):
+	if wardrobe_open() and _wardrobe_blocked(local):
 		wardrobe.close()
 	_face_table_on_sit(local)
 	camera.position = local.eye_position()
