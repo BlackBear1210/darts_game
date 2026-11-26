@@ -363,6 +363,15 @@ func _notification(what: int) -> void:
 		_prop_charge_from = -1.0
 
 
+## 화면을 클릭했을 때 마우스를 다시 잡아야 하는가.
+## [2026-11-26 사용자 "클릭 빼고는 아무 키도 안 먹는다"] 예전에는 '보이는' 상태에서만 다시 잡았다.
+## 이동·시점·Space 는 모두 '잡힘'일 때만 듣는데, 포인터 연출(ui/dart_cursor.gd)이 쓰는 '숨김'으로
+## 남으면 클릭으로도 빠져나올 수 없어 조작이 통째로 잠겼다 → 잡혀 있지만 않으면 언제든 다시 잡는다.
+## 경기 결과 화면에서는 버튼을 눌러야 하므로 포인터를 그대로 둔다.
+static func wants_capture(mode: int, phase: int) -> bool:
+	return mode != Input.MOUSE_MODE_CAPTURED and phase != MatchState.Phase.FINISHED
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	# 꾸미기 방이 열려 있으면 펍 조작(F·T·Tab·Enter·클릭)은 모두 쉰다 — 방 화면이 자기 입력을 받는다.
 	if wardrobe != null:
@@ -428,7 +437,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE and controller.state.phase != MatchState.Phase.FINISHED:
+		if wants_capture(Input.mouse_mode, controller.state.phase):
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			get_viewport().set_input_as_handled()
 		return
@@ -514,6 +523,7 @@ func _predict_local(delta: float) -> void:
 	var mine := actors.get(controller.local_peer_id) as PlayerView
 	if mine == null or mine.identity.is_bot:
 		return
+	mine.predicted = true
 	var controls: Dictionary = {} if _frozen(controller.local_peer_id) else _controls.get(controller.local_peer_id, {})
 	mine.simulate(delta, controls)
 	if _controls.has(controller.local_peer_id):
@@ -617,9 +627,6 @@ func _receive_motion(match_id: int, sequence: int, poses: Array) -> void:
 ## 벌어진 것이다(피격으로 밀림·스턴·자리 앉기·쓰러짐) → 방장 자리를 따른다.
 func _trusts_prediction(actor: PlayerView, pose: Dictionary) -> bool:
 	if actor.fallen or actor.seated or bool(pose.get("seated", false)):
-		return false
-	var controls: Dictionary = _controls.get(controller.local_peer_id, {})
-	if (controls.get("move", Vector2.ZERO) as Vector2).length() < 0.01:
 		return false
 	return actor.position.distance_to(pose.position as Vector3) <= PREDICT_TRUST
 

@@ -90,6 +90,11 @@ func _ready() -> void:
 	_cursor = _make_dart()
 
 
+## 이 포인터가 마우스를 '숨김'으로 바꿨는가. 바꿔 놓고 안 되돌리면 화면이 숨김에 갇혀
+## 이동·시점·Space 가 모두 잠긴다(2026-11-26 사용자 "클릭 빼고는 아무 키도 안 먹는다").
+var _hid_mouse: bool = false
+
+
 func _enter_tree() -> void:
 	_stack.append(self)
 
@@ -100,8 +105,9 @@ func _exit_tree() -> void:
 		if is_instance_valid(control):
 			control.scale = Vector2.ONE
 			control.rotation = 0.0
-	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
+	if _hid_mouse and Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_hid_mouse = false
 
 
 ## 맨 위 포인터이고, 시점 조작(마우스 잡기) 중이 아니며, 펼침 목록이 열려 있지 않을 때만 동작한다.
@@ -143,8 +149,11 @@ func _process(delta: float) -> void:
 	var active := is_active()
 	if active:
 		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
-	elif Input.mouse_mode == Input.MOUSE_MODE_HIDDEN and (_stack.is_empty() or _stack.back() == self):
+		_hid_mouse = true
+	elif Input.mouse_mode == Input.MOUSE_MODE_HIDDEN and (_hid_mouse or _stack.is_empty() or _stack.back() == self):
+		# 내가 숨겼으면 맨 위가 아니게 됐어도 되돌린다 — 아무도 안 되돌리면 숨김에 갇힌다.
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_hid_mouse = false
 	visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if active or not _flights.is_empty() or not _stuck.is_empty() \
 		else SubViewport.UPDATE_DISABLED

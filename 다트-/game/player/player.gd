@@ -76,6 +76,10 @@ const MOTION_SNAP: float = 1.5
 ## 방장이 보내온 자리·좌우 각도. INF = 아직 스냅샷을 받은 적 없음(방장 화면).
 var _motion_to: Vector3 = Vector3.INF
 var _motion_yaw: float = 0.0
+## 이 몸은 내 화면에서 직접 예측해 움직인다(손님의 내 캐릭터 — GameView._predict_local).
+## [2026-11-26 사용자 "그냥 걸어다니는데 밀리는 느낌"] 예측과 보간이 둘 다 자리를 쓰면 매 프레임
+## 앞으로 밀고 뒤로 당기는 줄다리기가 된다 → 걸음이 밀리고, 춤 카메라(Emotes)는 그 떨림을 그대로 비춘다.
+var predicted: bool = false
 ## 이름표에 "엿보는 중"을 붙였는지(SeatCards.PEEK_REVEAL 만큼 기울면 켠다).
 var _peek_tagged: bool = false
 ## 마시는 몸짓 진행(0 = 안 마심, 0~1 = 병을 입에 대고 기울이는 중). LoungeWorld 가 매 프레임 넣는다(보이기만).
@@ -485,7 +489,7 @@ func keep_predicted_motion(data: Dictionary) -> void:
 ## 스냅샷으로 받은 자리·좌우 각도로 매 프레임 조금씩 다가간다. 방장 화면에서는 _motion_to 가 비어 있어 아무 일도 없다.
 ## 보이기만 하는 보정이다 — 점수·몸 맞기 판정은 방장이 자기 시뮬레이션으로 하므로 영향받지 않는다.
 func _follow_motion(delta: float) -> void:
-	if fallen or not _motion_to.is_finite():
+	if predicted or fallen or not _motion_to.is_finite():
 		return
 	var weight: float = 1.0 - exp(-MOTION_FOLLOW * delta)
 	position = position.lerp(_motion_to, weight)

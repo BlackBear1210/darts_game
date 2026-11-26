@@ -44,12 +44,12 @@ func _run() -> void:
 	var behind := mine.position + Vector3(0, 0, 0.5)
 	assert(game._trusts_prediction(mine, pose(mine, behind)), "걷는 중 왕복 지연만큼의 차이는 정상이다")
 
-	# 2) 가만히 서 있는데 어긋났다 → 내가 모르는 일이 벌어진 것이다(밀림·스턴) → 방장을 따른다.
+	# 2) 걷다 멈춰도 그대로 믿는다. 멈춘 직후의 스냅샷은 아직 "걷던 중" 자리라 뒤처져 있는데,
+	#    그때 방장 자리를 따르면 멈출 때마다 뒤로 홱 끌려간다(방장은 곧 같은 자리로 따라온다).
 	hold(Vector2.ZERO)
-	assert(not game._trusts_prediction(mine, pose(mine, behind)), "안 움직이는데 어긋나면 방장을 따른다")
+	assert(game._trusts_prediction(mine, pose(mine, behind)), "멈춘 직후에도 뒤로 끌려가지 않는다")
 
-	# 3) 걷는 중이어도 PREDICT_TRUST 보다 크게 벌어지면 예측이 틀린 것이다.
-	hold(Vector2(0, -1))
+	# 3) PREDICT_TRUST 보다 크게 벌어지면 예측이 틀린 것이다(밀림·스턴·순간이동).
 	var far := mine.position + Vector3(0, 0, GameView.PREDICT_TRUST + 0.5)
 	assert(not game._trusts_prediction(mine, pose(mine, far)), "너무 벌어지면 방장을 따른다")
 
@@ -65,12 +65,20 @@ func _run() -> void:
 	mine.keep_predicted_motion(pose(mine, behind))
 	assert(mine.position.is_equal_approx(kept), "자리는 내 예측 그대로: %s" % mine.position)
 	assert(mine.crouched, "자세 같은 나머지 상태는 방장 것을 따른다")
-	# 지킨 자리가 보간 목표도 되어야 한다 — 안 그러면 _follow_motion 이 다시 뒤로 끌고 간다.
+	# 지킨 자리를 보간이 다시 끌고 가면 안 된다. 예측 중인 몸은 보간에서 아예 빠진다 —
+	# 둘 다 자리를 쓰면 매 프레임 앞뒤로 당겨 걸음이 밀린다(사용자 "그냥 걷는데 밀리는 느낌").
+	assert(mine.predicted or true)
+	mine.predicted = true
+	mine._motion_to = kept + Vector3(0, 0, 0.6)
 	await process_frame
 	await process_frame
-	assert(mine.position.is_equal_approx(kept), "지킨 자리를 보간이 되돌리지 않는다: %s" % mine.position)
+	assert(mine.position.is_equal_approx(kept), "예측 중인 몸은 보간이 건드리지 않는다: %s" % mine.position)
+	mine.predicted = false
+	await process_frame
+	await process_frame
+	assert(not mine.position.is_equal_approx(kept), "예측이 아니면 평소대로 보간한다")
 
 	main.queue_free()
 	await process_frame
-	print("PASS: client keeps its own predicted position through normal lag and defers to the host on knockback, stalls, seating and large drift")
+	print("PASS: client keeps its own predicted position through normal lag and on stopping, defers to the host on large drift/seating/falling, and is excluded from snapshot easing")
 	quit()
