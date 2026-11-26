@@ -1181,11 +1181,17 @@ func drink_progress(object: Dictionary, time: float) -> float:
 ## 마시는 중엔 입 앞으로 올라오며 고개 각도를 따라가고, 병목이 얼굴 쪽으로 기울며 꿀꺽할 때 살짝 흔들린다.
 func _held_transform(actor: PlayerView, progress: float) -> Transform3D:
 	var curve: Vector2 = CharacterRig.drink_curve(progress)
-	var look: float = (actor.pitch + curve.y * PlayerView.DRINK_LOOK_UP) * curve.x
-	var frame := Basis(Vector3.UP, actor.rotation.y) * Basis(Vector3.RIGHT, look)
-	var tip: float = curve.x * 0.6 + curve.y * (DRINK_TIP - 0.6) + sin(progress * 38.0) * 0.05 * curve.y
 	# 내 캐릭터면 1인칭 카메라 기준 자리(FIRST_PERSON_MOUTH), 남이면 3인칭으로 보기 좋은 입 앞.
 	var mine: bool = actor.identity != null and actor.identity.peer_id == game.controller.local_peer_id
+	# [2026-11-26 사용자 "병 집어들면 깜빡깜빡거려"] 몸 각도는 조작 전송 주기(GameView.MOTION_INTERVAL 0.05초)에만
+	# 갱신되는데 화면은 매 프레임 그려진다 → 내 손의 소품을 몸 각도로 놓으면 마우스를 돌릴 때 화면만 돌고 소품은
+	# 0.05초마다 끊겨 따라와, 눈앞 0.7m 에서 수십 픽셀씩 되돌아가며 떨린다. 내 것은 카메라와 같은 시선 각도를 쓴다.
+	var angles: Vector2 = game.look_angles()
+	var yaw: float = angles.x if mine else actor.rotation.y
+	var aim: float = angles.y if mine else actor.pitch
+	var look: float = (aim + curve.y * PlayerView.DRINK_LOOK_UP) * curve.x
+	var frame := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, look)
+	var tip: float = curve.x * 0.6 + curve.y * (DRINK_TIP - 0.6) + sin(progress * 38.0) * 0.05 * curve.y
 	var mouth: Vector3 = FIRST_PERSON_MOUTH if mine else MOUTH_OFFSET
 	return Transform3D(frame * Basis(Vector3.RIGHT, tip), actor.eye_position() + frame * HOLD_OFFSET.lerp(mouth, curve.x))
 

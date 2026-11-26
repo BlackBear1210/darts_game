@@ -786,6 +786,13 @@ func _animate_hand(delta: float) -> void:
 
 
 ## 내가 던졌다는 응답이 오면 1인칭 던지기 몸짓을 시작한다(놓을 때 당긴 자세에서 출발).
+## 1인칭 시선 각도(x = 좌우, y = 위아래). 마우스가 움직이는 대로 매 프레임 갱신되며 카메라가 쓰는 값 그대로다.
+## 몸 각도(PlayerView.rotation.y·pitch)는 조작 전송 주기(MOTION_INTERVAL)에만 갱신되므로, 눈앞에 크게 보이는 것은
+## 몸이 아니라 이 값을 따라야 화면과 같이 돈다.
+func look_angles() -> Vector2:
+	return Vector2(_yaw, _pitch)
+
+
 func _start_throw_kick() -> void:
 	_released_pull = _held_pull
 	_throw_kick = 1.0

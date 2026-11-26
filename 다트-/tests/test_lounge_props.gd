@@ -86,6 +86,22 @@ func _run() -> void:
 	# 상호작용 키 한 번 = 한 단계(25%) 올리기.
 	lounge.request("volume")
 	assert(is_equal_approx(lounge.music.volume, 0.75))
+	# [2026-11-26 사용자 "병 집어들면 깜빡깜빡거려"] 내 손의 소품은 화면 안에서 제자리에 붙어 있어야 한다.
+	# 몸 각도는 조작 전송 주기(0.05초)에만 갱신되므로, 몸 각도로 놓으면 마우스를 돌릴 때 소품만 끊겨 따라오며
+	# 화면에서 앞뒤로 튄다. 고개를 돌리는 동안 카메라 기준 자리가 그대로인지 본다.
+	var bottle: int = -1
+	for index in range(lounge.objects.size()):
+		if lounge.objects[index].kind == "bottle": bottle = index
+	lounge.objects[bottle].holder = 1
+	await process_frame
+	var seen: Vector3 = game.camera.to_local(lounge.visuals[bottle].global_position)
+	for turn in range(12):
+		game._yaw += 0.012
+		await process_frame
+		var moved: float = seen.distance_to(game.camera.to_local(lounge.visuals[bottle].global_position))
+		assert(moved < 0.002, "고개를 돌려도 손에 든 병은 화면에서 제자리다: %.4f m 어긋남" % moved)
+	lounge.objects[bottle].holder = 0
+
 	# 시작 화면 전환에도 음악·손에 든 물체·취기 값은 유지된다.
 	game.force_seat(1)
 	main.session.set_ready(true)
