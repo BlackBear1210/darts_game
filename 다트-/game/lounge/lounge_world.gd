@@ -126,6 +126,13 @@ var stun_until: Dictionary = {}
 ## 장난 효과: peer → {이름: 끝나는 시각}. 이름 = bighead(왕머리) · ink(먹물) · blind(인형에 얼굴 가림).
 var effects: Dictionary = {}
 var _last_action: Dictionary = {}
+## 스냅샷에서 빼는 항목: 소품을 만들 때 정해지고 그 뒤로 바뀌지 않는다(모든 화면이 _add_prop 으로 똑같이 만든다).
+const FIXED_FIELDS: Array[String] = ["kind", "home", "theme", "slot", "locked"]
+## 바뀐 게 없어도 이 간격으로는 한 번 보낸다(늦게 들어온 사람·놓친 꾸러미 보정).
+const RESEND_SECONDS: float = 2.0
+## 마지막으로 내보낸 원본 상태와 그 시각 — 같으면 다시 보내지 않는다(_publish).
+var _sent_state: Array = []
+var _sent_at: float = -100.0
 var _projectiles: Array[Dictionary] = []
 var _elapsed: float = 0.0
 var _last_deal: int = -1
@@ -1028,14 +1035,36 @@ func _play_fx(data: Dictionary) -> void:
 
 func _publish() -> void:
 	var time: float = now()
-	var public_objects: Array = objects.duplicate(true)
-	for object in public_objects:
-		object.available = maxf(0, float(object.available) - time)
-		object.broken = maxf(0, float(object.get("broken", 0.0)) - time)
-		object.rest_at = time - float(object.get("rest_at", time))
-		object.erase("return_at")
+	# [2026-11-26 멀티 지연 줄이기] 바뀐 게 없으면 보내지 않는다. 가만히 놓인 소품 23개를 초당 10번
+	# 내보내느라 사람당 91KB/s(전체 전송량의 83%)가 나갔고, 이 길은 reliable 이라 중계를 거치면
+	# 꾸러미 하나가 늦을 때마다 뒤가 전부 밀려 끊김으로 느껴졌다.
+	# 비교는 "남은 초"로 바꾸기 전 원본 값으로 한다 — 환산한 값(to_public)은 시간이 흘러 늘 달라지므로
+	# 오락실도 원본(claw·gacha·hoop)을 본다.
+	var signature: Array = [objects, music, intoxication, stun_until, effects,
+		_arcade.claw, _arcade.gacha, _arcade.hoop]
+	if signature == _sent_state and time - _sent_at < RESEND_SECONDS:
+		return
+	_sent_state = signature.duplicate(true)
+	_sent_at = time
+	session.receive_game_event.rpc("lounge", public_state())
+
+
+## 지금 라운지 상태를 보낼 모양으로 만든다. 시각은 모두 "남은 초 · 몇 초 전"으로 바꾸고
+## (컴퓨터마다 시계가 다르다) 바뀌지 않는 항목(FIXED_FIELDS)은 뺀다.
+func public_state() -> Dictionary:
+	var time: float = now()
+	var public_objects: Array = []
+	for object: Dictionary in objects:
+		# 만들 때 정해져 바뀌지 않는 항목은 빼고 보낸다(받는 쪽도 _add_prop 으로 똑같이 갖고 있다).
+		var copy: Dictionary = object.duplicate()
+		for field in FIXED_FIELDS: copy.erase(field)
+		copy.available = maxf(0, float(copy.available) - time)
+		copy.broken = maxf(0, float(copy.get("broken", 0.0)) - time)
+		copy.rest_at = time - float(copy.get("rest_at", time))
+		copy.erase("return_at")
 		# 마신 시각도 "몇 초 전"으로 보낸다(컴퓨터마다 시계가 달라 그대로 보내면 다른 화면에서 마시는 몸짓이 안 나온다).
-		if object.has("drank"): object.drank = time - float(object.drank)
+		if copy.has("drank"): copy.drank = time - float(copy.drank)
+		public_objects.append(copy)
 	var data := {"match_id": game.controller.state.match_id, "objects": public_objects, "music": music, "intoxication": intoxication,
 		"stun": {}, "effects": {}, "arcade": _arcade.to_public()}
 	# 시각/스턴 시간은 남은 초로 전달한다. 컴퓨터마다 다른 단조 시계를 공유하지 않는다.
@@ -1044,7 +1073,7 @@ func _publish() -> void:
 		var list: Dictionary = {}
 		for name in effects[id]: list[name] = maxf(0.0, float(effects[id][name]) - time)
 		data.effects[id] = list
-	session.receive_game_event.rpc("lounge", data)
+	return data
 
 func _receive_event(kind: String, data: Dictionary) -> void:
 	if int(data.get("match_id", -1)) != game.controller.state.match_id: return
@@ -1059,8 +1088,15 @@ func _receive_event(kind: String, data: Dictionary) -> void:
 		return
 	if kind != "lounge": return
 	var time: float = now()
-	objects.assign(data.objects)
-	for object in objects:
+	# 방장은 바뀌는 값만 보낸다(FIXED_FIELDS 는 내 쪽에 이미 있다) → 통째로 바꾸지 않고 덮어쓴다.
+	# 방장이 지운 값(마시는 중·내려놓을 자리)도 따라 지워야 하므로 먼저 비운다.
+	var incoming: Array = data.objects
+	for index in range(mini(objects.size(), incoming.size())):
+		var object: Dictionary = objects[index]
+		object.erase("drank")
+		object.erase("set_down")
+		for key: String in incoming[index]:
+			object[key] = incoming[index][key]
 		object.available = time + float(object.available)
 		object.broken = time + float(object.broken) if float(object.get("broken", 0.0)) > 0.0 else 0.0
 		object.rest_at = time - float(object.get("rest_at", 0.0))
