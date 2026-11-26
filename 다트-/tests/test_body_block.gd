@@ -60,6 +60,7 @@ func _run() -> void:
 	var before: int = controller.state.find_player(-1).score
 	controller.submit_throw(Vector2.ZERO, 1)
 	assert(controller.state.phase == MatchState.Phase.FLIGHT)
+	var thrown: int = game._darts.get_child_count()
 	assert(int(controller.state.find_player(1).score) == 0, "던진 사람은 점수를 못 얻는다")
 	until = Time.get_ticks_msec() / 1000.0 + 4.0
 	while Time.get_ticks_msec() / 1000.0 < until and int(controller.state.last_hit.get("victim", 0)) == 0:
@@ -68,6 +69,10 @@ func _run() -> void:
 	assert(int(hit.get("victim", 0)) == -1, "몸에 맞은 사람이 스냅샷에 실려야 한다: %s" % hit)
 	assert(int(hit.points) == 0 and "몸에 맞음" in str(hit.reason), "막힌 발은 0점이다: %s" % hit)
 	assert(int(controller.state.find_player(1).score) == 0, "던진 사람 점수는 그대로다")
+	# 몸에 맞은 다트는 허공(사람이 서 있던 자리)에 꽂힌 채 남지 않는다(2026-11-26 사용자 보고).
+	assert(thrown > 0, "다트 그림이 만들어졌다 — 아래 검사가 헛돌지 않게 먼저 본다")
+	await create_timer(0.4).timeout
+	assert(game._darts.get_child_count() == 0, "몸에 맞은 다트는 치운다: %d개 남음" % game._darts.get_child_count())
 	# 방해 성공 보상(점수)과 스턴.
 	var after: int = controller.state.find_player(-1).score
 	assert(after == before, "카드 없는 피격은 점수 보상 없음: %d → %d" % [before, after])

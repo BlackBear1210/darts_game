@@ -1322,6 +1322,7 @@ func _show_throw(data: Dictionary) -> void:
 		# 힘 증가 카드: 다트 뒤로 바람 줄기가 빨려 들어가듯 흐른다(겉모습 — 빠르기는 방장 계산 그대로).
 		dart.powered = bool(flight.get("power", false))
 		dart.pierced = bool(flight.get("pierce", false))
+		dart.victim_id = int(flight.get("victim", 0))
 		if flight.has("bounce_at"):
 			# 고무 다트: 처음 닿는 곳까지 날아가 판에서 튕겨 나왔다가 새 자리에 꽂힌다(방장 계산 그대로 보이기만).
 			var bounce_at: Vector3 = flight.bounce_at
@@ -1370,6 +1371,7 @@ func _redirect_throw(data: Dictionary) -> void:
 		if is_instance_valid(dart):
 			dart.size_multiplier = DartView.LARGE_SIZE if bool(flight.get("large", false)) else 1.0
 			dart.pierced = bool(flight.get("pierce", false))
+			dart.victim_id = int(flight.get("victim", 0))
 			var remaining := float(data.remaining)
 			if flight.has("hops"):
 				var elapsed := maxf(float(flight.duration) - remaining, 0.0)
@@ -1392,6 +1394,13 @@ func _redirect_throw(data: Dictionary) -> void:
 ## 2026-11-07: 과녁 면에 꽂힌 다트는 맞은 조각에 붙인다(BoardView.pin) — 판이 돌거나 벌어지면 다트도 같이 움직인다.
 ## 셔터 앞면·머신 몸체·벽에 박힌 다트는 과녁 면(z)에서 떨어져 있으므로 붙이지 않는다.
 func _on_dart_landed(at: Vector3, hit_board: bool, dart: DartView = null) -> void:
+	# 몸에 맞은 다트는 과녁이 아니라 사람 자리(허공)에서 멈춘다 → 움직이는 몸에 붙여 두지 않고
+	# "툭" 소리·불꽃과 함께 없앤다(그냥 던진 다트의 _on_stray_landed 와 같은 처리).
+	if dart != null and is_instance_valid(dart) and dart.victim_id != 0:
+		Sfx.play_at(self, "thunk", at, -1.0, 1.15)
+		BurstFx.spawn(self, "sparks", at, Vector3.UP, Color.WHITE)
+		dart.queue_free()
+		return
 	if dart != null and is_instance_valid(dart) and absf(at.z - TableView.BOARD_CENTER.z) < 0.03:
 		var radius: float = BoardLayout.RADIUS * TableView.BOARD_SCALE
 		table.board.pin(dart, Vector2(at.x - TableView.BOARD_CENTER.x, at.y - TableView.BOARD_CENTER.y) / radius, dart.pierced)

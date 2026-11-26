@@ -74,6 +74,9 @@ var _stuck_age: float = -1.0
 ## 고무 다트(2026-11-21): 처음 닿은 뒤 이어 갈 구간들 [[도착점, 초], ...]. 비어 있으면 닿는 곳에 바로 꽂힌다.
 var _hops: Array = []
 var pierced := false
+## 이 다트가 맞은 사람의 peer ID(0 = 사람에게 안 맞음). 몸에 맞은 다트는 꽂아 두지 않는다 — 몸은 움직이므로
+## 그대로 두면 허공에 떠 있는 다트가 된다(2026-11-26 사용자 보고).
+var victim_id: int = 0
 var _bounced: bool = false
 
 
