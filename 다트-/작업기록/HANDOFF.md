@@ -1,3 +1,26 @@
+# 2026-11-26 인수인계 — 구역 카드 F 고르기
+
+- **구역 팝업은 이제 F 로만 뜬다.** `use_lifted_card()` 가 `_picker_request` 를 적고, `_update_picker` 가 그 카드를 들고 있는 동안만 띄운다.
+  11-24 인수인계의 "choice: sector 를 주면 자동으로 뜬다"는 이제 "F 를 누르면 뜬다"로 읽을 것.
+- **"아직 안 골랐다"는 `card_effects.choice` 로 알 수 없다** — `round_rules.lift` 가 꺼내는 순간 무작위 칸을 넣는다.
+  사람이 직접 고른 카드는 `_sector_confirmed` 로 따로 기억한다(Z·X `_cycle_choice` 와 팝업 `picked` 가 적는다).
+- 팝업에서 고른 뒤 바로 쓰는 것은 **고른 칸이 상태로 돌아왔을 때**(`_use_after_sector` 와 같아졌을 때) 한다 — 손님은 한 박자 늦어서다.
+- 막힘 검사(`_blocked_card_reason`)는 팝업보다 **먼저** 한다. 순서를 바꾸면 이미 막힌 카드도 팝업부터 뜬다.
+- 휠 넘기기는 팀원 것(`_unhandled_input` 맨 앞, 11-25)이다. 구역 카드 흐름은 휠·Q·E 어느 쪽으로 넘겨도 같다.
+
+---
+
+# 2026-11-26 인수인계 — 1인칭 손패 입체감
+
+- **입체감 판(두께 띠·그림자)은 1인칭 손패만 붙인다.** `HandFan.depth_cues` 가 true 일 때 `set_card` 가 `CardView.add_depth_cues()` 를 부른다.
+  `set_layers` 보다 **먼저** 불러야 판들도 같은 레이어를 받는다.
+- **그림자 판 거리는 줄 간격(`ROW_STACK_STEP` 3mm)보다 짧아야** 바로 뒤 카드 앞면 위에 보인다. 카드 크기 배율이 거리에도 곱해지므로
+  `_follow_contact_shadow` 가 `size` 로 나눠 세상 거리로 맞춘다. 줄 간격을 바꾸면 그림자도 같이 볼 것.
+- `CardView.clear_mark()` 는 `_edge`·`_contact_shadow` 를 지우지 않는다(사용 표시만 지운다).
+- 부채꼴을 키우면 카드 아래가 화면 밖으로 나간다 → `ROW_ARC_RAISE` 로 줄을 올린다.
+
+---
+
 # 2026-11-25 인수인계 — 피드백 네 가지
 
 - **벌칙 카메라는 `GameView.PUNISH_VIEW` 고정 자리**다. 1인칭(판과 함께 도는 눈)은 어지러워서 버렸고
