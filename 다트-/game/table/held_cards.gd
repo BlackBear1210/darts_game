@@ -44,9 +44,11 @@ func sync(actors: Dictionary, players: Array[MatchPlayer], _local_id: int) -> vo
 			if player.pending_slot >= 0 and player.pending_slot < hand.size(): fan.lift(player.pending_slot)
 			else: fan.lower()
 		# 카드가 있으면 왼팔을 들어 부채를 든다. 마시는 중(오른팔)·던지는 중(오른팔)과는 팔이 달라 겹치지 않는다.
+		# 덱 연출 중 아직 안 닿은 칸은 -1 로 남는다 → 실제로 손에 닿은 카드가 한 장이라도 있을 때만 든다
+		# (2026-11-26: 7칸이 모두 -1 인 배분 전에도 손을 들고 있었다). 다 써서 0장이면 기본 자세로 내린다.
 		var rig: CharacterMotion = view.get("_rig")
 		if rig != null:
-			rig.holding_cards = not hand.is_empty()
+			rig.holding_cards = hand.any(func(card: int) -> bool: return card >= 0)
 	# 나간 사람 부채는 치운다(캐릭터가 지워지면 부채도 같이 지워지므로 기록만 정리).
 	for peer_id: int in _fans.keys():
 		if peer_id not in present:
