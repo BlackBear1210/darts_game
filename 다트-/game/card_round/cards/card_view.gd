@@ -17,6 +17,16 @@ const GLOW_COLOR := Color("ffd27a")
 const GLOW_SPREAD: float = 0.018
 ## 후광 안쪽 둥근 사각형의 모서리 반지름(m). 바깥으로 갈수록 모서리가 더 둥글게 풀린다.
 const GLOW_CORNER_RADIUS: float = 0.009
+## 1인칭 손패 입체감(2026-11-26 시안): 카드 아래로 비어져 나오는 종이 단면 띠와, 뒤 카드에 떨어지는 그림자.
+## 손패는 조명을 받지 않아(lit = false) 진짜 그림자가 없으므로 판 두 장으로 흉내 낸다.
+const EDGE_COLOR := Color("8f7655")
+## 두께 띠가 카드 아래 가장자리 밖으로 보이는 폭(m).
+const EDGE_PEEK: float = 0.0014
+## 카드 그림의 둥근 모서리 반지름(m). 카드 텍스처 400px 중 18px.
+const CARD_CORNER_RADIUS: float = 0.0043
+const CONTACT_SHADOW_COLOR := Color(0.12, 0.055, 0.016, 0.42)
+## 그림자가 카드 기준으로 밀리는 방향(m): x = 왼쪽, y = 그림 아래쪽(+Z).
+const CONTACT_SHADOW_SHIFT := Vector2(-0.0045, 0.0035)
 const BURN_SECONDS: float = 1.3
 const BURN_SHADER := """
 shader_type spatial;
@@ -57,6 +67,8 @@ static var _unlit_materials: Dictionary = {}
 static var _glow_material: StandardMaterial3D
 static var _paint_material: StandardMaterial3D
 static var _burn_shader: Shader
+static var _edge_material: StandardMaterial3D
+static var _contact_shadow_material: StandardMaterial3D
 
 var type: int = -1
 ## 조명을 받는가. 1인칭 부채만 false 로 두고 테이블·남의 손 카드는 그대로 조명을 받는다.
@@ -67,6 +79,8 @@ var body: Node3D
 var _face: MeshInstance3D
 var _back: MeshInstance3D
 var _glow: MeshInstance3D
+var _edge: MeshInstance3D
+var _contact_shadow: MeshInstance3D
 
 
 func _init() -> void:
@@ -103,6 +117,38 @@ func set_lit(enabled: bool) -> void:
 func set_shadow(enabled: bool) -> void:
 	for sheet in [_face, _back]:
 		(sheet as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if enabled else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## 두께 띠와 그림자 판을 붙인다(1인칭 손패 전용). 레이어를 정하기 전에 불러야 같은 레이어를 받는다.
+func add_depth_cues() -> void:
+	if _edge != null:
+		return
+	_edge = MeshInstance3D.new()
+	_edge.name = "Edge"
+	_edge.mesh = plane_mesh()
+	# 앞면 바로 뒤, 그림 아래쪽(+Z)으로 조금 밀어 아래 가장자리에만 띠가 보이게 한다.
+	_edge.position = Vector3(0, -THICKNESS * 0.25, EDGE_PEEK)
+	_edge.material_override = edge_material()
+	_edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(_edge)
+	_contact_shadow = MeshInstance3D.new()
+	_contact_shadow.name = "ContactShadow"
+	var mesh := PlaneMesh.new()
+	mesh.size = SIZE + Vector2.ONE * GLOW_SPREAD * 2.0
+	_contact_shadow.mesh = mesh
+	_contact_shadow.material_override = contact_shadow_material()
+	_contact_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(_contact_shadow)
+	place_contact_shadow(THICKNESS, 1.0)
+
+
+## 그림자 판 자리. behind = 앞면에서 뒤로 떨어진 거리(m, 바로 뒤 카드 앞면보다 가까워야 그 위에 보인다),
+## grow = 크기 배율(꺼내 든 카드는 멀리 떨어진 만큼 넓고 흐리게).
+func place_contact_shadow(behind: float, grow: float) -> void:
+	if _contact_shadow == null:
+		return
+	_contact_shadow.position = Vector3(CONTACT_SHADOW_SHIFT.x * grow, THICKNESS / 2.0 - behind, CONTACT_SHADOW_SHIFT.y * grow)
+	_contact_shadow.scale = Vector3(grow, 1.0, grow)
 
 
 ## 렌더 레이어(캐릭터 손의 카드는 그 캐릭터 레이어 → 자기 1인칭 카메라에는 안 보인다).
@@ -170,7 +216,7 @@ func mark_used(style: int) -> Tween:
 func clear_mark() -> void:
 	mark_style = -1
 	for child in body.get_children():
-		if child != _face and child != _back and child != _glow:
+		if child not in [_face, _back, _glow, _edge, _contact_shadow]:
 			child.queue_free()
 	if type >= 0:
 		set_type(type)
@@ -265,6 +311,29 @@ static func glow_material() -> StandardMaterial3D:
 	return _glow_material
 
 
+## 두께 띠 재질: 카드 모양(둥근 모서리)으로 오린 종이 단면색. 조명을 받지 않는다(1인칭 손패 전용).
+static func edge_material() -> StandardMaterial3D:
+	if _edge_material == null:
+		_edge_material = StandardMaterial3D.new()
+		_edge_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_edge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		_edge_material.alpha_scissor_threshold = 0.5
+		_edge_material.albedo_texture = _card_shape()
+		_edge_material.albedo_color = EDGE_COLOR
+	return _edge_material
+
+
+## 그림자 판 재질: 후광과 같은 부드러운 둥근 사각형을 짙은 갈색으로 칠한다.
+static func contact_shadow_material() -> StandardMaterial3D:
+	if _contact_shadow_material == null:
+		_contact_shadow_material = StandardMaterial3D.new()
+		_contact_shadow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_contact_shadow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_contact_shadow_material.albedo_texture = _soft_rounded_rect()
+		_contact_shadow_material.albedo_color = CONTACT_SHADOW_COLOR
+	return _contact_shadow_material
+
+
 ## 사용 표시 '페인트 칠' 재질(모든 카드가 함께 쓴다).
 static func paint_material() -> StandardMaterial3D:
 	if _paint_material == null:
@@ -300,6 +369,20 @@ static func _soft_rounded_rect() -> ImageTexture:
 			var distance: float = outside.max(Vector2.ZERO).length() + minf(maxf(outside.x, outside.y), 0.0) - GLOW_CORNER_RADIUS
 			var alpha: float = 1.0 - smoothstep(0.0, GLOW_SPREAD, distance)
 			image.set_pixel(x, y, Color(1, 1, 1, alpha))
+	return ImageTexture.create_from_image(image)
+
+
+## 카드 모양 오림판: 카드 크기 둥근 사각형 안은 불투명, 밖은 투명(두께 띠용).
+static func _card_shape() -> ImageTexture:
+	var width: int = 128
+	var height: int = roundi(width * SIZE.y / SIZE.x)
+	var inner_half := SIZE / 2.0 - Vector2.ONE * CARD_CORNER_RADIUS
+	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
+	for y in range(height):
+		for x in range(width):
+			var point := Vector2(absf((x + 0.5) / width - 0.5) * SIZE.x, absf((y + 0.5) / height - 0.5) * SIZE.y)
+			var outside := (point - inner_half).max(Vector2.ZERO)
+			image.set_pixel(x, y, Color(1, 1, 1, 1.0 if outside.length() <= CARD_CORNER_RADIUS else 0.0))
 	return ImageTexture.create_from_image(image)
 
 

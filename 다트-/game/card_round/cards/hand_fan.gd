@@ -22,6 +22,19 @@ const READY_GLOW := Color("8cf0a0")
 ## 1인칭 손패가 차지하는 화면 영역(왼쪽, 위, 너비, 높이).
 const HAND_RECT := Rect2(0.023, 0.725, 0.43, 0.272)
 const ROW_DEPTH := 0.42
+## 1인칭 손패에서 오른쪽 카드가 왼쪽 카드보다 카메라에 가까운 거리(m).
+const ROW_STACK_STEP: float = 0.003
+## 꺼내 든 카드가 줄보다 카메라 쪽으로 나오는 거리(m).
+const ROW_LIFT_DEPTH: float = 0.034
+## 1인칭 손패 입체감(2026-11-26 시안): 손에 쥔 것처럼 카드마다 조금씩 돌려 완만한 부채꼴로,
+## 위쪽은 뒤로 눕히고, 바깥 카드일수록 조금 내린다(카드 높이 배수).
+const ROW_ARC_STEP_DEGREES: float = 2.0
+const ROW_TILT_DEGREES: float = 7.0
+const ROW_ARC_DROP: float = 0.04
+## 돌린 카드는 위아래로 길어져 아래 가장자리(체크 띠·두께 띠)가 화면 밖으로 나간다 → 줄 전체를 이만큼 올린다.
+const ROW_ARC_RAISE: float = 0.09
+## 꺼내 든 카드의 그림자는 뒤 카드들 위로 넓게 떨어진다(크기 배율).
+const LIFTED_SHADOW_GROW: float = 1.6
 var row_camera: Camera3D
 
 func configure_screen_row(camera: Camera3D) -> void:
@@ -29,6 +42,7 @@ func configure_screen_row(camera: Camera3D) -> void:
 	transform = Transform3D.IDENTITY
 	cast_shadows = false
 	lit = false
+	depth_cues = true
 
 
 var spread_degrees: float = 44.0
@@ -41,6 +55,8 @@ var layer_mask: int = 1
 var cast_shadows: bool = true
 ## false = 조명을 받지 않는다(1인칭 부채 — 방이 어두워도 글자가 읽힌다).
 var lit: bool = true
+## true = 카드마다 두께 띠·그림자 판을 붙인다(1인칭 부채 — 조명을 안 받아 진짜 그림자가 없다).
+var depth_cues: bool = false
 ## slot(0~6 = 7칸, 7~8 = 보상 카드) → CardView
 var cards: Dictionary = {}
 var lifted_slot: int = -1
@@ -56,6 +72,8 @@ func set_card(slot: int, card_type: int, reward: bool = false) -> void:
 	add_child(card)
 	card.set_type(card_type)
 	card.show_face(true)
+	if depth_cues:
+		card.add_depth_cues()
 	card.set_layers(layer_mask)
 	card.set_shadow(cast_shadows)
 	card.set_lit(lit)
@@ -116,13 +134,23 @@ func _process(delta: float) -> void:
 			step -= maxf(width - step, 0.0) * 0.21
 			var offset := _row_offset(i, count, lifted_index, step, width, rect.size.x - width)
 			var center := Vector2(rect.position.x + width * 0.5 + offset, rect.end.y - height * 0.5)
-			var depth := ROW_DEPTH - 0.003 * i
+			var depth := ROW_DEPTH - ROW_STACK_STEP * i
+			# 가운데에서 몇 장 떨어졌는가(-1 = 왼쪽 끝, 1 = 오른쪽 끝).
+			var from_middle: float = 0.0 if count < 2 else (i - (count - 1) * 0.5) / ((count - 1) * 0.5)
+			var arc: float = -deg_to_rad(ROW_ARC_STEP_DEGREES) * (i - (count - 1) * 0.5)
+			var tilt: float = deg_to_rad(ROW_TILT_DEGREES)
+			center.y += height * (ROW_ARC_DROP * from_middle * from_middle - ROW_ARC_RAISE)
 			if lifted:
 				center.y -= height * 0.17
-				depth -= 0.034
+				depth -= ROW_LIFT_DEPTH
+				arc = 0.0
+				tilt *= 0.4
+			# 화면 면 안에서 돌리고(부채꼴), 위쪽을 카메라 반대쪽으로 눕힌다.
+			turn = Basis(Vector3.BACK, arc) * Basis(Vector3.RIGHT, -tilt)
 			spot = row_camera.to_local(row_camera.project_position(center, depth))
 			var right := row_camera.to_local(row_camera.project_position(center + Vector2.RIGHT * width, depth))
 			size = right.distance_to(spot) / CardView.SIZE.x
+			_follow_contact_shadow(card, lifted, size, weight)
 		else:
 			var t: float = 0.5 if count == 1 else float(i) / (count - 1)
 			var angle: float = deg_to_rad(lerpf(spread_degrees * 0.5, -spread_degrees * 0.5, t))
@@ -144,6 +172,15 @@ func _process(delta: float) -> void:
 			card.set_glow(0.75, REWARD_GLOW)
 		else:
 			card.set_glow(0.0)
+
+
+## 그림자 판을 바로 뒤 카드 앞면 위에 놓는다. 꺼내 들면 줄에서 떨어진 만큼 뒤로, 넓게 옮겨 간다.
+## 카드 크기 배율(size)이 판까지 거리에도 곱해지므로 나눠서 세상 거리로 맞춘다.
+func _follow_contact_shadow(card: Node3D, lifted: bool, size: float, weight: float) -> void:
+	var raised: float = lerpf(float(card.get_meta("shadow_raised", 0.0)), 1.0 if lifted else 0.0, weight)
+	card.set_meta("shadow_raised", raised)
+	var behind: float = lerpf(ROW_STACK_STEP * 0.6, ROW_LIFT_DEPTH - ROW_STACK_STEP, raised)
+	card.place_contact_shadow(behind / maxf(size, 0.001), lerpf(1.0, LIFTED_SHADOW_GROW, raised))
 
 
 ## 1인칭 한 줄 손패에서 i번째 카드 중심의 가로 위치(첫 카드 중심 기준, 픽셀).
