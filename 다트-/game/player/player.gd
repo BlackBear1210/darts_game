@@ -8,7 +8,11 @@ extends CharacterBody3D
 const COLORS: Array[Color] = PlayerLook.COLORS
 const SPEED: float = 3.8
 const JUMP_SPEED: float = 4.8
+## 올라갈 때 중력. JUMP_SPEED 와 함께 높이 약 1.0m · 오르기 0.40초를 만든다(60Hz 실측).
 const GRAVITY: float = 12.0
+## 꼭대기를 지나 내려올 때 중력(2026-11-26 사용자 요청 — 둥둥 뜨는 느낌을 뺀다).
+## 오르기는 그대로라 머리 위 다트를 막는 꼭대기 구간이 거의 줄지 않고, 내려오기만 0.42 → 0.30초로 빨라진다(공중 0.80 → 0.68초).
+const FALL_GRAVITY: float = 26.0
 const EYE_HEIGHT: float = 1.55
 ## 앉은 눈높이(m). 스툴 위에 앉은 캐릭터의 눈(character_factory.gd 의 눈 높이 1.34m)과 같게 맞춘다.
 ## 2026-10-31: 예전 0.95m 는 테이블 윗면(0.85m)보다 10cm 높을 뿐이라 매트 위 카드가 거의 안 보였다(사용자 피드백).
@@ -411,7 +415,7 @@ func simulate(delta: float, controls: Dictionary) -> void:
 		velocity.z = direction.z * speed + knockback.z
 		knockback = knockback.move_toward(Vector3.ZERO, delta * 9.0)
 		if not is_on_floor():
-			velocity.y -= GRAVITY * delta
+			velocity.y -= (GRAVITY if velocity.y > 0.0 else FALL_GRAVITY) * delta
 		elif bool(controls.get("jump", false)):
 			velocity.y = JUMP_SPEED
 		else:
