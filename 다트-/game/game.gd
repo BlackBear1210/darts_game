@@ -58,6 +58,9 @@ const BODY_KNOCKBACK: float = 4.0
 ## 칠판 점수판에 쓰는 이름 최대 글자 수(칠판 폭 약 0.95m에 맞춘 값).
 const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
+## 손님이 자기 예측을 믿을 최대 어긋남(m). 걷는 동안 스냅샷은 왕복 지연만큼 과거라 늘 뒤처져 온다
+## (걷기 PlayerView.SPEED 3.8m/s × 왕복 0.2초 ≈ 0.76m). 이보다 벌어지면 예측이 틀린 것이다.
+const PREDICT_TRUST: float = 0.9
 const INPUT_TIMEOUT: float = 0.35
 const MOUSE_SENSITIVITY: float = 0.0025
 ## 자리에 앉는 순간 시선을 테이블 가운데로 돌리고 이만큼 내려다본다(라디안, 약 -27도).
@@ -499,6 +502,22 @@ func _physics_process(delta: float) -> void:
 			actor.simulate(delta, controls)
 			if _controls.has(id):
 				_controls[id]["jump"] = false
+	else:
+		_predict_local(delta)
+
+
+## [손님 화면 예측 — 2026-11-26 사용자 "방장 빼면 다 렉 걸린다"] 손님은 자기 몸조차 방장이 보내 줄 때까지
+## 움직이지 못했다(조작 전송 0.05초 + 왕복 지연 + 스냅샷 0.05초). 방장과 똑같은 PlayerView.simulate 를
+## 자기 화면에서 먼저 돌려 키를 누른 프레임에 바로 걷게 한다. 방장 자리와 크게 어긋나면 _receive_motion 이
+## 되돌린다 — 점수·몸 맞기 같은 판정은 여전히 방장 계산 그대로다.
+func _predict_local(delta: float) -> void:
+	var mine := actors.get(controller.local_peer_id) as PlayerView
+	if mine == null or mine.identity.is_bot:
+		return
+	var controls: Dictionary = {} if _frozen(controller.local_peer_id) else _controls.get(controller.local_peer_id, {})
+	mine.simulate(delta, controls)
+	if _controls.has(controller.local_peer_id):
+		_controls[controller.local_peer_id]["jump"] = false
 
 
 ## 봇의 차례 행동(방장만). 자리에서 일어나 투척선까지 걸어가 던지고, 차례가 끝나면 자리로 돌아가 앉는다.
@@ -552,9 +571,9 @@ func _walk_bot_home(actor: PlayerView, delta: float) -> void:
 
 func send_controls(axis: Vector2, yaw: float, pitch: float, jump: bool, crouch: bool) -> void:
 	_sequence += 1
-	if multiplayer.is_server():
-		_accept_controls(controller.local_peer_id, _sequence, axis, yaw, pitch, jump, crouch)
-	else:
+	# 손님도 자기 조작을 바로 들고 있는다 — 방장 응답을 기다리지 않고 _predict_local 이 먼저 걷게 한다.
+	_accept_controls(controller.local_peer_id, _sequence, axis, yaw, pitch, jump, crouch)
+	if not multiplayer.is_server():
 		session.request_movement.rpc_id(1, controller.state.match_id, _sequence, {"move": axis, "yaw": yaw, "pitch": pitch, "jump": jump, "crouch": crouch})
 
 
@@ -583,8 +602,26 @@ func _receive_motion(match_id: int, sequence: int, poses: Array) -> void:
 		return
 	_last_motion_sequence = sequence
 	for pose: Dictionary in poses:
-		if actors.has(int(pose.id)):
-			(actors[int(pose.id)] as PlayerView).apply_motion(pose)
+		var id: int = int(pose.id)
+		if not actors.has(id):
+			continue
+		var actor := actors[id] as PlayerView
+		if id == controller.local_peer_id and not multiplayer.is_server() and _trusts_prediction(actor, pose):
+			actor.keep_predicted_motion(pose)
+		else:
+			actor.apply_motion(pose)
+
+
+## 내가 예측한 자리를 그대로 믿어도 되는가. 걷는 동안 스냅샷은 늘 왕복 지연만큼 뒤처져 오므로
+## 그 정도 차이는 정상이다. 가만히 서 있는데 어긋났거나 그보다 크게 벌어졌으면 내가 모르는 일이
+## 벌어진 것이다(피격으로 밀림·스턴·자리 앉기·쓰러짐) → 방장 자리를 따른다.
+func _trusts_prediction(actor: PlayerView, pose: Dictionary) -> bool:
+	if actor.fallen or actor.seated or bool(pose.get("seated", false)):
+		return false
+	var controls: Dictionary = _controls.get(controller.local_peer_id, {})
+	if (controls.get("move", Vector2.ZERO) as Vector2).length() < 0.01:
+		return false
+	return actor.position.distance_to(pose.position as Vector3) <= PREDICT_TRUST
 
 
 func request_seat() -> void:

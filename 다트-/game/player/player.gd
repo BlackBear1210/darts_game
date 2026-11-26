@@ -470,6 +470,18 @@ func apply_motion(data: Dictionary) -> void:
 	update_posture()
 
 
+## [손님 화면 — 내 몸] 방장 스냅샷에서 자세·앉기 같은 상태는 그대로 따르되, 자리는 내가 예측해 둔 쪽을 지킨다.
+## 스냅샷은 왕복 지연만큼 과거라, 걷는 동안 그대로 따르면 매번 뒤로 끌려가 걸음이 미끄러진다.
+func keep_predicted_motion(data: Dictionary) -> void:
+	var predicted: Vector3 = position
+	var yaw: float = rotation.y
+	apply_motion(data)
+	position = predicted
+	rotation.y = yaw
+	_motion_to = predicted
+	_motion_yaw = yaw
+
+
 ## 스냅샷으로 받은 자리·좌우 각도로 매 프레임 조금씩 다가간다. 방장 화면에서는 _motion_to 가 비어 있어 아무 일도 없다.
 ## 보이기만 하는 보정이다 — 점수·몸 맞기 판정은 방장이 자기 시뮬레이션으로 하므로 영향받지 않는다.
 func _follow_motion(delta: float) -> void:
