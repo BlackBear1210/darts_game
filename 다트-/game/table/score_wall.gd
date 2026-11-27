@@ -10,16 +10,18 @@ extends Node3D
 const MeshKit = preload("res://art/mesh_kit.gd")
 
 ## 판이 놓이는 벽 위 가운데(x·y)와 판이 차지하는 칸 크기(m). art/pub/room/room_board.gd 의 왼쪽 칠판과 같은 자리다.
-const CENTER := Vector2(-2.05, 2.5)
-const AREA := Vector2(0.98, 1.62)
+## 2026-11-27 "판을 좀 크게": 칠판 한 장(0.98 × 1.62) 안에 맞추던 것을 벽 칸 전체로 넓혔다 —
+## 가로는 머신 어깨(x −1.35)와 특징 판넬 끝(x −2.7) 사이, 세로는 아치 틀 아래까지 쓴다.
+const CENTER := Vector2(-2.02, 2.52)
+const AREA := Vector2(1.26, 2.0)
 ## 벽 안쪽 면에서 판까지(m). 칠판면(+0.116)보다 앞이라 겹쳐 깜빡이지 않는다.
 const DEPTH: float = 0.14
 
 ## 과녁 벽 안쪽 면의 z. 세우는 쪽(TableView)이 넣는다 — 여기서 TableView 를 보지 않아 서로 참조하지 않는다.
 var wall_z: float = 0.0
 ## 판 한 장의 높이 한계(m). 사람이 적으면 크게, 많으면 칸에 맞춰 줄인다.
-const PLATE_MIN: float = 0.26
-const PLATE_MAX: float = 0.46
+const PLATE_MIN: float = 0.34
+const PLATE_MAX: float = 0.58
 ## 지금 차례·벌칙인 판은 앞으로 나오고 조금 커진다(색만으로는 색약인 사람이 구분하지 못한다 — 기획 2-4).
 const TURN_LIFT: float = 0.04
 const TURN_SCALE: float = 1.07
@@ -68,11 +70,13 @@ func _rebuild(count: int) -> void:
 		add_child(root)
 		var panel: MeshInstance3D = MeshKit.rounded_box(root, "Panel", Vector3(AREA.x, height, 0.03), Vector3.ZERO, slate, 0.03)
 		# 자리 색 띠: 판이 어두울 때도 누구 칸인지 바로 보인다(색은 _paint 가 자리 번호에 맞춘다).
-		var stripe: MeshInstance3D = MeshKit.box(root, "Stripe", Vector3(0.055, height - 0.08, 0.012),
-			Vector3(-AREA.x / 2.0 + 0.07, 0, 0.022), slate)
-		var name_label: Label3D = _text(root, "Name", Vector3(-AREA.x / 2.0 + 0.1, height * 0.28, 0.024), 30, HORIZONTAL_ALIGNMENT_LEFT)
-		var tag: Label3D = _text(root, "Tag", Vector3(AREA.x / 2.0 - 0.05, height * 0.28, 0.024), 26, HORIZONTAL_ALIGNMENT_RIGHT)
-		var score: Label3D = _text(root, "Score", Vector3(AREA.x / 2.0 - 0.05, -height * 0.17, 0.024), 52, HORIZONTAL_ALIGNMENT_RIGHT)
+		var stripe: MeshInstance3D = MeshKit.box(root, "Stripe", Vector3(0.05, height - 0.09, 0.012),
+			Vector3(-AREA.x / 2.0 + 0.045, 0, 0.022), slate)
+		# 윗줄 = 이름(칸 전체를 쓴다), 아랫줄 = 왼쪽에 차례·벌칙 꼬리표 · 오른쪽에 큰 점수.
+		# 이름과 꼬리표를 한 줄에 두면 이름이 긴 사람에게서 서로 밀어낸다 → 줄을 나눴다.
+		var name_label: Label3D = _text(root, "Name", Vector3(-AREA.x / 2.0 + 0.08, height * 0.29, 0.024), 40, HORIZONTAL_ALIGNMENT_LEFT)
+		var tag: Label3D = _text(root, "Tag", Vector3(-AREA.x / 2.0 + 0.08, -height * 0.22, 0.024), 34, HORIZONTAL_ALIGNMENT_LEFT)
+		var score: Label3D = _text(root, "Score", Vector3(AREA.x / 2.0 - 0.06, -height * 0.2, 0.024), 76, HORIZONTAL_ALIGNMENT_RIGHT)
 		_plates.append([root, panel, stripe, name_label, tag, score])
 
 
