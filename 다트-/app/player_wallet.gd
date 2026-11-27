@@ -22,6 +22,7 @@ const PRICES: Dictionary = {
 	"watch": [0, 40, 25, 15],
 	"shirt": [0, 5, 5, 5, 5, 5, 5, 8, 8, 8],
 	"pants": [0, 10, 15],
+	# "character"(캐릭터 3안 준·솜·온, 2026-11-27)는 값표에 넣지 않아 공짜다 — 값을 매기려면 여기에 [0, 값, 값, 값] 을 더한다.
 }
 
 static var tokens: int = 0

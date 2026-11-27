@@ -59,8 +59,10 @@ var _last_key: Array = []
 var _settle: int = 0
 
 
-func equip(seat: int, shirt: int) -> void:
-	if arm == null:
+## seat = 자리(다트 깃 색) · shirt = 꾸미기 옷 색 번호 · character = 꾸미기 캐릭터 번호(character_looks.gd IDS).
+## 처음 한 번 팔 세계·화면을 만들고, 자리·캐릭터가 바뀌면 팔만 새로 만든다(피부·소매·손가락 모양이 캐릭터 메시에서 나온다).
+func equip(seat: int, shirt: int, character: int = 0) -> void:
+	if _viewport == null:
 		_viewport = ARM_VIEW.instantiate() as SubViewport
 		add_child(_viewport)
 		_pose = _viewport.get_node("Pose")
@@ -71,15 +73,6 @@ func equip(seat: int, shirt: int) -> void:
 		held.reparent(_pose, false)
 		for plate: String in ["FlightHorizontal", "FlightVertical"]:
 			(held.get_node("Visual/" + plate) as Node3D).scale = Vector3.ONE * HELD_FLIGHT_SCALE
-		arm = Arm.new()
-		arm.seat = seat
-		arm.shirt = shirt
-		arm.ik_driven = true
-		_pose.add_child(arm)
-		_rig = arm.skeleton()
-		if _rig != null:
-			_chain = ArmIK.chain(_rig)
-			_place_model()
 		_screen = Sprite2D.new()
 		_screen.centered = false
 		_screen.texture = _viewport.get_texture()
@@ -88,10 +81,37 @@ func equip(seat: int, shirt: int) -> void:
 		visibility_changed.connect(_sync_visibility)
 		_resize()
 		_sync_visibility()
-		animate(0.0, 0.0, 0.0, 0.0, true, false, 1.0, Vector2.ZERO)
+	if arm == null or arm.seat != seat or arm.character != character:
+		_build_arm(seat, shirt, character)
 	arm.set_shirt(shirt)
 	held.paint(PlayerLook.COLORS[seat])
 	_redraw()
+
+
+## 꾸미기 방에서 나오거나 방장 "looks" 이벤트로 차림이 바뀌었을 때(game.gd). 옷 색만 바뀌면 소매만 다시 칠한다.
+func set_look(shirt: int, character: int) -> void:
+	if arm == null: return
+	equip(arm.seat, shirt, character)
+
+
+## 팔(승인 모델 오른팔 + 캐릭터 메시)을 새로 만들어 팔 세계에 놓는다. 예전 팔은 지운다.
+func _build_arm(seat: int, shirt: int, character: int) -> void:
+	if arm != null:
+		_pose.remove_child(arm)
+		arm.queue_free()
+	arm = Arm.new()
+	arm.seat = seat
+	arm.shirt = shirt
+	arm.character = character
+	arm.ik_driven = true
+	_pose.add_child(arm)
+	_rig = arm.skeleton()
+	_chain = null
+	if _rig != null:
+		_chain = ArmIK.chain(_rig)
+		_place_model()
+	_last_key = []
+	animate(0.0, 0.0, 0.0, 0.0, true, _large, 1.0, Vector2.ZERO)
 
 
 ## 모델을 arm_scale 로 두고 어깨 관절이 shoulder 에 오게 옮긴다.

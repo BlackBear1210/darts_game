@@ -28,21 +28,54 @@ func _init(skeleton: Skeleton3D, model: Node3D):
 	var r := rig.get_bone_global_rest(hand_r)
 	var l := rig.get_bone_global_rest(hand_l)
 	left_palm = l.basis.inverse() * Basis.from_scale(Vector3(-1,1,1)) * r.basis * Grip.PALM
-	var key := body.mesh.get_instance_id()
+	body.mesh = grip_mesh(body.mesh, body.skin, rig)
+
+# ── 손가락 블렌드 셰이프(쥔 손 3가지)를 붙인 몸 메시 ──
+# 2026-11-27(캐릭터 3안): 꾸미기 "캐릭터"(character_looks.gd)가 몸 메시를 갈아 끼울 때도 같은 변환을 써야 해서
+# 원래 _init 안에 있던 코드를 아래 static 함수로 나눴다(결과는 예전과 같다). 무거운 정점 계산(grip_surfaces)은
+# 노드·RenderingServer 를 건드리지 않아서 character_looks 가 타이틀 화면에서 일꾼 스레드로 미리 만든다.
+
+## 변환한 메시에 붙이는 표시: 원래 메시(손가락 셰이프 없는 것).
+const SOURCE_META := &"grip_source"
+
+## 원본 메시의 변환본(meshes 캐시 — 원본마다 한 번만 만든다). 메인 스레드에서 부른다.
+static func grip_mesh(source: ArrayMesh, skin: Skin, skeleton: Skeleton3D) -> ArrayMesh:
+	var key := source.get_instance_id()
 	if not meshes.has(key):
-		var mesh := ArrayMesh.new()
-		for shape in ["RightGrip","LeftPinch","RightLarge"]:
-			mesh.add_blend_shape(shape)
-		mesh.blend_shape_mode = Mesh.BLEND_SHAPE_MODE_NORMALIZED
-		for i in range(body.mesh.get_surface_count()):
-			var a := body.mesh.surface_get_arrays(i)
-			Grip.bind_thumb(a,body.skin,r)
-			var shapes: Array[Array] = [Grip.surface_pose(a,body.skin,r,false),
-				Grip.surface_pose(a,body.skin,l,false,&"hand.L",left_palm),Grip.surface_pose(a,body.skin,r,true)]
-			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,a,shapes,{},body.mesh.surface_get_format(i) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
-			mesh.surface_set_material(i,body.mesh.surface_get_material(i))
-		meshes[key] = mesh
-	body.mesh = meshes[key]
+		var surfaces: Array = []
+		for i in range(source.get_surface_count()):
+			surfaces.append(source.surface_get_arrays(i))
+		meshes[key] = assemble_grip(source, grip_surfaces(surfaces, skin, hand_rests(skeleton)))
+	return meshes[key]
+
+## 오른손·왼손 쉬는 자세와 왼손 손바닥 방향 [r, l, left_palm](뼈대에서 한 번 읽는다).
+static func hand_rests(skeleton: Skeleton3D) -> Array:
+	var r := skeleton.get_bone_global_rest(skeleton.find_bone("hand.R"))
+	var l := skeleton.get_bone_global_rest(skeleton.find_bone("hand.L"))
+	return [r, l, l.basis.inverse() * Basis.from_scale(Vector3(-1,1,1)) * r.basis * Grip.PALM]
+
+## 면 배열마다 [엄지 가중치를 고친 배열, 셰이프 3개]. 배열만 다룬다(스레드에서 불러도 된다). surfaces 원본은 바꾸지 않는다.
+static func grip_surfaces(surfaces: Array, skin: Skin, rests: Array) -> Array:
+	var out: Array = []
+	for source: Array in surfaces:
+		var a: Array = source.duplicate()
+		Grip.bind_thumb(a,skin,rests[0])
+		var shapes: Array[Array] = [Grip.surface_pose(a,skin,rests[0],false),
+			Grip.surface_pose(a,skin,rests[1],false,&"hand.L",rests[2]),Grip.surface_pose(a,skin,rests[0],true)]
+		out.append([a, shapes])
+	return out
+
+## grip_surfaces 결과로 메시를 붙인다(메인 스레드). 재질은 원본 것을 그대로 쓴다.
+static func assemble_grip(source: ArrayMesh, grip: Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	for shape in ["RightGrip","LeftPinch","RightLarge"]:
+		mesh.add_blend_shape(shape)
+	mesh.blend_shape_mode = Mesh.BLEND_SHAPE_MODE_NORMALIZED
+	for i in range(grip.size()):
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,grip[i][0],grip[i][1],{},source.surface_get_format(i) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
+		mesh.surface_set_material(i,source.surface_get_material(i))
+	mesh.set_meta(SOURCE_META, source)
+	return mesh
 
 func enable_dart(model: Node3D, color: Color):
 	projectile = preload("res://game/dart/dart.tscn").instantiate()

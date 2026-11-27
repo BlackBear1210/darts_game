@@ -23,7 +23,8 @@ extends Node3D
 
 ## 1인칭에 남기는 메시 조각(위 주석의 측정 결과). 목록에 없는 조각은 전부 끈다 —
 ## 모델을 다시 구워 조각이 늘어나도 얼굴·다리가 화면에 튀어나오지 않는다.
-const ARM_PARTS: Array[String] = ["tripo_part_0", "tripo_part_4", "Body", "Top_01"]
+## CharacterParts = 캐릭터 3안의 덧댄 조각(character_looks.gd PARTS_NODE) — 준의 소맷단처럼 오른팔에 붙은 조각만 남는다.
+const ARM_PARTS: Array[String] = ["tripo_part_0", "tripo_part_4", "Body", "Top_01", "CharacterParts"]
 ## 손에 쥔 다트 위치를 맞출 소켓(GLB 에 들어 있는 BoneAttachment 자식). 없으면 hand.R 뼈로 맞춘다.
 const DART_SOCKET := "Socket_Dart_R"
 const HAND_BONE := "hand.R"
@@ -90,6 +91,9 @@ var seat: int = 0
 ## 꾸미기 옷 색 번호(art/characters/player_outfit.gd SHIRT_COLORS). 0 = 원래 그림 색. 소매가 3인칭 내 몸과 같은 색이 된다.
 var shirt: int = 0
 const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
+const CharacterLooks = preload("res://art/characters/character_looks.gd")
+## 꾸미기 캐릭터 번호(character_looks.gd IDS, 0 = 기본). 팔 피부색·소매가 3인칭 내 몸과 같아진다. 트리에 붙이기 전에 정한다.
+var character: int = 0
 ## 카드 시연의 가리키는 손도 같은 메시를 쓰되 Point_R 자세를 고정한다.
 var pointing: bool = false
 ## 손이 맞출 다트의 자세(이 노드 기준). 비워 두면 이 노드 축에 그대로 맞춘다.
@@ -165,6 +169,8 @@ func _ready() -> void:
 		rig.reset_bone_poses()
 	else:
 		_pose_hand(players[0] as AnimationPlayer)
+	# 캐릭터 메시(피부·소매)를 먼저 입힌다 → 오른팔 조각은 그 캐릭터 메시에서 골라낸다(손가락 모양도 그 메시로 만든다).
+	CharacterLooks.apply(model, character, false, PlayerOutfit.SHIRT_COLORS[shirt] if shirt > 0 and shirt < PlayerOutfit.SHIRT_COLORS.size() else null)
 	_show_arm_only(model, rig, approved_grip)
 	PlayerOutfit.tint_shirt(model, shirt)
 	if approved_grip:
@@ -314,37 +320,42 @@ func _extract_right_arm(instance: MeshInstance3D, rig: Skeleton3D, shaped: bool)
 		for shape: StringName in [&"RightGrip", &"RightLarge", &"RightOpen"]:
 			result.add_blend_shape(shape)
 		result.blend_shape_mode = Mesh.BLEND_SHAPE_MODE_NORMALIZED
-	var arm_binds: Array[int] = []
+	# 스킨 번호 → 오른팔 뼈인가(1/0). 정점마다 목록을 뒤지지 않게 표로 만든다(2026-11-27 — 만들기 125 ms 의 대부분).
+	var arm_bind := PackedByteArray()
+	arm_bind.resize(instance.skin.get_bind_count())
 	for bind in range(instance.skin.get_bind_count()):
 		var bone_name: String = str(instance.skin.get_bind_name(bind))
 		# 새 몸에는 손가락도 함께 있으므로 손가락 뼈의 면까지 남긴다.
 		var right_finger: bool = bone_name.ends_with(".R") and bone_name.get_slice("_", 0) in ["thumb", "index", "middle", "ring", "pinky"]
 		if bone_name in ["upper_arm.R", "forearm.R", "hand.R"] or right_finger or bone_name.begins_with("extra_RightHand"):
-			arm_binds.append(bind)
+			arm_bind[bind] = 1
 	for surface in range(instance.mesh.get_surface_count()):
-		var arrays: Array = instance.mesh.surface_get_arrays(surface)
-		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
-		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		var source: Array = instance.mesh.surface_get_arrays(surface)
+		var vertices: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
+		var bones: PackedInt32Array = source[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = source[Mesh.ARRAY_WEIGHTS]
 		var influences: int = bones.size() / vertices.size()
-		var on_arm: Array[bool] = []
+		var on_arm := PackedByteArray()
+		on_arm.resize(vertices.size())
 		for vertex in range(vertices.size()):
 			var arm_weight: float = 0.0
 			for influence in range(influences):
 				var offset: int = vertex * influences + influence
-				if bones[offset] in arm_binds:
+				if arm_bind[bones[offset]] == 1:
 					arm_weight += weights[offset]
-			on_arm.append(arm_weight > 0.5)
-		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+			on_arm[vertex] = 1 if arm_weight > 0.5 else 0
+		var indices: PackedInt32Array = source[Mesh.ARRAY_INDEX]
 		var kept := PackedInt32Array()
 		for triangle in range(0, indices.size(), 3):
-			if on_arm[indices[triangle]] and on_arm[indices[triangle + 1]] and on_arm[indices[triangle + 2]]:
+			if on_arm[indices[triangle]] == 1 and on_arm[indices[triangle + 1]] == 1 and on_arm[indices[triangle + 2]] == 1:
 				kept.append(indices[triangle])
 				kept.append(indices[triangle + 1])
 				kept.append(indices[triangle + 2])
 		if kept.is_empty():
 			continue
-		arrays[Mesh.ARRAY_INDEX] = kept
+		# 오른팔 면이 쓰는 정점만 남기고 번호를 다시 매긴다(몸 4만 6천 → 팔 몇 천).
+		# 손 화면을 다시 그릴 때 GPU 가 몸 전체를 스키닝하지 않고, 아래 손가락 셰이프 계산도 그만큼 빨라진다.
+		var arrays: Array = _compact(source, kept)
 		var shapes: Array[Array] = []
 		if shaped:
 			var rest: Transform3D = rig.get_bone_global_rest(rig.find_bone(HAND_BONE))
@@ -355,6 +366,43 @@ func _extract_right_arm(instance: MeshInstance3D, rig: Skeleton3D, shaped: bool)
 		var flags: int = (instance.mesh as ArrayMesh).surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
 		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, shapes, {}, flags)
 		result.surface_set_material(result.get_surface_count() - 1, instance.mesh.surface_get_material(surface))
+	return result
+
+
+## kept(면 번호)가 쓰는 정점만 모은 새 면 배열. 정점마다 붙는 배열(위치·법선·UV·뼈·가중치…)은 같은 순서로 줄인다.
+static func _compact(source: Array, kept: PackedInt32Array) -> Array:
+	var count: int = (source[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var remap := PackedInt32Array()
+	remap.resize(count)
+	remap.fill(-1)
+	var order := PackedInt32Array()
+	var indices := kept.duplicate()
+	for i in range(indices.size()):
+		var vertex: int = indices[i]
+		if remap[vertex] < 0:
+			remap[vertex] = order.size()
+			order.append(vertex)
+		indices[i] = remap[vertex]
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	for slot in range(Mesh.ARRAY_MAX):
+		if slot == Mesh.ARRAY_INDEX or source[slot] == null:
+			continue
+		arrays[slot] = _gather(source[slot], count, order)
+	arrays[Mesh.ARRAY_INDEX] = indices
+	return arrays
+
+
+## 정점마다 stride 칸씩 있는 Packed 배열에서 order 의 정점만 같은 종류의 배열로 모은다.
+static func _gather(data: Variant, count: int, order: PackedInt32Array) -> Variant:
+	var stride: int = data.size() / count
+	var result: Variant = data.duplicate()
+	result.resize(order.size() * stride)
+	for i in range(order.size()):
+		var from: int = order[i] * stride
+		var to: int = i * stride
+		for k in range(stride):
+			result[to + k] = data[from + k]
 	return result
 
 

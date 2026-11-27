@@ -217,7 +217,7 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		if player.peer_id == local_peer_id:
 			camera.cull_mask = 0xfffff & ~(1 << (player.seat + 1))
 			if FIRST_PERSON_HAND_3D and DisplayServer.get_name() != "headless":
-				_hand.equip(player.seat, int(view.look.shirt))
+				_hand.equip(player.seat, int(view.look.shirt), int(view.look.character))
 			else:
 				_dart_hand.set_seat(player.seat)
 	if room.settings.social_lobby:
@@ -710,7 +710,8 @@ func _on_wardrobe_closed(look: Dictionary) -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
 	if local != null:
 		local.wear(clean)
-		_hand.set_shirt(int(clean.shirt))
+		# 1인칭 팔도 같은 차림(옷 색 소매 · 캐릭터 피부).
+		_hand.set_look(int(clean.shirt), int(clean.character))
 	_send_look(clean, false)
 	if is_inside_tree() and DisplayServer.get_name() != "headless" and controller.state.phase != MatchState.Phase.FINISHED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -757,7 +758,7 @@ func _apply_looks(data: Dictionary) -> void:
 		var clean: Dictionary = PlayerOutfit.sanitize(looks[key])
 		actor.wear(clean)
 		if id == controller.local_peer_id:
-			_hand.set_shirt(int(clean.shirt))
+			_hand.set_look(int(clean.shirt), int(clean.character))
 		var room_player: RoomPlayer = session.room.find_player(id) if session != null else null
 		if room_player != null:
 			room_player.look = clean

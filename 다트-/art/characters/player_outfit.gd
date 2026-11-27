@@ -4,7 +4,8 @@ extends RefCounted
 ## class_name 을 만들지 않고 preload 로 부른다(열린 편집기가 새 class_name 을 못 읽어 파스 오류가 나는 함정).
 ##
 ## [무엇을 바꾸나] 보이기만 한다. 몸 충돌 캡슐·눈높이·판정·자리 색(●▲■◆ 이름표 색)은 그대로다.
-##   look(꾸미기 값) = { "hat", "eyes", "mustache", "cigar", "watch", "shirt" } — 칸마다 목록 번호(0 = 없음/기본).
+##   look(꾸미기 값) = { "hat", "eyes", "mustache", "cigar", "watch", "shirt", "pants", "character" } — 칸마다 목록 번호(0 = 없음/기본).
+##   "character"(2026-11-27) = 캐릭터 3안(기본·준·솜·온). 몸·옷 메시를 갈아 끼운다(art/characters/character_looks.gd).
 ##   이 값은 방 정보(RoomPlayer.look)로 모두에게 같이 간다 → 모든 화면에서 같은 차림으로 보인다.
 ## [어떻게 입히나] 캐릭터 GLB 는 건드리지 않는다. NPC 옷(art/pub/npc_outfit.gd)처럼 뼈(BoneAttachment3D)에 점토 부품을 붙이고,
 ##   옷 색만 셰이더(art/characters/shirt_tint.gdshader)로 몸통 그림의 티셔츠 칸을 다시 칠한다.
@@ -16,6 +17,7 @@ const RoundKit = preload("res://art/pub/round_kit.gd")
 const PubParts = preload("res://art/pub/pub_parts.gd")
 const CigarSmoke = preload("res://art/pub/cigar_smoke.gd")
 const SHIRT_SHADER := preload("res://art/characters/shirt_tint.gdshader")
+const CharacterLooks = preload("res://art/characters/character_looks.gd")
 
 ## 꾸미기 칸: [키, 화면 이름, 고를 것 이름들]. 순서 = 꾸미기 방 오른쪽 패널의 줄 순서. 번호 0 은 늘 "없음"(또는 기본).
 ## 새 물건은 목록 맨 뒤에 붙인다(앞에 끼우면 저장된 번호가 다른 물건을 가리킨다).
@@ -27,6 +29,8 @@ const SLOTS: Array = [
 	["watch", "시계", ["없음", "금시계", "은시계", "전자시계"]],
 	["shirt", "옷 색", ["기본 자주", "빨강", "주황", "노랑", "초록", "하늘", "남색", "흰색", "검정", "분홍"]],
 	["pants", "바지 스타일", ["남색 기본", "차콜 일자", "올리브 와이드"]],
+	# 2026-11-27 캐릭터 3안. 순서 = character_looks.gd IDS(base·jun·som·on). 캐릭터 칸이 없는 옛 저장 파일은 0(기본)으로 열린다.
+	["character", "캐릭터", ["기본", "준", "솜", "온"]],
 ]
 ## 옷 색(위 "shirt" 이름과 같은 순서). 0 = 원래 그림 색(다시 칠하지 않음).
 const SHIRT_COLORS: Array[Color] = [Color("3d2738"), Color("b8343a"), Color("dd7a2c"), Color("e3c043"), Color("3f9a55"),
@@ -66,6 +70,10 @@ static func random_look(rng: RandomNumberGenerator) -> Dictionary:
 		var count: int = (slot[2] as Array).size()
 		look[slot[0]] = rng.randi_range(1, count - 1) if rng.randf() < 0.5 else 0
 	look["shirt"] = rng.randi_range(0, SHIRT_COLORS.size() - 1)
+	# 봇도 캐릭터를 고른다(기본 포함 네 가지 고르게). 캐릭터 옷이 보이게 옷 색은 대개 "기본"으로 둔다.
+	look["character"] = rng.randi_range(0, CharacterLooks.IDS.size() - 1)
+	if int(look["character"]) > 0 and rng.randf() < 0.75:
+		look["shirt"] = 0
 	return look
 
 
@@ -81,7 +89,11 @@ static func choice_name(key: String, index: int) -> String:
 ## model(PlayerLook.character 로 만든 선수 캐릭터)에 look 차림을 입힌다. 이미 입은 부품은 지우지 않는다 → 새 모델에 한 번만.
 static func dress(model: Node3D, look: Dictionary) -> void:
 	var clean := sanitize(look)
-	tint_shirt(model, int(clean.shirt))
+	# 캐릭터를 먼저 입힌다(몸·옷 메시가 바뀐다) → 그 위에 옷 색·바지·모자·안경·수염·시가·시계.
+	# 모자를 쓰면 새 머리 윗부분을 모자 속으로 눌러 넣는다. 옷 색을 고르면 상의 색과 같은 깃 조각도 같은 색.
+	var shirt: int = int(clean.shirt)
+	CharacterLooks.apply(model, int(clean.character), int(clean.hat) > 0, SHIRT_COLORS[shirt] if shirt > 0 else null)
+	tint_shirt(model, shirt)
 	_fit_pants(model, int(clean.pants))
 	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
 	if skeleton == null:
@@ -209,6 +221,8 @@ static func _fitted_head(model: Node3D, head: Node3D, kind: String) -> Node3D:
 static func undress(model: Node3D) -> void:
 	tint_shirt(model, 0)
 	_fit_pants(model, 0)
+	# 캐릭터 메시를 원래 승인 모델 메시로 돌리고 새 머리·덧댄 조각을 뗀다.
+	CharacterLooks.apply(model, 0)
 	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
 	if skeleton == null:
 		return
@@ -256,7 +270,12 @@ static func _build_pants_variant(base: ArrayMesh, index: int) -> ArrayMesh:
 		arrays[Mesh.ARRAY_NORMAL] = normals
 		var flags: int = base.surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
 		result.add_surface_from_arrays(base.surface_get_primitive_type(surface), arrays, [], {}, flags)
-		var material := base.surface_get_material(surface).duplicate() as BaseMaterial3D
+		# 캐릭터 바지(character_cloth.gdshader)는 큰 면 색 칸(c_main)을, 승인 바지는 재질 색을 바꾼다.
+		var source: Material = base.surface_get_material(surface)
+		if source is ShaderMaterial:
+			result.surface_set_material(surface, CharacterLooks.tinted(source, PANTS_COLORS[index]))
+			continue
+		var material := source.duplicate() as BaseMaterial3D
 		material.albedo_color = PANTS_COLORS[index]
 		result.surface_set_material(surface, material)
 	return result
@@ -270,8 +289,13 @@ static func tint_shirt(model: Node3D, index: int) -> void:
 			if index <= 0 or index >= SHIRT_COLORS.size():
 				top.set_surface_override_material(surface, null)
 				continue
+			var current: Material = top.mesh.surface_get_material(surface)
+			if current is ShaderMaterial:
+				# 캐릭터 상의: 큰 면(c_main)만 고른 색 — 패널·주머니·요크 같은 덧색은 캐릭터 색 그대로.
+				top.set_surface_override_material(surface, CharacterLooks.tinted(current, SHIRT_COLORS[index]))
+				continue
 			if not _modular_shirt_materials.has(index):
-				var material := top.mesh.surface_get_material(surface).duplicate() as BaseMaterial3D
+				var material := current.duplicate() as BaseMaterial3D
 				material.albedo_color = SHIRT_COLORS[index]
 				_modular_shirt_materials[index] = material
 			top.set_surface_override_material(surface, _modular_shirt_materials[index] as Material)

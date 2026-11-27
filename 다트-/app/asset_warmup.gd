@@ -15,6 +15,7 @@ extends RefCounted
 ## 목록을 맞춰 보던 확인용 시험 test_asset_warmup.gd 는 2026-11-18 사용자 요청으로 지웠다(커밋 39a459c 에서 꺼내 쓸 수 있다).
 
 const GAME_SCENE := "res://game/game.tscn"
+const CharacterLooks = preload("res://art/characters/character_looks.gd")
 ## 손에 드는 소품(prop_looks.gd make → "res://art/props/%s.tscn"). 펍·오락실 모두 경기 방에 처음부터 놓인다.
 const PROP_DIR := "res://art/props/%s.tscn"
 const PROP_KINDS: Array[String] = ["bottle", "mug", "ball", "cue", "hoop_ball", "plush", "capsule"]
@@ -52,7 +53,9 @@ static func start() -> void:
 			_loading.append(path)
 
 
-## 다 읽은 것을 붙잡는다. 아직 읽는 것이 남았으면 true(매 프레임 부른다 — 다 끝나면 그만 불러도 된다).
+## 다 읽은 것을 붙잡는다. 아직 할 일이 남았으면 true(매 프레임 부른다 — 다 끝나면 그만 불러도 된다).
+## 파일 읽기가 다 끝나면 캐릭터 3안(준·솜·온) 메시를 한 프레임에 하나씩 미리 만든다(character_looks.gd prewarm_step)
+## → 경기 시작·꾸미기 방에서 처음 고를 때 멈추지 않는다. 화면 없는 실행(시험·전용 서버)은 필요할 때 만든다.
 static func poll() -> bool:
 	for path in _loading.duplicate():
 		var status := ResourceLoader.load_threaded_get_status(path)
@@ -61,7 +64,11 @@ static func poll() -> bool:
 		_loading.erase(path)
 		if status == ResourceLoader.THREAD_LOAD_LOADED:
 			_held[path] = ResourceLoader.load_threaded_get(path)
-	return not _loading.is_empty()
+	if not _loading.is_empty():
+		return true
+	if DisplayServer.get_name() == "headless":
+		return false
+	return CharacterLooks.prewarm_step()
 
 
 ## path 의 장면. 붙잡아 둔 게 있으면 바로, 읽는 중이면 끝날 때까지 기다려(이 프레임만 멈춤), 아니면 지금 읽는다.
