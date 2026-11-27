@@ -73,6 +73,12 @@ var _shown_lean: float = 0.0
 const MOTION_FOLLOW: float = 18.0
 ## 이보다 멀리 떨어진 스냅샷은 보간하지 않고 바로 붙인다(자리 앉기·쓰러진 뒤 복귀 같은 순간이동).
 const MOTION_SNAP: float = 1.5
+## [2026-11-27 사용자 "중간중간 툭툭 끊긴다"] 스냅샷 사이(0.05초)를 보간만으로 메우면 목표가 "멈춰 있는 점"이라
+## 매 구간 감속했다가 다음 스냅샷에 튄다 — 일정하게 3.8m/s 로 걷는 사람이 화면에서는 2.0~6.4m/s 로 출렁였다(실측).
+## 받은 속도로 목표를 계속 밀어 주어 그 사이를 메운다. 꾸러미가 늦어도 이만큼까지만 밀어 본다 —
+## 더 밀면 빗나갔을 때 되돌림이 커진다(그 뒤로는 목표에 멈춰 다음 스냅샷을 기다린다).
+const MOTION_LEAD: float = 0.12
+var _motion_lead: float = 0.0
 ## 방장이 보내온 자리·좌우 각도. INF = 아직 스냅샷을 받은 적 없음(방장 화면).
 var _motion_to: Vector3 = Vector3.INF
 var _motion_yaw: float = 0.0
@@ -463,6 +469,7 @@ func apply_motion(data: Dictionary) -> void:
 	var jump: bool = not _motion_to.is_finite() or position.distance_to(to) > MOTION_SNAP or bool(data.seated) != seated
 	_motion_to = to
 	_motion_yaw = float(data.yaw)
+	_motion_lead = MOTION_LEAD
 	if jump:
 		position = to
 		rotation.y = _motion_yaw
@@ -484,6 +491,7 @@ func keep_predicted_motion(data: Dictionary) -> void:
 	rotation.y = yaw
 	_motion_to = predicted
 	_motion_yaw = yaw
+	_motion_lead = 0.0
 
 
 ## 스냅샷으로 받은 자리·좌우 각도로 매 프레임 조금씩 다가간다. 방장 화면에서는 _motion_to 가 비어 있어 아무 일도 없다.
@@ -491,6 +499,11 @@ func keep_predicted_motion(data: Dictionary) -> void:
 func _follow_motion(delta: float) -> void:
 	if predicted or fallen or not _motion_to.is_finite():
 		return
+	# 다음 스냅샷이 올 때까지 목표를 받은 속도로 밀어 둔다(위아래는 빼고 — 바닥에 파묻히지 않게).
+	if _motion_lead > 0.0:
+		var lead: float = minf(delta, _motion_lead)
+		_motion_to += Vector3(velocity.x, 0.0, velocity.z) * lead
+		_motion_lead -= lead
 	var weight: float = 1.0 - exp(-MOTION_FOLLOW * delta)
 	position = position.lerp(_motion_to, weight)
 	rotation.y = lerp_angle(rotation.y, _motion_yaw, weight)

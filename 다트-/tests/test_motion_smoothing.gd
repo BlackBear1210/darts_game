@@ -71,6 +71,27 @@ func _run() -> void:
 	await process_frame
 	assert(mine.position.is_equal_approx(kept), "방장이 직접 시뮬레이션하는 사람은 그대로다")
 
+	# 7) [2026-11-27 "중간중간 툭툭"] 스냅샷 사이를 받은 속도로 메운다. 안 메우면 목표가 멈춘 점이라
+	#    매 구간 감속했다가 다음 스냅샷에 튀어, 일정하게 걷는 사람도 화면에서는 2~6m/s 로 출렁인다.
+	var walker := game.actors[-1] as PlayerView
+	walker.seated = false
+	var speed := Vector3(0, 0, -3.8)
+	var at := Vector3(0, 0, 6.0)
+	walker.apply_motion(pose(walker, at))
+	walker.velocity = speed
+	walker.apply_motion({"id": -1, "position": at, "yaw": 0.0, "pitch": 0.0, "seat_lean": 0.0,
+		"seated": false, "crouched": false, "velocity": speed})
+	var before: Vector3 = walker._motion_to
+	await process_frame
+	await process_frame
+	assert(walker._motion_to.z < before.z - 0.001, "스냅샷 사이에도 목표가 받은 속도로 나아간다: %s → %s" % [before, walker._motion_to])
+	# 다음 스냅샷이 끊겨도 끝없이 앞서가지는 않는다(MOTION_LEAD 만큼만).
+	var lead_start: Vector3 = walker._motion_to
+	for frame in range(40):
+		await process_frame
+	var led: float = lead_start.distance_to(walker._motion_to)
+	assert(led <= speed.length() * PlayerView.MOTION_LEAD + 0.05, "꾸러미가 끊기면 정해진 만큼만 밀고 멈춘다: %.3f m" % led)
+
 	main.queue_free()
 	await process_frame
 	print("PASS: client snapshots are eased between frames, far jumps snap, and host-simulated actors are untouched")
