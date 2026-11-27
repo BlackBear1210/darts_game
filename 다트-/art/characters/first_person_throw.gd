@@ -60,6 +60,15 @@ const RISE_START: float = 0.65
 ##   motion   움직임 크기(멀미 줄이기 설정이면 0.3)
 ##   extra    손 떨림 등 덧붙이는 이동
 static func pose(base: Transform3D, elbow: Vector3, pull: float, kick: float = 0.0, released: float = 0.0, reload: bool = true, motion: float = 1.0, extra: Vector3 = Vector3.ZERO) -> Transform3D:
+	var weights: Vector3 = pose_weights(pull, kick, released, reload)
+	var offset: Vector3 = (CHARGE_OFFSET * weights.x + THRUST_OFFSET * weights.y + DROP_OFFSET * weights.z) * motion + extra
+	var angle: float = CHARGE_COCK * weights.x * motion
+	var about_elbow := Transform3D(Basis.IDENTITY, elbow) * Transform3D(Basis(Vector3.RIGHT, angle), Vector3.ZERO) * Transform3D(Basis.IDENTITY, -elbow)
+	return base.translated_local(offset) * about_elbow
+
+
+## 시간에 따른 당김·뻗기·내림. 엄지 쪽 카메라에서도 같은 시점에 움직인다.
+static func pose_weights(pull: float, kick: float, released: float, reload: bool) -> Vector3:
 	var back: float = _ease_out(pull)
 	var thrust: float = 0.0
 	var drop: float = 0.0
@@ -69,10 +78,7 @@ static func pose(base: Transform3D, elbow: Vector3, pull: float, kick: float = 0
 		back = _ease_out(released) * (1.0 - smoothstep(0.0, UNCOCK_END, u)) * away + _ease_out(pull) * (1.0 - away)
 		thrust = _ease_out(clampf(u / THRUST_END, 0.0, 1.0)) * away
 		drop = smoothstep(DROP_START, DROP_END, u) * away
-	var offset: Vector3 = (CHARGE_OFFSET * back + THRUST_OFFSET * thrust + DROP_OFFSET * drop) * motion + extra
-	var angle: float = CHARGE_COCK * back * motion
-	var about_elbow := Transform3D(Basis.IDENTITY, elbow) * Transform3D(Basis(Vector3.RIGHT, angle), Vector3.ZERO) * Transform3D(Basis.IDENTITY, -elbow)
-	return base.translated_local(offset) * about_elbow
+	return Vector3(back, thrust, drop)
 
 
 ## 놓은 뒤 아래팔이 펴지는 각(라디안, 음수 = 과녁 쪽). FirstPersonArm.swing 의 첫 인자.
