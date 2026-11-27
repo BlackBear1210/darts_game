@@ -7,11 +7,17 @@ extends CharacterBody3D
 ## 자리 색. 디자인 약속표(PlayerLook) 하나만 보도록 그대로 가져온다.
 const COLORS: Array[Color] = PlayerLook.COLORS
 const SPEED: float = 3.8
-const JUMP_SPEED: float = 4.8
-## 올라갈 때 중력. JUMP_SPEED 와 함께 높이 약 1.0m · 오르기 0.40초를 만든다(60Hz 실측).
+## 2026-11-27 사용자 요청 "점프로 투척을 막는 게 의미가 거의 없다": 4.8 → 5.6 (최고 0.96 → 1.31m).
+## 몸 캡슐 꼭대기(body_hit.gd 의 TOP + RADIUS = 2.05m)가 과녁 맨 위(BOARD_CENTER.y + 점수 원 반지름 = 3.35m)에
+## 닿는 높이다 → 뛴 사람 머리 위로는 어떤 조준도 지나가지 못한다. 예전 0.96m 로는 과녁 가까이 서서
+## 위쪽을 노린 발(필요 1.22m)이 그대로 넘어갔다. 투척선 앞(z −5.2 안쪽)은 서 있어도 거의 다 막혀
+## 점프가 쓸 만해지는 자리는 과녁 쪽으로 더 들어간 곳이다.
+const JUMP_SPEED: float = 5.6
+## 올라갈 때 중력. JUMP_SPEED 와 함께 높이 1.31m · 오르기 0.47초를 만든다(60Hz 실측).
 const GRAVITY: float = 12.0
 ## 꼭대기를 지나 내려올 때 중력(2026-11-26 사용자 요청 — 둥둥 뜨는 느낌을 뺀다).
 ## 오르기는 그대로라 머리 위 다트를 막는 꼭대기 구간이 거의 줄지 않고, 내려오기만 0.42 → 0.30초로 빨라진다(공중 0.80 → 0.68초).
+## 2026-11-27 점프를 높인 뒤 내려오기 0.32초 · 공중 0.80초 — 떨어지는 빠르기는 그대로다.
 const FALL_GRAVITY: float = 26.0
 const EYE_HEIGHT: float = 1.55
 ## 앉은 눈높이(m). 스툴 위에 앉은 캐릭터의 눈(character_factory.gd 의 눈 높이 1.34m)과 같게 맞춘다.

@@ -3,6 +3,7 @@ extends SceneTree
 ## 그 발은 0점이고 맞은 사람은 스턴 + 방해 성공 보상(점수)을 받는다.
 ## 펜스 제거 후 투척선 앞 다트 홀 전체가 몸 판정 후보이며 뒤 대기 인원은 제외한다.
 const Rules = preload("res://game/card_round/rules/round_rules.gd")
+const BodyHit = preload("res://game/dart/body_hit.gd")
 
 var main: Node
 
@@ -23,6 +24,12 @@ func _run() -> void:
 	# 구역은 투척선보다 앞(과녁 쪽)이고 다트 홀 안이다.
 	assert(TableView.BLOCK_ZONE.x < TableView.BLOCK_ZONE.y and TableView.BLOCK_ZONE.y < TableView.NO_ENTRY_Z)
 	assert(TableView.BLOCK_ZONE.x > TableView.DART_HALL.position.y)
+	# 점프로 막기(2026-11-27 사용자 "점프로 투척을 막는 게 의미가 거의 없다"): 뛰어오른 몸 캡슐 꼭대기가
+	# 과녁 맨 위까지 닿아야 어떤 조준도 머리 위로 넘어가지 못한다. 점프를 낮추면 여기서 걸린다.
+	var jump_peak: float = PlayerView.JUMP_SPEED * PlayerView.JUMP_SPEED / (2.0 * PlayerView.GRAVITY)
+	var board_top: float = TableView.BOARD_CENTER.y + BoardLayout.RADIUS * TableView.BOARD_SCALE
+	assert(BodyHit.TOP + BodyHit.RADIUS + jump_peak >= board_top,
+		"뛴 몸 꼭대기 %.2fm 가 과녁 맨 위 %.2fm 에 못 닿는다" % [BodyHit.TOP + BodyHit.RADIUS + jump_peak, board_top])
 
 	main = load("res://app/main.tscn").instantiate()
 	root.add_child(main)

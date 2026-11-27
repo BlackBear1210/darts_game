@@ -54,9 +54,11 @@ const THROW_START := 34.0 / 30.0
 const THROW_END := 2.0
 const THROW_RATE := 1.6
 ## Jump_Air 는 높이 이동을 뺀 모션이다(높이는 PlayerView 물리). 발이 떨어지는 10프레임부터 튼다.
-## JUMP_RATE 는 공중 시간(약 0.68초, PlayerView.FALL_GRAVITY) 동안 착지가 예전과 같은 29프레임 근처에 오게 맞춘 배속.
+## JUMP_RATE 는 공중 시간(약 0.80초, PlayerView.JUMP_SPEED·FALL_GRAVITY) 동안 착지가 예전과 같은
+## 29프레임 근처에 오게 맞춘 배속. 2026-11-27 점프를 높여 공중 시간이 0.68 → 0.80초가 되며 0.95 → 0.79
+## (안 바꾸면 33프레임까지 흘러 아직 떠 있는데 착지 자세가 먼저 나온다).
 const JUMP_TAKEOFF := 10.0 / 30.0
-const JUMP_RATE := 0.95
+const JUMP_RATE := 0.79
 ## 마시는 동안 고개를 뒤로 젖히는 각도(라디안).
 const DRINK_HEAD_BACK := 0.45
 ## 손 IK 목표: 두 눈 사이에서 오른손목까지(모델 기준 m — 오른쪽 +X, 위 +Y, 앞 -Z). 눈 메시(Eye_L·Eye_R)가 있는 모델만 쓴다.
