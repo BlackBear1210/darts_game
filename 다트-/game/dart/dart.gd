@@ -2,6 +2,13 @@ class_name DartView
 extends Node3D
 ## 날아가는 다트 1개. 방장이 확정한 시작점·착탄점·비행 시간으로 포물선을 재생만 한다(판정 근거 아님).
 ## 겉모습: 은색 촉 + 금색 몸통 + 깃(던진 사람 자리 색, paint()). 원점 = 촉 끝, 몸통은 +Z 쪽으로 뻗는다.
+## 깃 모양은 실행할 때 dart.gd 가 만든다(스탠다드, 깃_디자인_2026-11-27).
+
+const RoundKit = preload("res://art/pub/round_kit.gd")
+const FLIGHT_HALF_WIDTH: float = 0.0375
+const FLIGHT_LENGTH: float = 0.07
+const FLIGHT_THICKNESS: float = 0.0015
+const DEFAULT_FLIGHT_COLOR: Color = Color(1, 0.35, 0.06)
 
 ## 과녁에 꽂혔을 때 겉모습 배율. 과녁이 실제의 2.5배(TableView.BOARD_SCALE)라서 손 크기 다트는 판 위에서 너무 작다.
 ## 손을 떠날 때 1배 → 꽂힐 때 이 배율로 서서히 커진다(촉 끝 기준이라 착탄점은 그대로).
@@ -49,6 +56,7 @@ void fragment() {
 }
 """
 static var _wind_shader: Shader
+static var _flight_mesh: ArrayMesh
 
 ## 다트가 멈춘 순간(꽂힘 또는 벽·바닥). 과녁 흔들림·소리·가루 효과를 붙이는 곳(GameView, 로비 배경).
 signal landed(at: Vector3, hit_board: bool)
@@ -81,15 +89,40 @@ var _bounced: bool = false
 
 
 func _ready() -> void:
+	if _flight_mesh == null:
+		_flight_mesh = _make_flight_mesh()
+	($Visual/FlightHorizontal as MeshInstance3D).mesh = _flight_mesh
+	($Visual/FlightVertical as MeshInstance3D).mesh = _flight_mesh
 	set_physics_process(false)
 	set_process(false)
 
 
-## 깃 색을 칠한다(던진 사람 자리 색). 깃 재질은 장면 안에서 공유되므로 다트마다 새로 만든다.
-func paint(color: Color) -> void:
+## 판 앞끝을 원점으로 두고 오른쪽 날개를 따라간 뒤 왼쪽으로 돌아온다.
+static func _make_flight_mesh() -> ArrayMesh:
+	var front_x: float = FLIGHT_HALF_WIDTH * 0.09
+	var shoulder_y: float = FLIGHT_LENGTH * 0.56
+	var points := PackedVector2Array([
+		Vector2(front_x, 0), Vector2(FLIGHT_HALF_WIDTH, shoulder_y), Vector2(FLIGHT_HALF_WIDTH, FLIGHT_LENGTH),
+		Vector2(-FLIGHT_HALF_WIDTH, FLIGHT_LENGTH), Vector2(-FLIGHT_HALF_WIDTH, shoulder_y), Vector2(-front_x, 0),
+	])
+	var radii := PackedFloat32Array([0, 0.004, 0.0015, 0.0015, 0.004, 0])
+	var outline: PackedVector2Array = RoundKit.rounded_polygon(points, radii, 5)
+	var mesh: ArrayMesh = RoundKit.panel_mesh("dart_standard_flight", outline, FLIGHT_THICKNESS)
+	mesh.surface_set_material(0, _flight_material(DEFAULT_FLIGHT_COLOR))
+	return mesh
+
+
+static func _flight_material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = color
+	material.roughness = 0.55
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
+
+
+## 자리 색은 다트마다 덮어쓴다. 장면에 붙이기 전에 칠한 색도 유지한다.
+func paint(color: Color) -> void:
+	var material: StandardMaterial3D = _flight_material(color)
 	for flight_name in ["FlightHorizontal", "FlightVertical"]:
 		(get_node("Visual/" + flight_name) as MeshInstance3D).material_override = material
 
