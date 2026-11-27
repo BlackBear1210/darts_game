@@ -55,8 +55,6 @@ var _punish_turn_sent: int = 0
 ## 몸으로 막은 사람이 옆으로 튕기는 세기(m/s). 감속 9 m/s² 라 약 0.9m 밀려난다 —
 ## 다트가 지나는 한가운데에서 벗어나므로 다음 발은 다시 들어와 서야 막을 수 있다(계속 서서 막는 것 방지).
 const BODY_KNOCKBACK: float = 4.0
-## 칠판 점수판에 쓰는 이름 최대 글자 수(칠판 폭 약 0.95m에 맞춘 값).
-const CHALK_NAME_LENGTH: int = 6
 const MOTION_INTERVAL: float = 0.05
 ## 손님이 자기 예측을 믿을 최대 어긋남(m). 걷는 동안 스냅샷은 왕복 지연만큼 과거라 늘 뒤처져 온다
 ## (걷기 PlayerView.SPEED 3.8m/s × 왕복 0.2초 ≈ 0.76m). 이보다 벌어지면 예측이 틀린 것이다.
@@ -964,6 +962,7 @@ func _process(delta: float) -> void:
 
 
 func _apply_state() -> void:
+	var turn_id: int = controller.state.active_player().peer_id if controller.state.active_player() != null else 0
 	for id: int in actors.keys():
 		var player := controller.state.find_player(id)
 		if player == null:
@@ -973,7 +972,7 @@ func _apply_state() -> void:
 			actors.erase(id)
 			_controls.erase(id)
 		else:
-			(actors[id] as PlayerView).show_state(player)
+			(actors[id] as PlayerView).show_state(player, id == turn_id and controller.state.phase in MatchController.DART_PHASES)
 	if seat_cards != null:
 		seat_cards.show_hands(controller.state.players)
 	# 카드 충전 라운드로 들어오면 덱 섞기·나눠 주기를 각 화면에서 재생한다(새 카드는 닿을 때까지 매트에서 숨김).
@@ -983,8 +982,9 @@ func _apply_state() -> void:
 	_sync_hand_fan()
 	if held_cards != null:
 		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
-	table.set_chalk_scores(_chalk_text())
 	var shooter := controller.state.active_player()
+	# 점수·차례·벌칙은 과녁 벽 점수판(game/table/score_wall.gd)이 보여 준다 — 화면 UI 로 겹쳐 그리지 않는다.
+	table.show_scores(controller.state.players, shooter.peer_id if shooter != null else 0, controller.state.punish_target)
 	if table.machine != null and shooter != null:
 		table.machine.set_readout(shooter.display_name, shooter.score)
 	if _shown_turn != controller.state.turn_id:
@@ -1479,16 +1479,6 @@ func _on_dart_landed(at: Vector3, hit_board: bool, dart: DartView = null) -> voi
 		Sfx.play_at(self, "thunk", at, 0.0, randf_range(0.92, 1.08))
 	else:
 		Sfx.play_at(self, "bounce", at, -4.0)
-
-
-## 과녁 왼쪽 칠판 글자: 자리 순서대로 "● 이름  점수".
-func _chalk_text() -> String:
-	var lines := PackedStringArray(["점 수", ""])
-	var players := controller.state.players.duplicate()
-	players.sort_custom(func(a: MatchPlayer, b: MatchPlayer) -> bool: return a.seat < b.seat)
-	for player: MatchPlayer in players:
-		lines.append("%s  %.1f" % [PlayerLook.tag(player.seat, player.display_name.left(CHALK_NAME_LENGTH)), player.score])
-	return "\n".join(lines)
 
 
 func _clear_darts() -> void:

@@ -89,6 +89,8 @@ var _turn_popup_title: Label
 var _turn_popup_note: Label
 var _turn_popup_age: float = TURN_POPUP_SECONDS
 var _turn_popup_shown: int = -1
+## 벌칙 알림을 띄워 준 대상(peer ID). 벌칙 라운드마다 한 번만 뜨게 한다.
+var _punish_popup_shown: int = 0
 ## 구역 고르기 팝업(2026-11-24). 떠 있는 동안 마우스를 풀어 클릭할 수 있게 한다.
 var _picker: Control
 var _picker_card: int = -1
@@ -492,10 +494,13 @@ func _update_active_cards(state: MatchState, width: float, hidden: bool) -> void
 	_active_cards.position = Vector2(width - EDGE - _active_cards.size.x, TOP)
 
 
-## 점수판: 라운지에서만 "DARTY 라운지" 머리글, 경기 중에는 이름·점수 줄만(라운드는 위 가운데 배너).
+## 점수판은 라운지에서만 화면에 띄운다. 경기 중에는 과녁 벽의 사람별 점수판(game/table/score_wall.gd)이 맡는다
+## [2026-11-27 사용자 요청 "점수를 따로 UI 로 표시하지 말고 맵에 점수판을 만든다"].
 func _update_scores(state: MatchState, waiting: bool) -> void:
-	var active: MatchPlayer = null if waiting else state.active_player()
-	_scores.show_players(state.players, active, game.controller.local_peer_id, "라운지" if waiting else "")
+	_scores.visible = waiting
+	if not waiting:
+		return
+	_scores.show_players(state.players, null, game.controller.local_peer_id, "라운지")
 
 
 func _update_phase(state: MatchState, room: RoomState, waiting: bool, finished: bool, delta: float) -> void:
@@ -712,16 +717,30 @@ func _update_prompt() -> void:
 		_prompt_box.add_child(_key_chip(str(pair[0]), str(pair[1])))
 
 
-## 내 차례가 시작되면 크게 알린다. 차례마다 한 번, TURN_POPUP_SECONDS 동안 커졌다가 사라진다.
+## 차례가 바뀌면 크게 알린다. 차례마다 한 번, TURN_POPUP_SECONDS 동안 커졌다가 사라진다.
+## [2026-11-27 사용자 요청 "누구 차례인지 알기가 쉽지 않다" · "벌칙 받는 사람이 누군지 잘 알려 달라"]
+## 예전에는 내 차례만 알렸다 → 차례가 바뀔 때마다 누구 차례인지 자리 색으로 알리고,
+## 벌칙 라운드가 시작되면 묶인 사람을 한 번 크게 알린다.
 func _update_turn_popup(state: MatchState, width: float, height: float, delta: float) -> void:
 	var active: MatchPlayer = state.active_player()
 	var mine: bool = active != null and active.peer_id == game.controller.local_peer_id
-	var playing: bool = state.phase in MatchController.DART_PHASES and state.punish_target == 0
-	if mine and playing and _turn_popup_shown != state.turn_id:
+	var playing: bool = state.phase in MatchController.DART_PHASES
+	var victim: MatchPlayer = state.find_player(state.punish_target) if state.punish_target != 0 else null
+	if playing and victim != null and _punish_popup_shown != state.punish_target:
+		_punish_popup_shown = state.punish_target
 		_turn_popup_shown = state.turn_id
 		_turn_popup_age = 0.0
-		_turn_popup_note.text = "다트 %d발 · 왼쪽 버튼을 누르고 놓으세요" % maxi(state.darts_left, 1)
+		_turn_popup_title.text = "☠ 벌칙 · %s" % PlayerLook.tag(victim.seat, victim.display_name)
+		_turn_popup_note.text = "꼴찌라 과녁판에 묶였다 — 나머지가 그 사람에게 던진다"
+		_turn_popup_title.add_theme_color_override("font_color", Style.PINK)
+	elif playing and active != null and _turn_popup_shown != state.turn_id:
+		_turn_popup_shown = state.turn_id
+		_turn_popup_age = 0.0
+		_turn_popup_title.text = "내 차례!" if mine else "%s 차례" % PlayerLook.tag(active.seat, active.display_name)
+		_turn_popup_note.text = ("다트 %d발 · 왼쪽 버튼을 누르고 놓으세요" if mine else "다트 %d발") % maxi(state.darts_left, 1)
 		_turn_popup_title.add_theme_color_override("font_color", PlayerLook.COLORS[active.seat % PlayerLook.COLORS.size()].lightened(0.45))
+	if state.punish_target == 0:
+		_punish_popup_shown = 0
 	if _turn_popup_age >= TURN_POPUP_SECONDS:
 		_turn_popup.visible = false
 		return

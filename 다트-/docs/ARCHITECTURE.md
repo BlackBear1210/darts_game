@@ -14,6 +14,7 @@
 | `game/player/player.tscn`, `player.gd` | CharacterBody3D 이동·점프·숙이기, 캡슐/방향 표시, 참가자별 렌더 레이어 |
 | `game/player/bot_driver.gd` | 봇의 차례 행동 계산(방장 전용): 투척선까지의 조향, 조준 방향, 조준점·충전. 상태를 두지 않는다 |
 | `game/table/table.tscn`, `table.gd` | ㄱ자 방·가구·4개 자리·과녁 위치 상수와 충돌 상자(환경 레이어 1·제한 벽 레이어 4), 이동 한계 계산. 보이는 방은 자식 `Pub`(`art/pub/pub_game.tscn`) |
+| `game/table/score_wall.gd` | 과녁 벽의 사람별 점수판(3D). 점수·지금 차례·벌칙 대상을 판에 그린다. `TableView`가 `Pub` 밖에 세우므로 테마를 바꿔도 남는다 |
 | `game/board/` | 공유 표준 섹터/링 데이터, 순수 채점과 기본 도형 표현 |
 | `game/throwing/dart_throw_controller.gd` | 마우스 누르기/충전 상한/놓기/입력 취소와 화면 중앙 조준 |
 | `game/dart/` | 설정 Resource, 공통 운동식, 확정된 포물선 재생 |
@@ -47,6 +48,7 @@ F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `Player
 - `game/lounge/lounge_world.gd`: 모니터·주크박스·소품과 테마. 방장만 물체 소유권/거리/요청 제한/병 궤적/적중/취기·스턴을 갱신한다. 시계는 남은 시간으로 보내 서로 다른 PC의 단조 시계 차이를 피한다. 과거 match_id 이벤트는 무시한다.
 - `game/lounge/youtube_bridge.gd`, `youtube_player.html`: 외부 브라우저 공식 임베드. 루프백에 /player·/state 읽기 전용 경로만 제공하고 헤더 크기·시간·동시 요청 수를 제한한다. 영상·전원·볼륨을 전달하고 파일/명령 실행 엔드포인트는 제공하지 않는다.
 - `ui/lounge_hud.gd`: 짧은 효과 피드·준비 인원·카드 키·상호작용·공동 순위. 기존 `GameHUD`는 legacy 예시/서버 검증 경로에 남긴다.
+- 점수는 경기 중 화면에 겹쳐 그리지 않는다(2026-11-27). `ui/score_list.gd`는 라운지에서만 보이고, 경기 중에는 과녁 벽 점수판(`game/table/score_wall.gd`)이 맡는다.
 - `ui/round_banner.gd`: 화면 위 가운데 라운드 칸(카드 충전·다트)·지금 → 다음 단계·남은 초. `MatchState` 를 읽기만 한다.
 - `game/table/seat_cards.gd`, `held_cards.gd`: 매트 위 앞면 카드와 다른 캐릭터 왼손 카드 부채. 스냅샷의 hand/pending_slot 을 보여 주기만 한다.
 - `game/lounge/emotes.gd`: T 감정표현. 손님 → 방장 `"emote"` 액션, 방장이 간격 확인 후 `"emote"` 이벤트. 봇 반응은 방장이 킬로그로 정한다.

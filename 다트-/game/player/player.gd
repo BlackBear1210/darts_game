@@ -88,6 +88,8 @@ var _motion_lead: float = 0.0
 ## 방장이 보내온 자리·좌우 각도. INF = 아직 스냅샷을 받은 적 없음(방장 화면).
 var _motion_to: Vector3 = Vector3.INF
 var _motion_yaw: float = 0.0
+## 지금 이 사람 차례인가(이름표 꼬리표). GameView 가 스냅샷마다 show_state 로 넣는다.
+var _throwing_turn: bool = false
 ## 이 몸은 내 화면에서 직접 예측해 움직인다(손님의 내 캐릭터 — GameView._predict_local).
 ## [2026-11-26 사용자 "그냥 걸어다니는데 밀리는 느낌"] 예측과 보간이 둘 다 자리를 쓰면 매 프레임
 ## 앞으로 밀고 뒤로 당기는 줄다리기가 된다 → 걸음이 밀리고, 춤 카메라(Emotes)는 그 떨림을 그대로 비춘다.
@@ -161,17 +163,20 @@ func configure(player: MatchPlayer, _angle: float = 0.0, _is_local: bool = false
 	show_state(player)
 
 
-func show_state(player: MatchPlayer) -> void:
+## active_turn = 지금 이 사람 차례인가. 이름표에 "▶ 차례" 를 붙이고 이름을 더 밝게 칠한다
+## (2026-11-27 사용자 요청 "누구 차례인지 알기가 쉽지 않다" — 과녁 벽 점수판을 안 보고 있어도 알게).
+func show_state(player: MatchPlayer, active_turn: bool = false) -> void:
 	identity = player
+	_throwing_turn = active_turn
 	_refresh_label()
 
 
 ## 이름표: 자리 표식(●▲■◆)을 붙이고 자리 색으로 칠한다(색약이어도 모양으로 구분 — 기획 2-4).
 ## 엿보는 중이면 "엿보는 중"을 붙인다 → 들여다보이는 옆 사람도 눈치채고 견제할 수 있다(모든 화면).
 func _refresh_label() -> void:
-	var tags: String = (" · 슬로우" if identity.speed_scale < 1.0 else "") + (" · 엿보는 중" if _peek_tagged else "") + (" · 꾸미는 중" if dressing else "")
+	var tags: String = (" · ▶ 차례" if _throwing_turn else "") + (" · 슬로우" if identity.speed_scale < 1.0 else "") + (" · 엿보는 중" if _peek_tagged else "") + (" · 꾸미는 중" if dressing else "")
 	_label.text = "%s%s" % [PlayerLook.tag(identity.seat, identity.display_name), tags]
-	_label.modulate = COLORS[identity.seat].lightened(0.35)
+	_label.modulate = COLORS[identity.seat].lightened(0.7 if _throwing_turn else 0.35)
 	var font: Font = _label.font if _label.font != null else ThemeDB.fallback_font
 	_label_half = font.get_string_size(_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT).x * LABEL_PIXEL * 0.5
 

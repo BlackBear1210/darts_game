@@ -165,6 +165,8 @@ var is_ready: bool = true
 var spread_batching: bool = false
 ## 다트 머신 그림(_ready 에서 만든다). 테마가 바뀌면 set_machine_skin 으로 다시 칠한다.
 @onready var machine: DartMachine = $DartMachine
+## 과녁 벽의 사람별 점수판(game/table/score_wall.gd). 방 그림(Pub)과 따로 세워 테마를 바꿔도 남는다.
+var scores: ScoreWall
 ## 지금 깔아 둔 자리 번호(0~3). 방 인원수에 맞춰 GameView.sync_room 이 정한다(기본 = 4자리 전부).
 ## 방 그림을 다시 만들면(_prepare_pub) 이 값으로 다시 숨긴다.
 var _shown_seats: Array[int] = [0, 1, 2, 3]
@@ -328,6 +330,11 @@ func _ready() -> void:
 	cabinet.add_child(collision)
 	_box(base + Vector3(0, 2.86, -0.91), Vector3(MACHINE_WIDTH, 3.40, 0.40))
 	_prepare_pub()
+	# 사람별 점수판은 Pub 밖에 둔다 — 테마를 바꿔 방 그림을 다시 만들어도(rebuild_pub) 그대로 남는다.
+	scores = ScoreWall.new()
+	scores.name = "ScoreWall"
+	scores.wall_z = DART_HALL.position.y + half_wall
+	add_child(scores)
 
 
 ## 두 방의 월넛 캐비닛은 조명 색으로 구분한다.
@@ -336,7 +343,13 @@ func set_machine_skin(arcade: bool) -> void:
 		machine.build(arcade)
 
 
-## 칠판 점수판(과녁 왼쪽 문)의 글자를 바꾼다. 방이 없으면(생성 전) 아무것도 안 한다.
+## 과녁 벽 점수판을 지금 점수로 갱신한다. active_id = 지금 던지는 사람, punish_id = 벌칙으로 묶인 사람(0 = 없음).
+func show_scores(players: Array, active_id: int, punish_id: int) -> void:
+	if scores != null:
+		scores.show_players(players, active_id, punish_id)
+
+
+## 생성기가 칠판에 써 둔 분필 글씨를 바꾼다(지금은 _prepare_pub 가 비우는 데만 쓴다). 방이 없으면 아무것도 안 한다.
 func set_chalk_scores(text: String) -> void:
 	var pub := get_node_or_null("Pub")
 	if pub == null:
@@ -429,6 +442,8 @@ func _prepare_pub() -> void:
 	if str(pub.get_meta("layout_signature", "")) != layout_signature():
 		push_warning("방 그림(pub_game.tscn)이 TableView 상수와 다릅니다. art/pub/pub_builder.gd 를 다시 실행하세요.")
 	_apply_seats(pub)
+	# 점수는 사람별 점수판(ScoreWall)이 맡는다 → 생성기가 써 둔 분필 글씨를 지워 같은 자리에 둘이 겹치지 않게 한다.
+	set_chalk_scores("")
 	# 화면 없는 시험(--headless)에서는 그리지 않으므로 묶는 시간만 아낀다.
 	if DisplayServer.get_name() != "headless":
 		if spread_batching: StaticBatch.optimize_spread(pub)
