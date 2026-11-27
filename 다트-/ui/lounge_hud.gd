@@ -615,13 +615,20 @@ func _target_name(state: MatchState, me: MatchPlayer) -> String:
 	if bool(Catalog.card(me.pending_card).get("aim", false)): return "조준점 방향의 첫 사람 (화면 가운데로 겨누기)"
 	if int(Catalog.card(me.pending_card).target) == Catalog.Target.COUNTER:
 		var victim: int = _counter_target(state, me)
-		return "%s (Tab 바꾸기)" % state.find_player(victim).display_name if victim != 0 else "막을 카드가 없음"
+		return state.find_player(victim).display_name + _tab_hint() if victim != 0 else "막을 카드가 없음"
 	if int(Catalog.card(me.pending_card).target) == Catalog.Target.PICK:
 		var picked: int = _pick_target(state, me)
-		return "%s (Tab 바꾸기)" % state.find_player(picked).display_name if picked != 0 else "대상 없음"
+		return state.find_player(picked).display_name + _tab_hint() if picked != 0 else "대상 없음"
 	var active: MatchPlayer = state.active_player()
 	if active == null: return "대상 없음"
 	return "나 (지금 던지는 사람)" if active == me else "%s (지금 던지는 사람)" % active.display_name
+
+
+## "(Tab 바꾸기)" 는 정말 바꿀 수 있을 때만 붙인다. 고를 사람이 한 명뿐이면 Tab 은 플레이어 목록이다.
+## [2026-11-27 사용자 "Tab 으로 대상 바꾸는 카드가 제대로 작동하지 않는다"] 2인 방이나 막을 카드가 하나뿐일 때
+## 안내는 Tab 을 누르라는데 Tab 이 목록을 열어, 대상 바꾸기가 고장 난 것처럼 보였다.
+func _tab_hint() -> String:
+	return " (Tab 바꾸기)" if tab_picks_target() else ""
 
 
 func _show_card_panel(me: MatchPlayer, target: String) -> void:
