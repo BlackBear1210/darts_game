@@ -66,6 +66,11 @@ const MOUSE_SENSITIVITY: float = 0.0025
 ## 자리에 앉는 순간 시선을 테이블 가운데로 돌리고 이만큼 내려다본다(라디안, 약 -27도).
 ## 2026-10-31: 앉으면 테이블이 아래로 보여 내 매트·옆자리 매트 카드가 한눈에 들어오게(사용자 요청). 그 뒤로는 마우스로 자유롭게 본다.
 const SEATED_LOOK_PITCH: float = -0.47
+## 다트 충전 확대(2026-11-28 사용자 요청): 당기기 시작하면 3% 확대에서 출발해 꽉 당기면 10%. 놓거나 취소하면 원래대로 줌아웃.
+const CHARGE_ZOOM_START: float = 0.03
+const CHARGE_ZOOM_FULL: float = 0.10
+## 확대가 목표를 따라가는 빠르기(1/초). 12 면 0.25초 안에 목표의 95% 에 닿는다 — 3% 로 툭 튀지 않고 부드럽게 들어간다.
+const CHARGE_ZOOM_RATE: float = 12.0
 const SeatCards = preload("res://game/table/seat_cards.gd")
 ## 다른 사람 캐릭터의 왼손 카드 부채(2026-10-31 저녁). 굽기 뒤에 seat_cards 와 같이 만든다.
 const HeldCards = preload("res://game/table/held_cards.gd")
@@ -117,6 +122,10 @@ var _last_motion_sequence: int = -1
 var _send_elapsed: float = 0
 var _yaw: float = 0
 var _pitch: float = 0
+## 카메라 기준 화각(씬에 정한 값). 매 프레임 여기서 다시 시작해 망원경 카드·충전 확대를 얹는다.
+var _view_fov: float = 0.0
+## 지금 충전 확대 비율(0 = 기본, 0.1 = 10% 확대). 목표를 부드럽게 따라가 줌인·줌아웃한다.
+var _charge_zoom: float = 0.0
 var _jump: bool = false
 var _shown_turn: int = -1
 var _was_finished: bool = false
@@ -169,6 +178,7 @@ func _ready() -> void:
 	throw_input.throw_requested.connect(_on_throw_requested)
 	throw_input.camera = camera
 	throw_input.board = table.board
+	_view_fov = camera.fov
 	$TrajectoryPreview.hide()
 	_hand.hide()
 	_prepare_hand_fan()
@@ -885,6 +895,18 @@ func _start_throw_kick() -> void:
 	_throw_kick = 1.0
 
 
+## 충전 확대(줌인·줌아웃). 망원경 카드가 정한 화각 위에 곱한다 — 화각은 매 프레임 _view_fov 에서 다시 시작하므로 쌓이지 않는다.
+## N% 확대 = 같은 장면이 (1 + N)배로 보인다 → 화각 절반의 tan 을 (1 + N)으로 나눈다. 조준은 화면 가운데 광선이라 화각과 무관하다.
+## '움직임 줄이기' 설정이면 확대하지 않는다.
+func _apply_charge_zoom(delta: float) -> void:
+	var target: float = 0.0
+	if throw_input.charging and not Preferences.reduced_motion:
+		target = lerpf(CHARGE_ZOOM_START, CHARGE_ZOOM_FULL, throw_input.timing)
+	_charge_zoom = lerpf(target, _charge_zoom, exp(-CHARGE_ZOOM_RATE * delta))
+	if _charge_zoom > 0.0001:
+		camera.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(camera.fov) * 0.5) / (1.0 + _charge_zoom)))
+
+
 func _process(delta: float) -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
 	if local == null:
@@ -899,6 +921,7 @@ func _process(delta: float) -> void:
 	# 엿보기(앉아서 A·D): 몸이 기운 쪽으로 화면도 기운다(레식 기울이기). 마시는 중이면 고개가 뒤로 젖혀진다.
 	camera.h_offset = 0.0
 	camera.rotation = Vector3(_pitch + local.drink_pose_tilt() * PlayerView.DRINK_LOOK_UP, _yaw, local.peek_roll())
+	camera.fov = _view_fov
 	# 쓰러진 동안: 1인칭을 잠깐 3인칭으로 — 쓰러진 내 몸을 뒤에서 내려다본다(내 몸 레이어도 보이게).
 	camera.cull_mask = 0xfffff if local.fallen else 0xfffff & ~(1 << (local.identity.seat + 1))
 	if local.fallen:
@@ -920,6 +943,7 @@ func _process(delta: float) -> void:
 	# 화면 카드(정전·딸꾹질·유체이탈·망원경·원샷). 조준(아래 aim_at)보다 먼저 — 카메라가 흔들리면 조준도 흔들린다.
 	if _card_screen != null:
 		_card_screen.apply(camera, local, state.active_player(), delta)
+	_apply_charge_zoom(delta)
 	_punish_camera()
 	if seat_cards != null:
 		seat_cards.show_peek(local, delta)

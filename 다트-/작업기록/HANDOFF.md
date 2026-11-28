@@ -1,3 +1,11 @@
+# 2026-11-28 인수인계 — 다트 충전 확대
+
+- **게임 카메라 화각은 `GameView._process` 가 매 프레임 `_view_fov` 로 되돌린 뒤 얹는다**(망원경 카드 → 충전 확대 순서).
+  화각을 바꾸는 효과를 새로 넣으면 이 사이에 넣을 것 — 한 번만 바꾸고 두면 다음 프레임에 지워진다.
+- 확대 수치는 `GameView.CHARGE_ZOOM_START`(3%)·`CHARGE_ZOOM_FULL`(10%)·`CHARGE_ZOOM_RATE`(12/초). `tests/test_charge_zoom.gd` 가 같은 상수를 본다.
+
+---
+
 # 2026-11-28 인수인계 — 카드 사용 HUD(A 보완안)
 
 - **'적용 중' 카드 줄(`ui/active_cards.gd`)은 지웠다.** 오른쪽 위는 이제 `ui/used_cards.gd` 의 상대 사람별 묶음이고,
