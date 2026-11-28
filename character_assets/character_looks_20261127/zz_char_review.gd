@@ -26,6 +26,9 @@ func _run() -> void:
 		"one": await _shots([OS.get_cmdline_user_args()[2]], true)
 		"hats": await _hats(["jun", "som", "on"])
 		"turn": await _turn(Array(OS.get_cmdline_user_args().slice(2)))
+		"bald": await _turn(Array(OS.get_cmdline_user_args().slice(2)), true)
+		"mix": await _turn(Array(OS.get_cmdline_user_args().slice(2)), false, MIX_SHOTS)
+		"close": await _close(Array(OS.get_cmdline_user_args().slice(2)))
 		"hands": await _hands(Array(OS.get_cmdline_user_args().slice(2)))
 		"glasses": await _glasses(["jun", "som", "on"])
 	print("DONE ", _mode)
@@ -300,25 +303,70 @@ func _hats(ids: Array) -> void:
 	cam.queue_free()
 
 
+## 헤어 조합표에 쓰는 컷만(mix 모드).
+const MIX_SHOTS: Array = ["t_face_000", "t_face_030", "t_face_090", "t_face_150", "t_face_180", "t_top_045", "t_body_030"]
+
+
 ## 12방향(30°마다): 전신(정사영) + 얼굴(원근). 파일 = <id>_t_body_<각> · <id>_t_face_<각>
-func _turn(ids: Array) -> void:
+## only 가 비어 있지 않으면 그 이름(태그 뒤)의 컷만 찍는다.
+func _turn(ids: Array, bald: bool = false, only: Array = []) -> void:
 	var vp := _studio(Vector2i(1200, 1600))
-	for id: String in ids:
-		var model := _dressed(CharacterLooks.IDS.find(id))
+	for spec: String in ids:
+		# "jun" 또는 "jun:3"(캐릭터:헤어 번호)
+		var bits: PackedStringArray = spec.split(":")
+		var id: String = bits[0]
+		var extra: Dictionary = {}
+		if bits.size() > 1:
+			extra["hair"] = int(bits[1])
+		# "jun:3:2" = 세 번째 칸은 모자 번호 · "jun:3:2:1" = 네 번째 칸은 안경 번호
+		if bits.size() > 2:
+			extra["hat"] = int(bits[2])
+		if bits.size() > 3:
+			extra["eyes"] = int(bits[3])
+		var model := _dressed(CharacterLooks.IDS.find(id), extra)
+		if bald:
+			var parts: Node = model.find_child(CharacterLooks.PARTS_NODE, true, false)
+			if parts != null:
+				parts.get_parent().remove_child(parts)
+				parts.free()
+		var tag: String = spec.replace(":", "_h") if bits.size() <= 2 else "%s_h%s_k%s" % [id, bits[1], "_".join(bits.slice(2))]
 		vp.add_child(model)
 		_rest(model)
 		vp.size = Vector2i(1200, 1600)
 		var cam := _camera(vp, true, Vector3(0, 0.915, -6.0), Vector3(0, 0.915, 0), 1.96)
 		for k in range(12):
 			model.rotation_degrees.y = k * 30
-			await _save(vp, "%s_t_body_%03d" % [id, k * 30])
+			if only.is_empty() or only.has("t_body_%03d" % (k * 30)):
+				await _save(vp, "%s_t_body_%03d" % [tag, k * 30])
 		cam.queue_free()
 		vp.size = Vector2i(1000, 1000)
 		var face := _camera(vp, false, Vector3(0, 1.57, -1.62), Vector3(0, 1.57, 0), 23.0)
 		for k in range(12):
 			model.rotation_degrees.y = k * 30
-			await _save(vp, "%s_t_face_%03d" % [id, k * 30])
+			if only.is_empty() or only.has("t_face_%03d" % (k * 30)):
+				await _save(vp, "%s_t_face_%03d" % [tag, k * 30])
 		face.queue_free()
+		# 위에서 내려다보기: 바로 위(앞이 사진 위쪽) · 앞 위 45°
+		model.rotation_degrees.y = 0
+		var top := Camera3D.new()
+		top.fov = 23.0
+		top.near = 0.02
+		top.far = 30.0
+		vp.add_child(top)
+		top.position = Vector3(0, 3.1, 0.0)
+		top.look_at(Vector3(0, 1.62, -0.04), Vector3(0, 0, -1))
+		top.current = true
+		if only.is_empty() or only.has("t_top_000"):
+			await _save(vp, "%s_t_top_000" % tag)
+		top.position = Vector3(0, 2.62, -1.12)
+		top.look_at(Vector3(0, 1.64, -0.04), Vector3.UP)
+		if only.is_empty() or only.has("t_top_045"):
+			await _save(vp, "%s_t_top_045" % tag)
+		top.position = Vector3(0, 2.62, 1.12)
+		top.look_at(Vector3(0, 1.64, -0.04), Vector3.UP)
+		if only.is_empty() or only.has("t_top_180"):
+			await _save(vp, "%s_t_top_180" % tag)
+		top.queue_free()
 		model.queue_free()
 		await process_frame
 
@@ -356,3 +404,33 @@ func _glasses(ids: Array) -> void:
 			m.queue_free()
 			await process_frame
 	cam.queue_free()
+
+
+## 얼굴 가까이(민머리 또는 "id:헤어"): 0~180° 30°마다 + 아래 앞. 파일 = <tag>_c_<각>
+func _close(ids: Array) -> void:
+	var vp := _studio(Vector2i(900, 1000))
+	for spec: String in ids:
+		var bits: PackedStringArray = spec.split(":")
+		var extra: Dictionary = {}
+		if bits.size() > 1:
+			extra["hair"] = int(bits[1])
+		var model := _dressed(CharacterLooks.IDS.find(bits[0]), extra)
+		if bits.size() == 1:
+			var parts: Node = model.find_child(CharacterLooks.PARTS_NODE, true, false)
+			if parts != null:
+				parts.get_parent().remove_child(parts)
+				parts.free()
+		var tag: String = spec.replace(":", "_h")
+		vp.add_child(model)
+		_rest(model)
+		var cam := _camera(vp, false, Vector3(0, 1.58, -1.62), Vector3(0, 1.57, 0), 18.5)
+		for yaw in [0, 30, 60, 90, 120, 150, 180]:
+			model.rotation_degrees.y = yaw
+			await _save(vp, "%s_c_%03d" % [tag, yaw])
+		cam.position = Vector3(0, 1.30, -1.5)
+		cam.look_at(Vector3(0, 1.52, 0), Vector3.UP)
+		model.rotation_degrees.y = 25
+		await _save(vp, "%s_c_low" % tag)
+		cam.queue_free()
+		model.queue_free()
+		await process_frame

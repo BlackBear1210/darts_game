@@ -1,19 +1,22 @@
 extends RefCounted
-## [부품] 캐릭터 3안(준·솜·온) 조립 — 꾸미기 칸 "캐릭터"(art/characters/player_outfit.gd SLOTS)가 부른다. 디자인 담당 소유.
+## [부품] 캐릭터 조립 = **인형 + 헤어 부품** — 꾸미기 칸 "캐릭터"·"헤어"(art/characters/player_outfit.gd SLOTS)가 부른다. 디자인 담당 소유.
 ## class_name 을 만들지 않고 preload 로 부른다(열린 편집기가 새 class_name 을 못 읽어 파스 오류가 나는 함정).
 ##
 ## [어떻게] 승인 모델(approved_player.tscn) 하나를 그대로 쓰고 **메시만 갈아 끼운다**. 뼈·관절·키·충돌·눈높이·판정은 그대로다.
-##   - Body(피부·머리 그림) → 피부·머리 색 셰이더(character_skin.gdshader) + 옛 곱슬머리를 두피 안으로 눌러 넣은 정점
-##     + 캐릭터마다 얼굴형(_morph_face: 턱·볼·코) + 두툼한 손(_morph_hands)
+##   - 인형 머리(2026-11-28 v3): Body 의 머리 면(승인 모델에 곱슬이 조각된 6만 면)을 **새 각진 로우폴리 머리**(약 2천 2백 면)로 바꾼다.
+##     민머리 두개골 + 캐릭터 얼굴형 + 눈·눈동자·코·귀·입·눈썹 조각. 모양은 자료(character_look_data.res heads)에 구워 두었고
+##     여기서는 색(LOOKS)만 칠한다. 목 이음새 정점은 승인 모델 것을 그대로 베껴 목과 틈이 없다.
+##   - 헤어: 인형 위에 얹는 닫힌 덩어리 부품(HAIRS). 어느 캐릭터에나 끼우고 색은 캐릭터 머리색. 조각 메시(CharacterParts)에 들어간다.
+##   - 몸(목·팔·손) → 피부색 셰이더(character_skin.gdshader) + 두툼한 손(_morph_hands) + 목 앞은 얼굴형과 같은 식(_morph_face)
 ##   - Top_01 · Bottom_01 · Shoes_01 → 옷 색 구역 셰이더(character_cloth.gdshader). 쉬는 자세 좌표를 정점(UV·UV2)에 구워 칠한다.
 ##   - 체형(_morph): 쉬는 자세 좌표를 조금 밀고 당긴다 — 솜 = 가슴·허리·골반·엉덩이, 온 = 몸통·상완 두툼
-##   - 새 머리·입체 눈썹·소맷단·깃 같은 단단한 조각은 한 메시(CharacterParts)로 묶어 뼈대에 붙인다(드로우콜 +1, 조각마다 한 뼈).
-##     그림 속 머리카락·눈썹은 셰이더가 살색으로 지운다(2026-11-27 v2 — 그림 눈썹이 튀어나온 눈알 뒤에 박혀 보였다).
+##   - 헤어·소맷단·깃 같은 단단한 조각은 한 메시(CharacterParts)로 묶어 뼈대에 붙인다(드로우콜 +1, 조각마다 한 뼈).
+##   - 기본 캐릭터 + "캐릭터 기본" 헤어 = 승인 모델 그대로(조각을 붙이지 않는다). 기본 캐릭터에 다른 헤어를 고르면 기본 인형을 쓴다.
 ##   게임이 찾는 파츠 이름(Body / Top_01 / Bottom_01 / Shoes_01)과 뼈 이름은 바꾸지 않는다.
 ## [재사용] 같은 캐릭터 메시는 한 번만 만들어 모든 선수·래그돌·꾸미기 방·1인칭 팔이 같이 쓴다(_meshes 캐시, 게임을 끌 때까지).
 ##   처음 만들 때 시간이 걸리므로(잰 값은 docs/ARCHITECTURE.md) 타이틀 화면에서 prewarm_step()으로 한 조각씩 미리 만든다(app/asset_warmup.gd).
 ## [되돌리기] apply(model, 0) = 원래 메시로 돌리고 조각을 뗀다(player_outfit.undress 가 부른다).
-## 디자인 기준: 바탕화면 darty_캐릭터_디자인/3D_검증_2026-11-26 (12방향 사진). 시안 그림은 참고만 한다(저작권).
+## 디자인 기준: 승인 모델 얼굴(눈·코·입·턱 자리). 시안 그림은 참고만 한다(저작권). 사진: 바탕화면 darty_캐릭터_디자인/.
 
 const DATA_PATH := "res://art/characters/character_look_data.res"
 const LookData = preload("res://art/characters/character_look_data.gd")
@@ -29,14 +32,28 @@ const PALM: Basis = preload("res://art/characters/approved_dart_grip.gd").PALM
 ## 이름은 player_outfit.gd SLOTS 의 "character" 줄과 같은 순서다.
 const IDS: Array[String] = ["base", "jun", "som", "on"]
 
-## 캐릭터 색표(sRGB 16진). skin = 피부 · hair = 머리 · brow = 눈썹·입술선 · fade = 온의 짧게 민 옆·뒤 머리 · 나머지는 옷 색 구역.
+## 꾸미기 "hair" 칸 번호 순서(player_outfit.gd SLOTS 의 "hair" 줄과 같은 순서). 0 = 그 캐릭터의 기본 헤어(HAIR_OF).
+## 새 헤어는 맨 뒤에 붙인다(저장된 번호가 바뀌지 않게). 모양 = 자료의 kind "hair" 조각(id = 이 키).
+const HAIRS: Array[String] = ["", "wavy", "spiky", "bob", "curls", "crew", "pony", "bun"]
+## 캐릭터마다 기본 헤어. 기본(base)은 헤어 0 이면 승인 모델 그대로라 이 값은 "기본 인형"을 쓸 때만 본다.
+## 솜 기본 = 올림머리(bun, 2026-11-28 밤 — 시안의 틀어 올린 머리). 단발(bob)은 꾸미기에서 고를 수 있다.
+const HAIR_OF: Dictionary = {"base": "wavy", "jun": "spiky", "som": "bun", "on": "curls"}
+## 헤어 조각의 고정 색(캐릭터 색표에 없는 키) — 포니테일 · 올림머리 머리끈.
+const HAIR_FIXED_COLORS: Dictionary = {"tie": "7d2f3c"}
+## 인형 머리 색 키(자료 heads.k): 0 피부 · 1 흰자 · 2 눈동자 · 3 입 · 4 눈썹.
+const EYE_WHITE := Color("f3f0e9")
+const PUPIL := Color("141313")
+
+## 캐릭터 색표(sRGB 16진). skin = 피부 · hair = 머리 · brow = 눈썹 · mouth = 입 · 나머지는 옷 색 구역.
 ## 피부는 셋이 한눈에 갈리게 밝기를 벌린다(2026-11-27 v2): 준 = 밝은 살구 · 솜 = 따뜻한 황갈 · 온 = 짙은 갈색.
+## base = 기본 인형(기본 캐릭터에 다른 헤어를 골랐을 때) — 승인 모델 피부·머리 색 그대로, 옷은 승인 옷.
 const LOOKS: Dictionary = {
-	"jun": {"skin": "eba57a", "hair": "231f22", "brow": "231d20",
+	"base": {"skin": "e19461", "hair": "3d2216", "brow": "2b1810", "mouth": "4a2219"},
+	"jun": {"skin": "eba57a", "hair": "231f22", "brow": "231d20", "mouth": "4e2420",
 		"shirt": "4b2441", "inner": "eadfca", "accent": "d69a3c", "pants": "465068", "shoe": "5c2123", "sole": "cdb88f"},
-	"som": {"skin": "c18556", "hair": "232a48", "brow": "1b1d30",
+	"som": {"skin": "c18556", "hair": "232a48", "brow": "1b1d30", "mouth": "5a2627",
 		"shirt": "ebe1cb", "panel": "4f8985", "pocket": "2c5754", "pants": "272b3f", "turnup": "a9c9b4", "shoe": "23242d", "sole": "17171c"},
-	"on": {"skin": "6b3f29", "hair": "a4532a", "brow": "3b1d12", "fade": "4a2619",
+	"on": {"skin": "6b3f29", "hair": "a4532a", "brow": "2a140c", "mouth": "2a120c",
 		"shirt": "a5392b", "yoke": "ebdfc3", "tab": "5f6f8c", "pants": "4c4744", "shoe": "2b325c", "sole": "151518", "pull": "b5452f"},
 }
 ## 옷 색 구역 셰이더 칸: 부위 → [무늬 번호, c_main 키, c_a 키, c_b 키, 밑창 줄 높이]. 신발은 면마다(0 = 몸통, 1 = 밑창).
@@ -57,7 +74,7 @@ const PART_NAMES: Array[String] = ["Body", "Top_01", "Bottom_01", "Shoes_01"]
 ## 원래 메시를 기억해 두는 메타 키 · 조각 노드 이름(1인칭 팔 first_person_arm.gd ARM_PARTS 도 이 이름을 본다).
 const BASE_META := &"character_base_mesh"
 const PARTS_NODE := "CharacterParts"
-## 모자를 쓰면 이 높이(m) 위의 새 머리를 눌러 모자 속에 넣는다 = 승인 모델 모자 밑면(face_anchors.hat y 1.785).
+## 모자를 쓰면 이 높이(m) 위의 헤어를 눌러 모자 속에 넣는다 = 승인 모델 모자 밑면(face_anchors.hat y 1.785).
 ## 이보다 낮게 누르면 모자와 머리 사이가 떠 보인다(2026-11-27 1.73 → 1.785 로 고침). 옆·뒤 머리와 묶음머리는 그대로 보인다.
 const HAT_HAIR_LINE: float = 1.785
 const HAT_HAIR_SQUASH: float = 0.35
@@ -80,6 +97,7 @@ static var _meshes: Dictionary = {}
 ## 재질(키 → Material). 같은 캐릭터·같은 면은 모든 선수가 한 재질을 같이 쓴다(같은 것끼리 한 번에 그려진다).
 static var _materials: Dictionary = {}
 static var _parts_material: StandardMaterial3D
+static var _head_material: StandardMaterial3D
 ## 미리 만들기 줄(prewarm_step). [캐릭터, 파츠] 순서.
 static var _prewarm_queue: Array = []
 static var _prewarm_base: Dictionary = {}
@@ -96,6 +114,8 @@ static var _prewarm_grip: Array = []
 ## 손가락 변환에 쓰는 승인 모델 스킨·손 쉬는 자세(PropGrip.hand_rests). 미리 만들기 동안만 들고 있다.
 static var _prewarm_skin: Skin
 static var _prewarm_rests: Array = []
+## 조각 메시를 일꾼 스레드에서 만들 때 쓰는 뼈 이름 → 스킨 번호 표(_bind_table).
+static var _prewarm_binds: Dictionary = {}
 ## 손 두께 변형(_morph_hands)에 쓰는 손바닥 좌표틀 [오른손 → 손바닥, 손바닥 → 오른손, 왼손 → 손바닥, 손바닥 → 왼손].
 ## 승인 모델 뼈의 쉬는 자세에서 한 번 구한다(_hand_frames, 메인 스레드). 스레드는 읽기만 한다.
 static var _palm: Array = []
@@ -106,11 +126,24 @@ static func id_at(index: int) -> String:
 	return IDS[clampi(index, 0, IDS.size() - 1)]
 
 
-## model(PlayerLook.character 로 만든 승인 캐릭터)에 캐릭터 index 를 입힌다. 이미 입은 캐릭터는 바꿔 끼운다.
-##   hat_on  모자를 쓰는가(새 머리 윗부분을 모자 속으로 눌러 넣는다)
+## 캐릭터 칸 index · 헤어 칸 hair_index → 헤어 키(0 = 그 캐릭터의 기본 헤어).
+static func hair_id(index: int, hair_index: int) -> String:
+	var chosen: String = HAIRS[clampi(hair_index, 0, HAIRS.size() - 1)]
+	return chosen if chosen != "" else str(HAIR_OF[id_at(index)])
+
+
+## 인형을 쓰는가: 기본 캐릭터 + 기본 헤어만 승인 모델 그대로다.
+static func uses_doll(index: int, hair_index: int) -> bool:
+	return not (id_at(index) == "base" and clampi(hair_index, 0, HAIRS.size() - 1) == 0)
+
+
+## model(PlayerLook.character 로 만든 승인 캐릭터)에 캐릭터 index · 헤어 hair_index 를 입힌다. 이미 입은 것은 바꿔 끼운다.
+##   hat_on  모자를 쓰는가(헤어 윗부분을 모자 속으로 눌러 넣는다)
 ##   shirt   꾸미기 옷 색 번호(0 = 캐릭터 옷 그대로). 상의 색과 같은 색인 깃 조각도 같이 바꾼다.
-static func apply(model: Node3D, index: int, hat_on: bool = false, shirt_color: Variant = null) -> void:
+static func apply(model: Node3D, index: int, hat_on: bool = false, shirt_color: Variant = null, hair_index: int = 0) -> void:
 	var id: String = id_at(index)
+	var hair: String = hair_id(index, hair_index)
+	var doll: bool = uses_doll(index, hair_index)
 	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
 	for part_name: String in PART_NAMES:
 		var instance := model.find_child(part_name, true, false) as MeshInstance3D
@@ -124,7 +157,10 @@ static func apply(model: Node3D, index: int, hat_on: bool = false, shirt_color: 
 		if not instance.has_meta(BASE_META):
 			instance.set_meta(BASE_META, current.get_meta(PropGrip.SOURCE_META) if gripped else current)
 		var base: ArrayMesh = instance.get_meta(BASE_META)
-		var chosen: ArrayMesh = base if id == "base" else part_mesh(id, part_name, base)
+		# 기본 인형은 몸(머리)만 바꾸고 옷은 승인 옷 그대로.
+		var chosen: ArrayMesh = base
+		if doll and (id != "base" or part_name == "Body"):
+			chosen = part_mesh(id, part_name, base)
 		if gripped and skeleton != null:
 			chosen = PropGrip.grip_mesh(chosen, instance.skin, skeleton)
 		instance.mesh = chosen
@@ -139,12 +175,13 @@ static func apply(model: Node3D, index: int, hat_on: bool = false, shirt_color: 
 		skeleton.remove_child(old)
 		old.queue_free()
 	model.set_meta("character", id)
+	model.set_meta("hair", hair if doll else "")
 	var body := model.find_child("Body", true, false) as MeshInstance3D
-	if id == "base" or body == null or body.skin == null:
+	if not doll or body == null or body.skin == null:
 		return
 	var parts := MeshInstance3D.new()
 	parts.name = PARTS_NODE
-	parts.mesh = _parts_mesh(id, hat_on, shirt_color, body.skin)
+	parts.mesh = _parts_mesh(id, hair, hat_on, shirt_color, body.skin)
 	skeleton.add_child(parts)
 	parts.skin = body.skin
 	parts.skeleton = parts.get_path_to(skeleton)
@@ -175,11 +212,18 @@ static func part_mesh(id: String, part_name: String, base: ArrayMesh) -> ArrayMe
 
 
 static func _mesh_key(id: String, part_name: String, base: ArrayMesh) -> String:
-	return "%s/%s/%d" % [id, part_name, base.get_instance_id()]
+	return "%s/%s/%s" % [id, part_name, _resource_key(base)]
+
+
+## 캐시 키에 쓰는 원본 이름: 파일(또는 장면 속) 경로 — 장면을 다시 읽어 새 객체가 되어도 같은 키다.
+## (2026-11-28 실측: 모델을 모두 지운 뒤 다시 만들면 옷 메시·스킨이 새 객체라 객체 번호 키로는 입힐 때마다 메시를 또 만들었다.)
+static func _resource_key(resource: Resource) -> String:
+	return resource.resource_path if resource.resource_path != "" else str(resource.get_instance_id())
 
 
 ## 타이틀 화면에서 매 프레임 부른다(app/asset_warmup.gd). 남은 일이 있으면 true.
-## 만드는 것: 캐릭터 3안 × 파츠 4개 + 몸의 손가락 변환본(승인 모델 몸 포함 — 경기 시작 때 첫 선수가 만들며 멈추던 것).
+## 만드는 것: 캐릭터 3안 × 파츠 4개 + 기본 인형 몸 + 몸의 손가락 변환본(승인 모델 몸 포함 — 경기 시작 때 첫 선수가 만들며 멈추던 것)
+##   + 조각 메시(캐릭터 4 × 헤어 6 × 모자 벗음·씀 — 봇이 아무 헤어를 골라도 경기 시작 때 멈추지 않게).
 ## 무거운 정점 계산(체형·색 구역 좌표·손가락 셰이프, 파츠 하나 20~300 ms)은 일꾼 스레드(WorkerThreadPool)가 하고,
 ## 메인 스레드는 원본 배열 꺼내기와 메시 붙이기(몇 ms)만 한다 → 타이틀 화면이 끊기지 않는다.
 ## 스레드는 배열과 읽기 전용 자료(_data·스킨)만 만진다(노드·RenderingServer 를 건드리지 않는다 — 스레드에서 안전).
@@ -199,13 +243,23 @@ static func prewarm_step() -> bool:
 		if skeleton != null and body != null and body.skin != null and _prewarm_base.has("Body"):
 			_prewarm_skin = body.skin
 			_prewarm_rests = PropGrip.hand_rests(skeleton)
-			_prewarm_queue.append(["base", "Body"])
+			_prewarm_binds = _bind_table(body.skin)
+			# "approved" = 승인 모델 몸 그대로(손가락 변환본만 만든다).
+			_prewarm_queue.append(["approved", "Body"])
 		if skeleton != null and _palm.is_empty():
 			_palm = _palm_frames(skeleton)
 		model.free()
 		for id: String in IDS.slice(1):
 			for part_name: String in _prewarm_base:
 				_prewarm_queue.append([id, part_name])
+		# 기본 인형 = 기본 캐릭터 몸(머리만 인형) — 기본 캐릭터에 다른 헤어를 골랐을 때.
+		if _prewarm_base.has("Body"):
+			_prewarm_queue.append(["base", "Body"])
+		if _prewarm_skin != null:
+			for hat_on: bool in [false, true]:
+				for id: String in IDS:
+					for hair: String in HAIRS.slice(1):
+						_prewarm_queue.append(["parts", id, hair, hat_on])
 		# 자료는 메인 스레드에서 미리 읽어 둔다(스레드는 읽기만 한다).
 		_data_resource()
 		return true
@@ -216,8 +270,14 @@ static func prewarm_step() -> bool:
 		_prewarm_task = -1
 		var job: Array = _prewarm_job
 		_prewarm_job = []
+		if job[0] == "parts":
+			var parts_key: String = _parts_key(job[1], job[2], job[3], null, _prewarm_skin)
+			# 그 사이 경기가 먼저 만들었으면(_parts_mesh) 그것을 쓴다.
+			if not _meshes.has(parts_key):
+				_meshes[parts_key] = _parts_from_arrays(job[4])
+			return true
 		var source: ArrayMesh = job[2]
-		if job[0] != "base":
+		if job[0] != "approved":
 			var key: String = _mesh_key(job[0], job[1], job[2])
 			# 그 사이 경기가 먼저 만들었으면(part_mesh) 그것을 쓴다.
 			if not _meshes.has(key):
@@ -235,9 +295,15 @@ static func prewarm_step() -> bool:
 		return true
 	while not _prewarm_queue.is_empty():
 		var job: Array = _prewarm_queue.pop_front()
+		if job[0] == "parts":
+			if _meshes.has(_parts_key(job[1], job[2], job[3], null, _prewarm_skin)):
+				continue
+			_prewarm_job = ["parts", job[1], job[2], job[3], []]
+			_prewarm_task = WorkerThreadPool.add_task(_prewarm_parts_work.bind(_prewarm_job), false, "캐릭터 조각 미리 만들기")
+			return true
 		var base: ArrayMesh = _prewarm_base[job[1]]
 		var grip: bool = job[1] == "Body" and _prewarm_skin != null
-		if job[0] == "base":
+		if job[0] == "approved":
 			if PropGrip.meshes.has(base.get_instance_id()):
 				continue
 		elif _meshes.has(_mesh_key(job[0], job[1], base)) and not (grip and PropGrip.meshes.has((_meshes[_mesh_key(job[0], job[1], base)] as ArrayMesh).get_instance_id())):
@@ -253,15 +319,16 @@ static func prewarm_step() -> bool:
 	_prewarm_base.clear()
 	_prewarm_skin = null
 	_prewarm_rests = []
+	_prewarm_binds = {}
 	return false
 
 
 ## 일꾼 스레드: 원본 면 배열(source, 읽기만)을 복사해 정점을 계산하고 job[3] 에 담는다.
-## 정점 배열은 그 자리에서 고치므로 꼭 새로 복사한다(원본은 다음 캐릭터도 쓴다).
+## 정점 배열은 그 자리에서 고치므로 꼭 새로 복사한다(원본은 다음 캐릭터도 쓴다). 인형 머리는 새 배열로 통째로 바꾼다.
 ## grip 이면 그 결과(승인 모델이면 원본 그대로)에 손가락 셰이프를 계산해 job[4] 에 담는다.
 static func _prewarm_work(job: Array, source: Array, grip: bool) -> void:
 	var out: Array = job[3]
-	if job[0] == "base":
+	if job[0] == "approved":
 		out.append_array(source)
 	else:
 		for surface in range(source.size()):
@@ -271,6 +338,11 @@ static func _prewarm_work(job: Array, source: Array, grip: bool) -> void:
 		_shape(job[0], job[1], out)
 	if grip:
 		job[4] = PropGrip.grip_surfaces(out, _prewarm_skin, _prewarm_rests)
+
+
+## 일꾼 스레드: 조각 메시 배열(job = ["parts", 캐릭터, 헤어, 모자, 결과]). 메시 붙이기는 메인 스레드(_parts_from_arrays).
+static func _prewarm_parts_work(job: Array) -> void:
+	job[4] = _parts_arrays(job[1], job[2], job[3], null, _prewarm_binds)
 
 
 # ─────────────────────────────── 몸(피부·머리 그림) ───────────────────────────────
@@ -305,47 +377,101 @@ static func _assemble(id: String, part_name: String, base: ArrayMesh, surfaces: 
 		result.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surfaces[surface], [], {}, base.surface_get_format(surface) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 		var material: Material
 		if part_name == "Body":
-			material = _skin_material(id, surface, surface == _data.head_surface, base.surface_get_material(surface))
+			# 인형 머리로 바뀐 면(정점 수가 원본과 다르다) = 정점 색 재질. 나머지 면 = 피부색 셰이더(기본 인형도 — 목이 머리와 같은 단색).
+			var doll_head: bool = surface == _data.head_surface and (surfaces[surface][Mesh.ARRAY_VERTEX] as PackedVector3Array).size() != base.surface_get_array_len(surface)
+			if doll_head:
+				material = _doll_head_material()
+			else:
+				material = _skin_material(id, surface, base.surface_get_material(surface))
 		else:
 			material = _cloth_material(id, part_name, surface)
 		result.surface_set_material(surface, material)
 	return result
 
 
-## 몸: 머리 면이면 옛 곱슬머리를 두피 안으로 눌러 넣고(자료의 정점 자리), 체형·얼굴형·손을 밀고, 입술선 좌표를 굽는다.
+## 몸: 머리 면은 인형 머리(자료 heads)로 통째로 바꾸고, 나머지 면(목·몸·팔·손)은 체형·목 앞 얼굴형·손 두께를 민다.
 static func _shape_body(id: String, surface: int, arrays: Array) -> void:
 	var data: LookData = _data
-	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var head: bool = surface == data.head_surface
-	if head:
-		if verts.size() == data.head_vertex_count:
-			var moved_index: PackedInt32Array = data.moved_index
-			var moved_position: PackedVector3Array = data.moved_position
-			for k in range(moved_index.size()):
-				verts[moved_index[k]] = moved_position[k]
-		else:
-			push_warning("캐릭터 조립: 승인 모델 머리 정점 수가 자료와 달라 옛 머리 눌러 넣기를 건너뜁니다(character_look_data.res 를 다시 만드세요).")
-	var rest_y := PackedFloat32Array()
-	var rest_z := PackedFloat32Array()
-	if head:
-		rest_y.resize(verts.size())
-		rest_z.resize(verts.size())
-		for i in range(verts.size()):
-			rest_y[i] = verts[i].y
-			rest_z[i] = verts[i].z
-	verts = _morph(id, "Body", verts)
-	arrays[Mesh.ARRAY_VERTEX] = verts
-	if head:
-		# 입술선만 남기고 그림 머리카락·눈썹을 살색으로 지우는 데 쓰는 쉬는 자세 좌표(character_skin.gdshaderinc 참고).
-		# 얼굴형 변형 전 좌표를 쓴다(턱을 내려도 입술선 고르기는 같게).
-		var uv2 := PackedVector2Array()
-		uv2.resize(verts.size())
-		for i in range(verts.size()):
-			uv2[i] = Vector2(rest_y[i], rest_z[i])
-		arrays[Mesh.ARRAY_TEX_UV2] = uv2
+	if surface == data.head_surface:
+		if (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() == data.head_vertex_count and data.heads.has(id):
+			_doll_head(id, arrays)
+			return
+		push_warning("캐릭터 조립: 승인 모델 머리 정점 수가 자료와 달라 인형 머리를 건너뜁니다(character_look_data.res 를 다시 만드세요).")
+	arrays[Mesh.ARRAY_VERTEX] = _morph(id, "Body", arrays[Mesh.ARRAY_VERTEX])
 
 
-static func _skin_material(id: String, surface: int, head: bool, original: Material) -> Material:
+## 인형 머리: 승인 모델 머리 면(arrays)을 자료의 새 머리로 바꾼다(그 자리에서 배열을 갈아 끼운다).
+##   v6(2026-11-28 밤): 얼굴은 승인 모델 면을 그대로(좌우 거울 대칭) 쓰고 두피만 둥근 인형 머리 — 정점을 나눠 쓴다(i 번호 목록).
+##   뼈 가중치: w(정점마다 승인 모델 원본 정점 번호)가 있으면 그것을, 없으면(v5 자료) 이음새 정점은 그 원래 정점 것을,
+##   나머지는 머리 뼈 하나(head_rigid_src 정점 것)를 베낀다.
+##   이음새 법선(seam ≥ 0)은 원래 것을 베낀다 → 목과 빛이 끊기지 않는다.
+##   색: 정점 색 키(0 피부 · 1 흰자 · 2 눈동자 · 3 입 · 4 눈썹) → 캐릭터 색(sRGB). 알파 = 거칠기(눈은 조금 반짝).
+static func _doll_head(id: String, arrays: Array) -> void:
+	var head: Dictionary = _data.heads[id]
+	var points: PackedVector3Array = head["v"]
+	var normals: PackedVector3Array = (head["n"] as PackedVector3Array).duplicate()
+	var keys: PackedByteArray = head["k"]
+	var seam: PackedInt32Array = head["seam"]
+	var bone_src: PackedInt32Array = head.get("w", PackedInt32Array())
+	var old_normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var old_bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var old_weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var stride: int = old_bones.size() / (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var look: Dictionary = LOOKS[id]
+	var palette: Array[Color] = [Color(str(look.skin)), EYE_WHITE, PUPIL, Color(str(look.mouth)), Color(str(look.brow))]
+	for k in range(palette.size()):
+		palette[k].a = HEAD_ROUGHNESS[k]
+	var count: int = points.size()
+	var colors := PackedColorArray()
+	var bones := PackedInt32Array()
+	var weights := PackedFloat32Array()
+	var shared: bool = head.has("i")
+	var index: PackedInt32Array = head["i"] if shared else PackedInt32Array()
+	colors.resize(count)
+	bones.resize(count * stride)
+	weights.resize(count * stride)
+	if not shared:
+		index.resize(count)
+	for i in range(count):
+		colors[i] = palette[mini(keys[i], palette.size() - 1)]
+		var src: int = seam[i]
+		if src >= 0:
+			normals[i] = old_normals[src]
+		elif not shared:
+			src = _data.head_rigid_src
+		if shared:
+			src = bone_src[i]
+		for j in range(stride):
+			bones[i * stride + j] = old_bones[src * stride + j]
+			weights[i * stride + j] = old_weights[src * stride + j]
+		if not shared:
+			index[i] = i
+	arrays.fill(null)
+	arrays[Mesh.ARRAY_VERTEX] = points
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_BONES] = bones
+	arrays[Mesh.ARRAY_WEIGHTS] = weights
+	arrays[Mesh.ARRAY_INDEX] = index
+
+
+## 인형 머리 색 키별 거칠기(정점 색 알파): 피부 · 흰자 · 눈동자 · 입 · 눈썹.
+const HEAD_ROUGHNESS: Array[float] = [0.86, 0.42, 0.3, 0.7, 0.95]
+
+
+## 인형 머리 재질(모든 캐릭터가 하나를 같이 쓴다 — 색은 정점에). 몸과 같은 피부 셰이더를 써서 목 이음새 빛이 같다.
+static func _doll_head_material() -> Material:
+	var key := "skin/doll_head"
+	if not _materials.has(key):
+		var material := ShaderMaterial.new()
+		material.resource_name = "CharacterDollHead"
+		material.shader = SKIN_SHADER
+		material.set_shader_parameter("vertex_paint", true)
+		_materials[key] = material
+	return _materials[key]
+
+
+static func _skin_material(id: String, surface: int, original: Material) -> Material:
 	var key: String = "skin/%s/%d" % [id, surface]
 	if _materials.has(key):
 		return _materials[key]
@@ -361,9 +487,8 @@ static func _skin_material(id: String, surface: int, head: bool, original: Mater
 	material.set_shader_parameter("hair_new", _linear(Color(look.hair)))
 	material.set_shader_parameter("brow_new", _linear(Color(look.brow)))
 	material.set_shader_parameter("hair_ref_lum", _linear(HAIR_REF).dot(Vector3(0.2126, 0.7152, 0.0722)))
-	# 면 0 = 얼굴·몸 그림(피부와 머리카락이 섞임), 머리 면 = 머리 그림 — 나머지 면(팔·손·다리)은 그림 전체가 피부.
-	material.set_shader_parameter("all_skin", surface != 0 and not head)
-	material.set_shader_parameter("is_head", head)
+	# 면 0 = 얼굴·몸 그림(피부와 머리카락이 섞임), 머리 면 = 머리 그림 — 나머지 면(목·팔·손)은 그림 전체가 피부.
+	material.set_shader_parameter("all_skin", surface != 0 and surface != _data.head_surface)
 	_materials[key] = material
 	return material
 
@@ -427,20 +552,23 @@ static func _morph(id: String, part_name: String, verts: PackedVector3Array) -> 
 	elif id == "on":
 		verts = _morph_on(verts)
 	if part_name == "Body":
+		# 목 앞(턱 밑)은 인형 머리 얼굴형과 같은 식 → 이음새가 맞는다. 기본 인형은 승인 몸 그대로(손도).
 		verts = _morph_face(id, verts)
-		verts = _morph_hands(verts)
+		if id != "base":
+			verts = _morph_hands(verts)
 	return verts
 
 
 # ─────────────────────────────── 얼굴형 · 손 (2026-11-27 v2) ───────────────────────────────
 # 승인 모델 얼굴: 좁은 턱 · 긴 쐐기 코(끝 y 1.48, z −0.295) · 입술선 y 1.43~1.44 · 턱 밑 1.344 · 눈 1.56~1.62.
-# 눈·이마·두개골(1.56 m 위)은 건드리지 않는다 → 모자·안경 자리, 입체 눈썹·새 머리 자리가 그대로 맞는다.
+# 눈·이마·두개골(1.56 m 위)은 건드리지 않는다 → 모자·안경·헤어 자리가 그대로 맞는다.
+# 인형 머리(v3)는 이 식을 자료에 구워 두었다(hair_geo.py morph_face — 숫자를 고치면 둘 다) → 여기서는 목 앞 면만 민다.
 # 얼굴 앞(z < −0.02)만 민다 → 뒤통수·목 뒤는 그대로. 같은 자리 정점(면 경계)은 같은 함수로 움직여 틈이 생기지 않는다.
 
 ## 캐릭터별 얼굴형: [턱 폭(+넓게/−좁게), 턱끝 위아래(m, +위), 턱끝 폭, 볼 볼륨, 코 길이 줄임(0~1), 코 폭].
 const FACE: Dictionary = {
 	"jun": [-0.05, -0.006, -0.03, 0.0, 0.0, -0.06],   # 길고 좁은 얼굴 · 긴 턱 · 곧은 긴 코
-	"som": [0.03, 0.012, 0.12, 0.14, 0.80, 0.0],      # 둥근 볼 · 짧고 둥근 턱 · 짧은 코
+	"som": [0.03, 0.012, 0.12, 0.14, 0.0, 0.0],       # 둥근 볼 · 짧고 둥근 턱 · 코는 다른 캐릭터처럼 높게(2026-11-28 밤 — 예전 0.80 짧은 코)
 	"on": [0.16, -0.004, 0.14, 0.0, 0.15, 0.38],      # 넓고 각진 턱 · 넓은 코
 }
 
@@ -612,16 +740,32 @@ static func _bump(x: float, a: float, peak: float, b: float) -> float:
 
 # ─────────────────────────────── 덧붙이는 단단한 조각 ───────────────────────────────
 
-## 새 머리·소맷단·깃·탭 등을 한 메시로 묶는다. 조각마다 한 뼈에 통째로(가중치 1) 붙는다.
+## 헤어·소맷단·깃·탭 등을 한 메시로 묶는다. 조각마다 한 뼈에 통째로(가중치 1) 붙는다.
+## 헤어 조각(kind "hair")은 헤어 키(hair)로, 캐릭터 조각(kind "extra")은 캐릭터 키(id)로 고른다 → 어느 캐릭터에 어느 헤어든 끼운다.
 ## 면마다 밝기를 조금 흔들어 낮은 다각형 느낌을 살린다. 1인칭 팔이 오른팔 면만 골라내므로 번호(인덱스) 배열을 갖는다.
-static func _parts_mesh(id: String, hat_on: bool, shirt_color: Variant, skin: Skin) -> ArrayMesh:
+static func _parts_mesh(id: String, hair: String, hat_on: bool, shirt_color: Variant, skin: Skin) -> ArrayMesh:
+	var key: String = _parts_key(id, hair, hat_on, shirt_color, skin)
+	if not _meshes.has(key):
+		_data_resource()
+		_meshes[key] = _parts_from_arrays(_parts_arrays(id, hair, hat_on, shirt_color, _bind_table(skin)))
+	return _meshes[key]
+
+
+static func _parts_key(id: String, hair: String, hat_on: bool, shirt_color: Variant, skin: Skin) -> String:
 	var shirt_key: String = str(shirt_color) if shirt_color is Color else "-"
-	var key: String = "parts/%s/%s/%s/%d" % [id, hat_on, shirt_key, skin.get_instance_id()]
-	if _meshes.has(key):
-		return _meshes[key]
+	return "parts/%s/%s/%s/%s/%s" % [id, hair, hat_on, shirt_key, _resource_key(skin)]
+
+
+## 뼈 이름 → 스킨 바인드 번호.
+static func _bind_table(skin: Skin) -> Dictionary:
 	var binds: Dictionary = {}
 	for bind in range(skin.get_bind_count()):
 		binds[str(skin.get_bind_name(bind))] = bind
+	return binds
+
+
+## 조각 메시의 면 배열(정점 계산만 — 일꾼 스레드에서도 부른다. _data 는 미리 읽혀 있어야 한다).
+static func _parts_arrays(id: String, hair: String, hat_on: bool, shirt_color: Variant, binds: Dictionary) -> Array:
 	var look: Dictionary = LOOKS[id]
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -629,15 +773,17 @@ static func _parts_mesh(id: String, hat_on: bool, shirt_color: Variant, skin: Sk
 	var bones := PackedInt32Array()
 	var weights := PackedFloat32Array()
 	var indices := PackedInt32Array()
-	for part: Dictionary in _data_resource().parts:
-		if str(part.id) != id or not binds.has(str(part.bone)):
+	for part: Dictionary in _data.parts:
+		var is_hair: bool = str(part.kind) == "hair"
+		if str(part.id) != (hair if is_hair else id) or not binds.has(str(part.bone)):
 			continue
-		var color := Color(look[str(part.color)])
-		if str(part.color) == "shirt" and shirt_color is Color:
+		var color_key: String = str(part.color)
+		var color := Color(str(look.get(color_key, HAIR_FIXED_COLORS.get(color_key, "ff00ff"))))
+		if color_key == "shirt" and shirt_color is Color:
 			color = shirt_color
 		var bind: int = binds[str(part.bone)]
 		var points: PackedVector3Array = part.v
-		if hat_on and str(part.kind) == "hair":
+		if hat_on and is_hair:
 			points = _under_hat(points)
 		var triangles: PackedInt32Array = part.t
 		var shade: float = float(part.shade)
@@ -668,17 +814,22 @@ static func _parts_mesh(id: String, hat_on: bool, shirt_color: Variant, skin: Sk
 	arrays[Mesh.ARRAY_BONES] = bones
 	arrays[Mesh.ARRAY_WEIGHTS] = weights
 	arrays[Mesh.ARRAY_INDEX] = indices
+	return arrays
+
+
+## 면 배열 → 메시(메인 스레드).
+static func _parts_from_arrays(arrays: Array) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
-	if not verts.is_empty():
+	if arrays.size() == Mesh.ARRAY_MAX and not (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mesh.surface_set_material(0, _parts_shared_material())
-	_meshes[key] = mesh
 	return mesh
 
 
 ## 모자 밑으로 들어갈 머리:
-##   1) 모자 밑면 바로 아래 띠(1.72 ~ 1.785 m)는 승인 모델 옛 곱슬머리 바깥선(HAT_FIT_OUTLINE)까지 부풀린다.
-##      모자 5종은 승인 모델 머리에 맞춰져 있어, 그보다 좁은 새 머리 위에서는 모자와 머리 사이가 떠 보였다(2026-11-27 v2).
+##   1) 모자 밑면 바로 아래 띠(1.72 ~ 1.785 m)는 승인 모델 옛 곱슬머리 바깥선(HAT_FIT_OUTLINE)에 맞춘다.
+##      모자 5종은 승인 모델 머리에 맞춰져 있어, 그보다 좁은 새 머리 위에서는 모자와 머리 사이가 떠 보였다(2026-11-27 v2) → 부풀린다.
+##      볼륨을 키운 헤어(2026-11-28 v4)는 바깥선보다 넓을 수 있다 → 모자 띠를 뚫지 않게 바깥선까지 좁힌다.
 ##   2) HAT_HAIR_LINE 위는 낮게 누르고 머리 가운데로 모은다(모자 꼭대기를 뚫고 나오지 않게).
 static func _under_hat(points: PackedVector3Array) -> PackedVector3Array:
 	var result := points.duplicate()
@@ -690,7 +841,7 @@ static func _under_hat(points: PackedVector3Array) -> PackedVector3Array:
 		var ex: float = p.x / outline.x
 		var ez: float = (p.z - outline.z) / outline.y
 		var e: float = sqrt(ex * ex + ez * ez)
-		if e > 0.05 and e < 1.0:
+		if e > 0.05:
 			var grow: float = lerpf(1.0, 1.0 / e, smoothstep(HAT_FIT_BAND.x, HAT_FIT_BAND.y, p.y))
 			p.x *= grow
 			p.z = outline.z + (p.z - outline.z) * grow

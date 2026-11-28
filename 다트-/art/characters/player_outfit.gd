@@ -6,6 +6,7 @@ extends RefCounted
 ## [무엇을 바꾸나] 보이기만 한다. 몸 충돌 캡슐·눈높이·판정·자리 색(●▲■◆ 이름표 색)은 그대로다.
 ##   look(꾸미기 값) = { "hat", "eyes", "mustache", "cigar", "watch", "shirt", "pants", "character" } — 칸마다 목록 번호(0 = 없음/기본).
 ##   "character"(2026-11-27) = 캐릭터 3안(기본·준·솜·온). 몸·옷 메시를 갈아 끼운다(art/characters/character_looks.gd).
+##   "hair"(2026-11-28) = 헤어 부품. 0 = 그 캐릭터의 기본 헤어. 인형 머리 위에 얹으므로 어느 캐릭터에나 끼운다.
 ##   이 값은 방 정보(RoomPlayer.look)로 모두에게 같이 간다 → 모든 화면에서 같은 차림으로 보인다.
 ## [어떻게 입히나] 캐릭터 GLB 는 건드리지 않는다. NPC 옷(art/pub/npc_outfit.gd)처럼 뼈(BoneAttachment3D)에 점토 부품을 붙이고,
 ##   옷 색만 셰이더(art/characters/shirt_tint.gdshader)로 몸통 그림의 티셔츠 칸을 다시 칠한다.
@@ -31,6 +32,8 @@ const SLOTS: Array = [
 	["pants", "바지 스타일", ["남색 기본", "차콜 일자", "올리브 와이드"]],
 	# 2026-11-27 캐릭터 3안. 순서 = character_looks.gd IDS(base·jun·som·on). 캐릭터 칸이 없는 옛 저장 파일은 0(기본)으로 열린다.
 	["character", "캐릭터", ["기본", "준", "솜", "온"]],
+	# 2026-11-28 헤어 부품. 순서 = character_looks.gd HAIRS. 0 = 캐릭터 기본 헤어(기본 캐릭터면 승인 모델 그대로).
+	["hair", "헤어", ["캐릭터 기본", "웨이브", "삐죽 숏컷", "단발", "짧은 곱슬", "스포츠 컷", "포니테일", "올림머리"]],
 ]
 ## 옷 색(위 "shirt" 이름과 같은 순서). 0 = 원래 그림 색(다시 칠하지 않음).
 const SHIRT_COLORS: Array[Color] = [Color("3d2738"), Color("b8343a"), Color("dd7a2c"), Color("e3c043"), Color("3f9a55"),
@@ -74,6 +77,8 @@ static func random_look(rng: RandomNumberGenerator) -> Dictionary:
 	look["character"] = rng.randi_range(0, CharacterLooks.IDS.size() - 1)
 	if int(look["character"]) > 0 and rng.randf() < 0.75:
 		look["shirt"] = 0
+	# 헤어는 대개 캐릭터 기본(얼굴과 어울리게 만든 것) — 가끔 다른 헤어.
+	look["hair"] = rng.randi_range(1, CharacterLooks.HAIRS.size() - 1) if rng.randf() < 0.35 else 0
 	return look
 
 
@@ -92,7 +97,7 @@ static func dress(model: Node3D, look: Dictionary) -> void:
 	# 캐릭터를 먼저 입힌다(몸·옷 메시가 바뀐다) → 그 위에 옷 색·바지·모자·안경·수염·시가·시계.
 	# 모자를 쓰면 새 머리 윗부분을 모자 속으로 눌러 넣는다. 옷 색을 고르면 상의 색과 같은 깃 조각도 같은 색.
 	var shirt: int = int(clean.shirt)
-	CharacterLooks.apply(model, int(clean.character), int(clean.hat) > 0, SHIRT_COLORS[shirt] if shirt > 0 else null)
+	CharacterLooks.apply(model, int(clean.character), int(clean.hat) > 0, SHIRT_COLORS[shirt] if shirt > 0 else null, int(clean.hair))
 	tint_shirt(model, shirt)
 	_fit_pants(model, int(clean.pants))
 	var skeleton := model.find_child("Skeleton3D", true, false) as Skeleton3D
