@@ -36,6 +36,9 @@ var _cover_side: int = -1
 var _seams := Vector2i.ONE
 var _move_direction := Vector2.RIGHT
 var _round_overrides: Dictionary = {}
+## 이번 라운드에 쓴 카드 한 장의 상태(card_effects["used_cards"] 의 Vector2i.y, 2026-11-28 HUD A 보완안).
+## LIVE = 아직 걸려 있음 · SPENT = 끝남 · NULLIFIED = 무효(×0)에 막힘.
+enum UsedCard { LIVE, SPENT, NULLIFIED }
 ## 쓰는 순간 끝나는 카드·사용 조건(2026-11-21).
 const Actions = preload("res://game/match/match_card_actions.gd")
 var actions: RefCounted
@@ -527,7 +530,7 @@ func _sync() -> void:
 			player.pending_slot = rules.seats[seat].slots.slice(0, raw).filter(func(card) -> bool: return card != null).size()
 		player.card_effects = modifiers(player.peer_id)
 		player.card_effects["details"] = _effect_details(seat)
-		player.card_effects["active_cards"] = _effect_cards(seat)
+		player.card_effects["used_cards"] = _used_cards(seat)
 		player.card_effects["choice"] = pending.choice if pending != null else -1
 		player.card_effects["retry_used"] = rules.seats[seat].retry_used
 		player.card_effects["extra_turn"] = rules.seats[seat].extra_turn
@@ -537,19 +540,22 @@ func _sync() -> void:
 		player.card_effects["mine_count"] = mines.size()
 
 
-## 지금 걸려 있는 효과의 **카드 종류**(2026-11-25 사용자 요청 "무슨 카드가 적용됐는지 모른다").
-## HUD 가 이 번호로 카드 그림을 띄운다(ui/active_cards.gd). 겹친 효과는 번호가 그만큼 여러 번 들어간다.
-## 범위가 공개되지 않는 효과(카드 번호가 없는 것)는 뺀다 — 글 줄은 _effect_details 가 따로 낸다.
-func _effect_cards(seat: int) -> Array[int]:
-	var types: Array[int] = []
+## 이번 라운드에 seat 가 쓴 카드, 쓴 순서대로 Vector2i(카드 번호, UsedCard 상태). HUD 가 사람별로 그린다(ui/used_cards.gd).
+## 2026-11-28 A 보완안: 예전 '적용 중' 카드 줄(지금 던지는 사람에게 걸린 카드)을 이 기록으로 합쳤다 — 걸려 있는 카드는 LIVE 로 밝게 보인다.
+## 카드를 실제로 쓴 기록 = RoundRules.use()·_nullify_from() 이 uid 를 매긴 효과다. 몸 명중 어지러움·모두 어지러움 나눔은
+## uid 가 0 이고, 투척자 벌칙(hit_penalty)은 카드가 아니라 뺀다. rules.effects 는 begin_round 에서 비우므로 기록도 라운드 단위다.
+func _used_cards(seat: int) -> Array[Vector2i]:
+	var used: Array[Vector2i] = []
 	for effect in rules.effects:
-		if effect.target != seat or effect.card_type < 0:
+		if effect.source != seat or effect.uid <= 0 or effect.kind == "hit_penalty":
 			continue
-		var next_dart: bool = effect.timing == Catalog.Timing.NEXT_DART and effect.state == Rules.EffectState.QUEUED
-		var turn: bool = effect.timing in [Catalog.Timing.TURN, Catalog.Timing.ROUND] and effect.state == Rules.EffectState.ACTIVE
-		if next_dart or turn:
-			types.append(int(effect.card_type))
-	return types
+		var status: int = UsedCard.SPENT
+		if effect.state == Rules.EffectState.NULLIFIED:
+			status = UsedCard.NULLIFIED
+		elif effect.state in [Rules.EffectState.QUEUED, Rules.EffectState.ACTIVE]:
+			status = UsedCard.LIVE
+		used.append(Vector2i(effect.card_type, status))
+	return used
 
 
 ## 같은 효과는 횟수를 합쳐 실제 유효한 효과와 남은 범위만 공개한다.

@@ -37,6 +37,18 @@ const ROW_ARC_RAISE: float = 0.09
 const LIFTED_SHADOW_GROW: float = 1.6
 var row_camera: Camera3D
 
+## 1인칭 한 줄 손패에서 카드 한 장의 화면 크기(px). 줄 배치(_process)와 HUD 의 손패 위 '내가 쓴 카드' 줄(ui/used_cards.gd)이 같이 쓴다.
+static func row_card_size(viewport_size: Vector2) -> Vector2:
+	var area := HAND_RECT.size * viewport_size
+	var width := minf(area.y * CardView.SIZE.x / CardView.SIZE.y, area.x * 0.36)
+	return Vector2(width, width * CardView.SIZE.y / CardView.SIZE.x)
+
+
+## 1인칭 손패 줄의 윗가장자리(화면 y, px). ROW_ARC_RAISE 로 올린 것까지 넣는다. 꺼내 든 카드는 이보다 더 올라온다.
+static func row_top(viewport_size: Vector2) -> float:
+	return HAND_RECT.end.y * viewport_size.y - row_card_size(viewport_size).y * (1.0 + ROW_ARC_RAISE)
+
+
 func configure_screen_row(camera: Camera3D) -> void:
 	row_camera = camera
 	transform = Transform3D.IDENTITY
@@ -128,8 +140,9 @@ func _process(delta: float) -> void:
 		if row_camera != null:
 			var viewport_size := row_camera.get_viewport().get_visible_rect().size
 			var rect := Rect2(HAND_RECT.position * viewport_size, HAND_RECT.size * viewport_size)
-			var width := minf(rect.size.y * CardView.SIZE.x / CardView.SIZE.y, rect.size.x * 0.36)
-			var height := width * CardView.SIZE.y / CardView.SIZE.x
+			var card_size := row_card_size(viewport_size)
+			var width := card_size.x
+			var height := card_size.y
 			var step := (rect.size.x - width) / maxi(6, count - 1)
 			step -= maxf(width - step, 0.0) * 0.21
 			var offset := _row_offset(i, count, lifted_index, step, width, rect.size.x - width)

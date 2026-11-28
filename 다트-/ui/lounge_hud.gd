@@ -3,7 +3,9 @@ extends CanvasLayer
 ## 2026-11-22: 판넬(검정 배경)을 모두 걷어 냈다 — 사용자 요청 "배경을 가리는 걸 최소화". 글자는 잉크 외곽선으로 읽힌다(Style.outline).
 ##
 ##   왼쪽 위    점수판(이름 · 점수만) — ui/score_list.gd. 라운지에서만 "DARTY 라운지" 머리글과 준비 안내가 붙는다.
-##   오른쪽 위  방 정보(라운지만) + 초대 코드 복사, 그 아래 킬로그 — ui/kill_feed.gd
+##   오른쪽 위  방 정보(라운지만) + 초대 코드 복사 · 경기 중엔 이번 라운드에 상대가 쓴 카드(사람별) — ui/used_cards.gd,
+##              그 아래 킬로그 — ui/kill_feed.gd
+##   왼쪽 아래  손패 줄 바로 위 '내가 쓴 카드' — ui/used_cards.gd
 ##   가운데     조준점 + 충전 막대(다트·소품 던지기)
 ##   아래 가운데 키 안내 칩(키캡 + 할 일), 대기실이면 준비 현황(✓ 이름)
 ##   가운데 위  라운드 칸(◆ 카드 충전 · ● 다트) · 지금 단계 → 다음 단계 · 남은 초(큰 숫자 + 막대) — ui/round_banner.gd
@@ -23,7 +25,16 @@ const MatchCards = preload("res://game/match/match_cards.gd")
 ## 위 가운데 라운드·남은 시간 표시(2026-10-31 저녁 — 다트 라운드 → 다음 카드 충전 라운드).
 const RoundBanner = preload("res://ui/round_banner.gd")
 const SectorPicker = preload("res://ui/sector_picker.gd")
-const ActiveCards = preload("res://ui/active_cards.gd")
+## 이번 라운드에 쓴 카드(2026-11-28 A 보완안). 예전 '적용 중' 카드 줄(active_cards.gd)을 대신한다.
+const UsedCards = preload("res://ui/used_cards.gd")
+const HandFan = preload("res://game/card_round/cards/hand_fan.gd")
+## 내 줄과 1인칭 손패 줄 사이 간격(px).
+const MINE_ABOVE_FAN: float = 10.0
+## 상대 카드가 날아올 자리: 과녁 가운데에서 오른쪽으로 과녁 반지름의 몇 배인가.
+const FLIGHT_BOARD_GAP: float = 1.6
+## 과녁이 화면 가장자리 이만큼(px) 안쪽에 없으면 대신 조준점 오른쪽 위(화면 비율)로 날린다.
+const FLIGHT_MARGIN: float = 80.0
+const FLIGHT_FALLBACK := Vector2(0.62, 0.4)
 ## 내 차례 알림이 떠 있는 시간(초).
 const TURN_POPUP_SECONDS: float = 2.2
 ## 카드별 "지금 쓸 수 있나" 조건 — 방장(MatchCards._use)과 같은 함수(2026-11-21).
@@ -40,8 +51,8 @@ var _scores: ScoreList
 var _phase_title: Label
 var _phase_detail: Label
 var _effects: Label
-## 오른쪽 위: 지금 걸려 있는 카드 그림(2026-11-25).
-var _active_cards: Control
+## 오른쪽 위 상대 카드(사람별) + 왼쪽 아래 내 카드(2026-11-28).
+var _used_cards: UsedCards
 var _drowsy_hint: Label
 var _timer_bar: ProgressBar
 var _banner: RoundBanner
@@ -177,10 +188,10 @@ func _build_room_corner() -> void:
 		_copy.text = "복사했어요 ✓")
 	_copy.icon = null
 	_copy.custom_minimum_size = Vector2(210, 48)
-	_active_cards = ActiveCards.new()
-	_active_cards.name = "ActiveCards"
-	_active_cards.visible = false
-	_root.add_child(_active_cards)
+	_used_cards = UsedCards.new()
+	_used_cards.name = "UsedCards"
+	_used_cards.visible = false
+	_root.add_child(_used_cards)
 	_feed = KillFeed.new()
 	_feed.name = "KillFeed"
 	_root.add_child(_feed)
@@ -434,10 +445,10 @@ func _process(delta: float) -> void:
 	_room.visible = waiting
 	_feed.visible = not game.throw_input.charging and not finished
 	if not waiting: _feed.position.y = TOP
-	# 오른쪽 위는 위에서부터 "적용 중" 카드 그림 → 킬로그 순서다(2026-11-25). 카드 줄이 자리를 먼저 잡는다.
-	_update_active_cards(state, width, waiting or finished)
-	if _active_cards.visible:
-		_feed.position.y = maxf(_feed.position.y, _active_cards.position.y + _active_cards.size.y + 12)
+	# 오른쪽 위는 위에서부터 "상대가 쓴 카드"(사람별) → 킬로그 순서다(2026-11-28). 카드 묶음이 자리를 먼저 잡는다.
+	_update_used_cards(state, extent, ratio, width, waiting or finished)
+	if _used_cards.visible and _used_cards.has_opponent_cards():
+		_feed.position.y = maxf(_feed.position.y, _used_cards.opponents_bottom() + 12)
 	# 키 안내 칩(height - 92) 위에 둔다 — 부채가 열리면 칩이 오른쪽으로 비켜 겹칠 수 있다.
 	_card_panel.position = Vector2(width - 28 - _card_panel.size.x, height - 112 - _card_panel.size.y)
 	_update_prompt()
@@ -485,17 +496,31 @@ func _update_effects(state: MatchState, hidden: bool) -> void:
 		_effects.text = "적용 중 · %s\n%s" % [active.display_name, text]
 
 
-## 오른쪽 위 카드 그림(2026-11-25). 지금 던지는 사람에게 걸린 카드를 보인다 —
-## 방해 카드는 남이 걸어도 효과는 던지는 사람에게 가므로, 내 차례면 곧 "나에게 걸린 카드"다.
-func _update_active_cards(state: MatchState, width: float, hidden: bool) -> void:
-	var active: MatchPlayer = state.active_player()
-	var types: Array = active.card_effects.get("active_cards", []) if active != null else []
-	if hidden or active == null:
-		types = []
-	_active_cards.show_cards(types, active.display_name if active != null else "")
-	if not _active_cards.visible:
+## 이번 라운드에 쓴 카드(2026-11-28 A 보완안): 상대는 오른쪽 위 사람별 묶음, 나는 손패 줄 바로 위.
+## 내 줄은 카드를 꺼내 든 동안 숨긴다 — 꺼낸 카드가 그 자리로 올라온다.
+## extent = 화면 픽셀 크기, ratio = HUD 배율(_root.scale). 손패 줄·과녁 자리는 픽셀로 재서 HUD 좌표로 나눈다.
+func _update_used_cards(state: MatchState, extent: Vector2, ratio: float, width: float, hidden: bool) -> void:
+	_used_cards.visible = not hidden
+	if hidden:
 		return
-	_active_cards.position = Vector2(width - EDGE - _active_cards.size.x, TOP)
+	var me: MatchPlayer = state.find_player(game.controller.local_peer_id)
+	var mine_origin := Vector2(HandFan.HAND_RECT.position.x * extent.x, HandFan.row_top(extent) - MINE_ABOVE_FAN) / ratio
+	_used_cards.flight_target = _flight_target(extent) / ratio
+	_used_cards.place(width - EDGE, TOP, mine_origin)
+	_used_cards.show_round(state.players, game.controller.local_peer_id, me == null or me.pending_card >= 0)
+
+
+## 상대 카드가 날아올 자리(화면 픽셀): 보이는 과녁의 오른쪽 옆. 과녁이 화면 밖·뒤에 있으면 조준점 오른쪽 위.
+func _flight_target(extent: Vector2) -> Vector2:
+	var fallback: Vector2 = extent * FLIGHT_FALLBACK
+	var camera: Camera3D = game.camera
+	if camera == null:
+		return fallback
+	var side: Vector3 = TableView.BOARD_CENTER + camera.global_basis.x * BoardLayout.RADIUS * TableView.BOARD_SCALE * FLIGHT_BOARD_GAP
+	if camera.is_position_behind(side):
+		return fallback
+	var point: Vector2 = camera.unproject_position(side)
+	return point if Rect2(Vector2.ZERO, extent).grow(-FLIGHT_MARGIN).has_point(point) else fallback
 
 
 ## 점수판은 라운지에서만 화면에 띄운다. 경기 중에는 과녁 벽의 사람별 점수판(game/table/score_wall.gd)이 맡는다

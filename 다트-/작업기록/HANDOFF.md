@@ -1,3 +1,17 @@
+# 2026-11-28 인수인계 — 카드 사용 HUD(A 보완안)
+
+- **'적용 중' 카드 줄(`ui/active_cards.gd`)은 지웠다.** 오른쪽 위는 이제 `ui/used_cards.gd` 의 상대 사람별 묶음이고,
+  걸려 있는 카드는 밝게 남아서 그 역할을 겸한다. 아래 11-25 메모의 `active_cards`·`CARD_SIZE`·`MAX_CARDS` 는 더는 없다.
+- **기록 원본은 `MatchCards._used_cards`**(방장) → `card_effects["used_cards"]` = `Vector2i(카드 번호, MatchCards.UsedCard)`.
+  "카드를 쓴 기록" = `rules.effects` 중 `uid > 0` 이고 `kind != "hit_penalty"` 인 것(쓴 카드·무효로 사라진 꺼낸 카드).
+  `RoundRules` 에 uid 를 안 매기는 효과(몸 명중 어지러움·모두 어지러움 나눔)나 카드 아닌 효과를 새로 만들면 여기서 걸러지는지 볼 것.
+- 기록은 `rules.effects` 와 같이 **라운드 단위**다(`begin_round` 가 비운다).
+- **새로 쓴 카드는 "같은 사람의 기록 길이가 늘었다"로 안다**(`UsedCards.show_round`). 처음 보는 사람·라운드가 바뀌어 줄어든 경우는 날리지 않는다.
+- 손패 위 내 줄 자리는 `HandFan.row_top()` 이 1인칭 부채와 같은 식(`row_card_size`)으로 잰다. 부채 줄 크기·높이를 바꾸면 따라온다.
+- 날아갈 자리는 `LoungeHUD._flight_target` — 과녁 오른쪽 옆, 과녁이 화면 밖이면 조준점 오른쪽 위. '움직임 줄이기' 설정이면 날리지 않는다.
+
+---
+
 # 2026-11-28 · 조준점과 다트머신
 
 점수 표시기는 스냅샷 변경 시에만 그린다. 펍 옷장 코너나 오른쪽 안내판을 편집한 뒤에는 pub_builder.gd의 --game-room-only로 경기 방을 다시 생성한다. [변경·검증 기록](2026-11-28_조준점_전자점수판.md)

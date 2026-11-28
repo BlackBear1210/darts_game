@@ -50,6 +50,7 @@ F5는 `Main/FrontDoor`로 시작한다. `RoomSettings`는 공유 규칙, `Player
 - `ui/lounge_hud.gd`: 짧은 효과 피드·준비 인원·카드 키·상호작용·공동 순위. 기존 `GameHUD`는 legacy 예시/서버 검증 경로에 남긴다.
 - 점수는 경기 중 화면에 겹쳐 그리지 않는다(2026-11-27). `ui/score_list.gd`는 라운지에서만 보이고, 경기 중에는 과녁 벽 점수판(`game/table/score_wall.gd`)이 맡는다.
 - `ui/round_banner.gd`: 화면 위 가운데 라운드 칸(카드 충전·다트)·지금 → 다음 단계·남은 초. `MatchState` 를 읽기만 한다.
+- `ui/used_cards.gd`(2026-11-28): 이번 라운드에 쓴 카드 — 오른쪽 위 상대 사람별 묶음(킬로그는 그 아래), 손패 줄 위 내 카드, 상대가 새로 쓴 카드는 과녁 옆까지 날아왔다 돌아간다. 방장 `MatchCards._used_cards` 가 `card_effects["used_cards"]`(Vector2i(카드 번호, 상태))로 보내고 화면은 읽기만 한다. 예전 '적용 중' 카드 줄(`ui/active_cards.gd`)을 대신한다.
 - `game/table/seat_cards.gd`, `held_cards.gd`: 매트 위 앞면 카드와 다른 캐릭터 왼손 카드 부채. 스냅샷의 hand/pending_slot 을 보여 주기만 한다.
 - `game/lounge/emotes.gd`: T 감정표현. 손님 → 방장 `"emote"` 액션, 방장이 간격 확인 후 `"emote"` 이벤트. 봇 반응은 방장이 킬로그로 정한다.
 - `network/voice_chat.gd`(2026-11-01): `NetworkSession/VoiceChat`. 마이크 → 16 kHz μ-law 40 ms 묶음 → 손님 `_voice_up`(채널 3) → 방장이 발신자·방·크기·초당 양 검사 후 `_voice_down` 으로 같은 방 사람에게 중계. 말하는 사람마다 AudioStreamGenerator 재생기(버스 `Voice`). `class_name` 없이 `preload` 로 쓴다.
