@@ -51,7 +51,7 @@ func _ready() -> void:
 	_root.theme = Style.theme()
 	add_child(_root)
 	var dim := ColorRect.new()
-	dim.color = Color(0.06, 0.035, 0.06, 0.86)
+	dim.color = Color(Style.INK, 0.74)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(dim)
 	var center := CenterContainer.new()
@@ -157,6 +157,29 @@ func _render() -> void:
 	else: _room()
 
 func _personal() -> void:
+	Style.section(_body, "조준점", Style.GOLD)
+	var sample := preload("res://ui/aim_reticle.gd").new()
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 12)
+	var glass := PanelContainer.new()
+	glass.custom_minimum_size = Vector2(80, 64)
+	glass.add_theme_stylebox_override("panel", Style.flat(Style.INK, Style.GOLD.darkened(0.5), 1, 10, 0))
+	controls.add_child(glass)
+	glass.add_child(sample)
+	var shape := Style.select(["십자가", "원형"], Preferences.reticle_shape, func(index: int) -> void:
+		Preferences.reticle_shape = index
+		sample.refresh(0.0))
+	controls.add_child(shape)
+	var picker := ColorPickerButton.new()
+	picker.custom_minimum_size = Vector2(72, 44)
+	picker.tooltip_text = "조준점 색상"
+	picker.edit_alpha = false
+	picker.color = Preferences.reticle_color
+	picker.color_changed.connect(func(value: Color) -> void:
+		Preferences.reticle_color = value
+		sample.refresh(0.0))
+	controls.add_child(picker)
+	Style.row(_body, "모양 · 색상", controls)
 	# 토큰(2026-11-23). 경기 결과 말고도 아무 때나 확인할 수 있는 자리 — 꾸미기 방까지 걸어가지 않아도 된다.
 	Style.section(_body, "토큰", Style.GOLD)
 	Style.heading(_body, "가진 토큰 %d개" % PlayerWallet.tokens, 30, Style.PINK if PlayerWallet.tokens < 0 else Style.GOLD)

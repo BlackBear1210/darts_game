@@ -68,7 +68,7 @@ class Shade extends Control:
 		resized.connect(queue_redraw)
 
 	func _draw() -> void:
-		var ink := Color(0.07, 0.045, 0.07)
+		var ink := Style.INK
 		var w := size.x
 		var h := size.y
 		for i in range(STEPS):

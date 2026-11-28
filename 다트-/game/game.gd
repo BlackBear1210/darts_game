@@ -933,8 +933,7 @@ func _process(delta: float) -> void:
 			if Preferences.visual_effects and not Preferences.reduced_motion: camera.rotation.z += sin(Time.get_ticks_msec() / 800.0) * _screen_fx.sway * 0.035
 		if _last_quality != Preferences.quality:
 			_last_quality = Preferences.quality
-			get_viewport().scaling_3d_scale = [0.65, 0.85, 1.0][_last_quality]
-			get_viewport().msaa_3d = Viewport.MSAA_2X if _last_quality == 2 else Viewport.MSAA_DISABLED
+			Preferences.apply_3d_quality(get_viewport())
 		for actor: PlayerView in actors.values():
 			var identity: RoomPlayer = session.room.find_player(actor.identity.peer_id)
 			actor.ready_pose = session.room.phase == RoomState.Phase.LOBBY and identity != null and identity.is_ready and not identity.is_bot
@@ -1009,11 +1008,15 @@ func _apply_state() -> void:
 	_sync_hand_fan()
 	if held_cards != null:
 		held_cards.sync(actors, controller.state.players, controller.local_peer_id)
-	var shooter := controller.state.active_player()
-	# 점수·차례·벌칙은 과녁 벽 점수판(game/table/score_wall.gd)이 보여 준다 — 화면 UI 로 겹쳐 그리지 않는다.
-	table.show_scores(controller.state.players, shooter.peer_id if shooter != null else 0, controller.state.punish_target)
-	if table.machine != null and shooter != null:
-		table.machine.set_readout(shooter.display_name, shooter.score)
+	var state := controller.state
+	var shooter := state.active_player() if state.phase in MatchController.DART_PHASES else null
+	table.show_scores(state.players, shooter.peer_id if shooter != null else 0, state.punish_target)
+	if table.machine != null:
+		if shooter == null:
+			table.machine.set_readout("", 0)
+		else:
+			table.machine.set_readout(shooter.display_name, shooter.score, PlayerLook.COLORS[shooter.seat],
+				Vector2i(state.match_id, state.turn_id), shooter.peer_id == controller.local_peer_id)
 	if _shown_turn != controller.state.turn_id:
 		_shown_turn = controller.state.turn_id
 		_clear_darts()

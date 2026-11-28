@@ -65,6 +65,8 @@ var _card_status: Label
 ## 지금 꺼내 든 카드(손패 번호·종류)와 꺼낸 시각. 방장의 준비 시간(Rules.READY_SECONDS)을 화면에서 따라 센다.
 var _shown_pending: Vector2i = Vector2i(-1, -1)
 var _pending_since: float = 0.0
+const Reticle = preload("res://ui/aim_reticle.gd")
+var _reticle: Reticle
 var _charge: ProgressBar
 var _result: PanelContainer
 var _result_rows: VBoxContainer
@@ -88,7 +90,6 @@ var _turn_popup: Control
 var _turn_popup_title: Label
 var _turn_popup_note: Label
 var _turn_popup_age: float = TURN_POPUP_SECONDS
-var _turn_popup_shown: int = -1
 ## 벌칙 알림을 띄워 준 대상(peer ID). 벌칙 라운드마다 한 번만 뜨게 한다.
 var _punish_popup_shown: int = 0
 ## 구역 고르기 팝업(2026-11-24). 떠 있는 동안 마우스를 풀어 클릭할 수 있게 한다.
@@ -188,14 +189,9 @@ func _build_room_corner() -> void:
 func _build_bottom() -> void:
 	_drowsy_hint = Style.label(_root, "졸림 · 조준 오차가 생길 수 있어요", 16, Style.GOLD)
 	_drowsy_hint.visible = false
-	var reticle := Style.label(_root, "·", 40, Style.MINT)
-	reticle.add_theme_color_override("font_outline_color", Style.INK)
-	reticle.add_theme_constant_override("outline_size", 8)
-	reticle.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	reticle.offset_left = -8
-	reticle.offset_right = 8
-	reticle.offset_top = -22
-	reticle.offset_bottom = 22
+	_reticle = Reticle.new()
+	_root.add_child(_reticle)
+	_reticle.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_charge = _bar(Style.PINK, 10)
 	_charge.custom_minimum_size = Vector2(180, 10)
 	_charge.size = Vector2(180, 10)
@@ -462,12 +458,20 @@ func _process(delta: float) -> void:
 	var charge: float = -1.0
 	if game.throw_input.charging: charge = game.throw_input.timing
 	elif game.has_method("prop_charge") and game.prop_charge() >= 0.0: charge = game.prop_charge()
+	_reticle.refresh(charge)
+	_reticle.visible = not finished
 	_charge.visible = charge >= 0.0
 	_charge.value = charge * 100.0
 	_charge.position = Vector2((width - 180) / 2, height / 2 + 34)
 	_drowsy_hint.visible = Preferences.visual_effects and game.throw_input.enabled and me != null and bool(me.card_effects.get("drowsy", false))
 	_drowsy_hint.position = Vector2((width - _drowsy_hint.size.x) / 2, height / 2 + 58)
-	_overlay.queue_redraw()
+	var has_overlay := _drowsy_hint.visible
+	if game.lounge != null:
+		var id: int = game.controller.local_peer_id
+		has_overlay = has_overlay or game.lounge.effect_left(id, "ink") > 0 or game.lounge.effect_left(id, "blind") > 0
+	_overlay.visible = has_overlay
+	if has_overlay:
+		_overlay.queue_redraw()
 
 
 func _update_effects(state: MatchState, hidden: bool) -> void:
@@ -718,27 +722,16 @@ func _update_prompt() -> void:
 
 
 ## 차례가 바뀌면 크게 알린다. 차례마다 한 번, TURN_POPUP_SECONDS 동안 커졌다가 사라진다.
-## [2026-11-27 사용자 요청 "누구 차례인지 알기가 쉽지 않다" · "벌칙 받는 사람이 누군지 잘 알려 달라"]
-## 예전에는 내 차례만 알렸다 → 차례가 바뀔 때마다 누구 차례인지 자리 색으로 알리고,
-## 벌칙 라운드가 시작되면 묶인 사람을 한 번 크게 알린다.
+## 차례는 머신 표시창에서 알린다. 벌칙 대상은 투척선을 보고 있지 않아도 알아볼 수 있게 한다.
 func _update_turn_popup(state: MatchState, width: float, height: float, delta: float) -> void:
-	var active: MatchPlayer = state.active_player()
-	var mine: bool = active != null and active.peer_id == game.controller.local_peer_id
 	var playing: bool = state.phase in MatchController.DART_PHASES
 	var victim: MatchPlayer = state.find_player(state.punish_target) if state.punish_target != 0 else null
 	if playing and victim != null and _punish_popup_shown != state.punish_target:
 		_punish_popup_shown = state.punish_target
-		_turn_popup_shown = state.turn_id
 		_turn_popup_age = 0.0
 		_turn_popup_title.text = "☠ 벌칙 · %s" % PlayerLook.tag(victim.seat, victim.display_name)
 		_turn_popup_note.text = "꼴찌라 과녁판에 묶였다 — 나머지가 그 사람에게 던진다"
 		_turn_popup_title.add_theme_color_override("font_color", Style.PINK)
-	elif playing and active != null and _turn_popup_shown != state.turn_id:
-		_turn_popup_shown = state.turn_id
-		_turn_popup_age = 0.0
-		_turn_popup_title.text = "내 차례!" if mine else "%s 차례" % PlayerLook.tag(active.seat, active.display_name)
-		_turn_popup_note.text = ("다트 %d발 · 왼쪽 버튼을 누르고 놓으세요" if mine else "다트 %d발") % maxi(state.darts_left, 1)
-		_turn_popup_title.add_theme_color_override("font_color", PlayerLook.COLORS[active.seat % PlayerLook.COLORS.size()].lightened(0.45))
 	if state.punish_target == 0:
 		_punish_popup_shown = 0
 	if _turn_popup_age >= TURN_POPUP_SECONDS:

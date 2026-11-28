@@ -3,6 +3,7 @@ extends Node3D
 const Kit = preload("res://art/mesh_kit.gd")
 const BoardChaos = preload("res://game/board/board_chaos.gd")
 const Pedestal = preload("res://art/dart_machine/dart_pedestal.gd")
+const Display = preload("res://art/dart_machine/score_display.gd")
 const Drive = preload("res://art/dart_machine/dart_drive.gd")
 const FlipGuard = preload("res://art/dart_machine/flip_guard.gd")
 ## 과녁 중심 높이(m). 2026-11-24 사용자 요청으로 2.9 → 2.6 으로 내렸다 — 눈높이 1.65m 에서 너무 올려다봐야 했다.
@@ -27,6 +28,10 @@ var _close := 0.0
 var _shown: Dictionary = {}
 var _turn_name := ""
 var _score := 0.0
+var _seat_color := Color.WHITE
+var _turn := Vector2i(-1, -1)
+var _turn_caption := ""
+var _caption_timer: Timer
 
 
 func _ready() -> void:
@@ -34,6 +39,12 @@ func _ready() -> void:
 	if board != null:
 		board.position.y = BOARD_Y
 		board.scale = Vector3.ONE * BOARD_SCALE
+	_caption_timer = Timer.new()
+	_caption_timer.one_shot = true
+	_caption_timer.timeout.connect(func() -> void:
+		_turn_caption = ""
+		_update_readout())
+	add_child(_caption_timer)
 	build(arcade_skin)
 
 
@@ -82,9 +93,18 @@ func show_chaos(shape: Dictionary, _delta: float) -> void:
 	_close = float(shape.get("shutter", 0))
 
 
-func set_readout(display_name: String, total: float) -> void:
-	if display_name == _turn_name and is_equal_approx(total, _score):
+func set_readout(display_name: String, total: float, seat_color: Color = Color.WHITE,
+		turn: Vector2i = Vector2i(-1, -1), mine: bool = false) -> void:
+	if display_name == _turn_name and is_equal_approx(total, _score) and turn == _turn and seat_color == _seat_color:
 		return
+	if turn != _turn:
+		_turn = turn
+		_turn_caption = ""
+		_caption_timer.stop()
+		if not display_name.is_empty():
+			_turn_caption = "내 차례!" if mine else "이번 차례"
+			_caption_timer.start(2.8)
+	_seat_color = seat_color
 	_turn_name = display_name
 	_score = total
 	_update_readout()
@@ -94,7 +114,12 @@ func _update_readout() -> void:
 	if _cabinet == null:
 		return
 	_cabinet.turn_text.text = "READY" if _turn_name.is_empty() else _turn_name.left(9)
-	_cabinet.score_text.text = "—" if _turn_name.is_empty() else String.num(_score, 1)
+	var number := Display.score_text(_score)
+	_cabinet.score_text.text = "—" if _turn_name.is_empty() else number
+	var rows: Array[Dictionary] = []
+	if not _turn_name.is_empty():
+		rows.append({"label": _turn_name, "score": number, "color": _seat_color})
+	_cabinet.header.present(rows, _turn_caption)
 
 
 func slide_shutter(closed: bool) -> void:

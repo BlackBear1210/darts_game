@@ -112,6 +112,8 @@ func _start(bots: int, port: int) -> void:
 	hud = game.lounge_hud
 	assert(controller.state.phase == MatchState.Phase.AIMING, "조준 단계까지 가지 못했다")
 	assert(controller.state.players.size() == bots + 1)
+	# 후보 선택만 재현한다. 무효 카드를 쓰는 봇과 자동 턴 만료가 시험 손패를 바꾸지 않게 한다.
+	controller.set_process(false)
 
 
 func _stop() -> void:

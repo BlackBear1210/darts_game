@@ -5,6 +5,8 @@ static var music: float = 0.5
 static var sfx: float = 0.7
 static var ui_scale: float = 1.0
 static var sensitivity: float = 1.0
+static var reticle_shape: int = 0
+static var reticle_color: Color = Color("ffe6ae")
 static var visual_effects: bool = true
 static var reduced_motion: bool = false
 static var fullscreen: bool = false
@@ -53,6 +55,9 @@ static func load_saved() -> void:
 		reduced_motion = bool(file.get_value("display", "reduced_motion", false))
 		fullscreen = bool(file.get_value("display", "fullscreen", false))
 		quality = clampi(int(file.get_value("display", "quality", 1)), 0, 2)
+		reticle_shape = clampi(int(file.get_value("display", "reticle_shape", 0)), 0, 1)
+		reticle_color = Color.from_string(str(file.get_value("display", "reticle_color", "ffe6ae")), Color("ffe6ae"))
+		reticle_color.a = 1.0
 		# 예전에 저장한 E(이제 카드 키)는 F 로 옮긴다.
 		interact_key = KEY_R if int(file.get_value("keys", "interact", KEY_F)) == KEY_R else KEY_F
 		voice_enabled = bool(file.get_value("voice", "enabled", true))
@@ -70,6 +75,12 @@ static func load_saved() -> void:
 		if saved_look is Dictionary: look = saved_look
 		show_key_hints = bool(file.get_value("display", "key_hints", true))
 	apply()
+
+## 메뉴의 3D 배경과 옷장도 경기에서 고른 렌더 해상도를 따른다. 2D 글자는 원 해상도로 남는다.
+static func apply_3d_quality(viewport: Viewport, high_msaa: Viewport.MSAA = Viewport.MSAA_2X) -> void:
+	viewport.scaling_3d_scale = [0.65, 0.85, 1.0][quality]
+	viewport.msaa_3d = high_msaa if quality == 2 else Viewport.MSAA_DISABLED
+
 
 static func apply() -> void:
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(master, 0.0001)))
@@ -104,6 +115,8 @@ static func save() -> void:
 	file.set_value("display", "reduced_motion", reduced_motion)
 	file.set_value("display", "fullscreen", fullscreen)
 	file.set_value("display", "quality", quality)
+	file.set_value("display", "reticle_shape", reticle_shape)
+	file.set_value("display", "reticle_color", reticle_color.to_html(false))
 	file.set_value("display", "key_hints", show_key_hints)
 	file.set_value("keys", "interact", interact_key)
 	file.set_value("voice", "enabled", voice_enabled)

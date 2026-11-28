@@ -12,6 +12,7 @@ const UPPER_FRONT := -0.70
 static var _grain: ImageTexture
 var turn_text: Label3D
 var score_text: Label3D
+var header := preload("res://art/dart_machine/score_display.gd").new()
 var _travel_index: MeshInstance3D
 
 static func walnut() -> StandardMaterial3D:
@@ -96,6 +97,10 @@ func build(wood: Material, trim: Material, frame: Material, metal: Material, lam
 	Kit.rounded_box(self, "MarqueeFrame", Vector3(2.16, 0.168, 0.085), Vector3(0, 4.343, -0.471), trim, 0.035)
 	var brand := Kit.label(self, "Marquee", "DARTY", Vector3(0, 4.344, -0.420), 64, Color("ffe6ad"), 0.00135)
 	brand.shaded = false
+	# 기존 명판 바로 위에 돌출된 별도 모듈을 단다. 상단은 펍 천장(4.8m) 아래다.
+	var cap := Kit.rounded_box(self, "ScoreHeader", Vector3(2.37, 0.419, 0.23), Vector3(0, 4.57, -0.39), metal, 0.035, 3)
+	Kit.rounded_box(cap, "Gasket", Vector3(2.30, 0.397, 0.035), Vector3(0, 0, 0.119), trim, 0.02, 2)
+	header.mount(cap, Vector3(0, 0, 0.14), Vector2(2.24, 0.373), false)
 	Kit.rounded_box(self, "TaskLight", Vector3(1.15, 0.035, 0.056), Vector3(0, 4.239, -0.446), lamp, 0.016)
 
 

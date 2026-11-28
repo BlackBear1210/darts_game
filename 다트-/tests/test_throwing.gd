@@ -44,7 +44,7 @@ func _run() -> void:
 	input.set_process(false)
 	input.enabled = true
 	# 경기 요청 대신 입력만 관찰하여 시간 기반 경기 진행과 분리한다.
-	input.throw_requested.disconnect(game.controller.submit_throw)
+	input.throw_requested.disconnect(game._on_throw_requested)
 	input.throw_requested.connect(func(_aim: Vector2, _timing: float) -> void: _requests += 1)
 	var screen: Vector2 = game.camera.unproject_position(game.table.board.global_position)
 	assert(input.aim_at(screen).is_equal_approx(Vector2.ZERO))

@@ -113,8 +113,6 @@ func configure(room: RoomState, peer_id: int, connection: NetworkSession = null)
 ## 연결(session 신호)·규칙(config)·내 번호(local_peer_id)·요청 번호(_request_number, 계속 올라가야 한다)는 그대로 둔다.
 func reset_match(room: RoomState) -> void:
 	room_settings = room.settings
-	if card_test_active and cards != null:
-		cards.actions.cards = null
 	card_test_active = false
 	state = MatchState.new()
 	state.match_id = room.match_id

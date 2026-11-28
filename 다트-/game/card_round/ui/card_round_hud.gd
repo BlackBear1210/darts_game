@@ -49,7 +49,8 @@ var _card_target: Label
 var _card_status: Label
 var _card_bar: ProgressBar
 var _prompt: Label
-var _crosshair: Control
+const Reticle = preload("res://ui/aim_reticle.gd")
+var _crosshair: Reticle
 var _charge: ProgressBar
 var _settings: PanelContainer
 var _options: Dictionary = {}
@@ -264,6 +265,7 @@ func hide_card() -> void:
 ## 조준 십자선과 충전 막대를 보이거나 숨긴다(charge = 0~1).
 func set_aim(shown: bool, charge: float) -> void:
 	_crosshair.visible = shown
+	_crosshair.refresh(charge if shown else 0.0)
 	_charge.visible = shown and charge > 0.0
 	_charge.value = charge
 
@@ -417,7 +419,7 @@ func _build_card_panel() -> void:
 
 ## 화면 가운데 조준 십자선과 충전 막대를 만든다.
 func _build_aim() -> void:
-	_crosshair = Crosshair.new()
+	_crosshair = Reticle.new()
 	_crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_crosshair.visible = false
@@ -578,10 +580,3 @@ func _button(text: String) -> Button:
 	button.add_theme_font_override("font", CardFaces.bold_font())
 	button.custom_minimum_size = Vector2(240, 54)
 	return button
-
-
-## 가운데 조준점: 작은 원 + 점.
-class Crosshair extends Control:
-	func _draw() -> void:
-		draw_arc(Vector2.ZERO, 14, 0, TAU, 32, Color(PubTheme.PAPER, 0.85), 2.0, true)
-		draw_circle(Vector2.ZERO, 3, PubTheme.GOLD)

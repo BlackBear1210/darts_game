@@ -1,34 +1,28 @@
 extends RefCounted
 ## DARTY 로비·설정·라운지 HUD 의 공용 시각 언어(디자인 담당 소유, 2026-10-30 개편).
 ##
-## [방향] 따뜻한 펍 + 파티 게임. 굵은 잉크 테두리와 아래로 떨어지는 단단한 그림자로
-## "책상 위에 붙인 스티커 카드"처럼 보이게 한다. 색은 다트판(크림·토마토·초록)과 다트 배럴 금색에서 골랐다.
-## 기존 경기 HUD 테마(ui/pub_theme.gd, 개발자 예시 경기용)는 건드리지 않는다.
+## 월넛 패널, 황동 조작부, 크림색 글자. 민트색은 상태 표시에 쓴다.
 ##
 ## [글꼴] art/fonts/ 에 디자인 요청서(DARTY_프로젝트/디자인 요청)로 고른 글꼴 파일이 들어오면 그것을 쓰고,
 ## 없으면 Windows 기본 글꼴(맑은 고딕·Impact)로 그린다. 파일 이름은 아래 FONT_FILES 를 따른다.
 
-## 바탕·판넬은 자두빛 검정(펍 조명 아래 어두운 나무 느낌), 글자·주 버튼은 다트판 크림색.
-const BG := Color("17111a")
-const PANEL := Color("241b29")
-const PANEL_HI := Color("33273a")
-const INK := Color("120c12")
+## 펍과 머신에서 따온 공용 색.
+const BG := Color("1a1510")
+const PANEL := Color("261e18")
+const PANEL_HI := Color("3c3026")
+const INK := Color("17120e")
 const CREAM := Color("fff3dc")
 ## MINT / PINK 는 예전 이름을 유지한다(설정 창·HUD 가 이 이름을 쓴다). 지금 값은 청록(분필·네온)과 토마토(강조·경고)다.
-const MINT := Color("37d9bf")
-const PINK := Color("ff6b5b")
-const GOLD := Color("ffc845")
-const MUTED := Color("b7a7b1")
+const MINT := Color("9ecab6")
+const PINK := Color("eb9877")
+const GOLD := Color("d9b679")
+const MUTED := Color("c4b5a3")
 ## 다트판 색(로고·과녁 장식에서 쓴다).
 const BOARD_RED := Color("e0453a")
 const BOARD_GREEN := Color("1f9d68")
 
 ## 단단한 그림자 거리(px). 누르면 0 으로 줄어 "눌린" 느낌을 준다.
 const SHADOW := Vector2(0, 6)
-## 버튼 기울기(StyleBoxFlat.skew). 다트 깃처럼 살짝 기울인다(2026-10-30 개편 — card() 의 모서리 반지름이 16 이하면 기운다).
-## 경기 화면 HUD 는 2026-11-22 부터 판을 쓰지 않아(outline·hud_label) 기울어진 테두리가 없다. 로비·설정 창 버튼만 기운다.
-## 메뉴 버튼까지 곧게 하려면 이 값을 0.0 으로 바꾸면 된다(한 곳).
-const SKEW: float = -0.08
 
 const FONT_FILES := {
 	"logo": "res://art/fonts/darty_logo.ttf",
@@ -77,20 +71,20 @@ static func theme() -> Theme:
 	result.set_color("font_color", "Label", CREAM)
 	# 주 버튼: 크림 카드 + 잉크 테두리 + 단단한 그림자. 올리면 금색, 누르면 그림자가 사라진다.
 	for type in ["Button", "OptionButton", "CheckButton"]:
-		result.set_stylebox("normal", type, card(CREAM))
+		result.set_stylebox("normal", type, card(CREAM, Color("b19c7c")))
 		result.set_stylebox("hover", type, card(GOLD, INK, SHADOW + Vector2(0, 2)))
 		result.set_stylebox("pressed", type, card(GOLD.darkened(0.08), INK, Vector2.ZERO))
 		result.set_stylebox("hover_pressed", type, card(GOLD, INK, Vector2(0, 2)))
 		result.set_stylebox("focus", type, card(Color.TRANSPARENT, MINT, Vector2.ZERO, 3))
-		result.set_stylebox("disabled", type, card(Color("5a4d57"), Color("2b222a"), Vector2(0, 3)))
+		result.set_stylebox("disabled", type, card(Color("554a3e"), Color("30271e"), Vector2(0, 3)))
 		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 			result.set_color(state, type, INK)
-		result.set_color("font_disabled_color", type, Color("a3959e"))
+		result.set_color("font_disabled_color", type, Color("bdac96"))
 		result.set_constant("h_separation", type, 12)
 	result.set_font_size("font_size", "Button", 22)
 	# 보조 버튼(돌아가기·탭 등): 어두운 판에 크림 테두리.
 	result.set_type_variation("SecondaryButton", "Button")
-	result.set_stylebox("normal", "SecondaryButton", card(PANEL_HI, CREAM.darkened(0.45), Vector2(0, 4)))
+	result.set_stylebox("normal", "SecondaryButton", card(PANEL_HI, Color("75634f"), Vector2(0, 4)))
 	result.set_stylebox("hover", "SecondaryButton", card(PANEL_HI.lightened(0.12), CREAM, Vector2(0, 5)))
 	result.set_stylebox("pressed", "SecondaryButton", card(MINT, INK, Vector2.ZERO))
 	for state in ["font_color", "font_hover_color", "font_focus_color"]:
@@ -99,18 +93,18 @@ static func theme() -> Theme:
 	result.set_font_size("font_size", "SecondaryButton", 19)
 	# 선택된 탭·카드(토글 버튼이 눌린 상태).
 	result.set_type_variation("ChoiceButton", "Button")
-	result.set_stylebox("normal", "ChoiceButton", card(PANEL_HI, Color("4a3c4f"), Vector2(0, 4)))
+	result.set_stylebox("normal", "ChoiceButton", card(PANEL_HI, Color("695542"), Vector2(0, 4)))
 	result.set_stylebox("hover", "ChoiceButton", card(PANEL_HI.lightened(0.1), CREAM.darkened(0.2), Vector2(0, 5)))
-	result.set_stylebox("pressed", "ChoiceButton", card(MINT, INK, Vector2(0, 4)))
-	result.set_stylebox("hover_pressed", "ChoiceButton", card(MINT.lightened(0.1), INK, Vector2(0, 5)))
+	result.set_stylebox("pressed", "ChoiceButton", card(GOLD, GOLD.darkened(0.32), Vector2(0, 4)))
+	result.set_stylebox("hover_pressed", "ChoiceButton", card(GOLD.lightened(0.1), GOLD.darkened(0.25), Vector2(0, 4)))
 	for state in ["font_color", "font_hover_color", "font_focus_color"]:
 		result.set_color(state, "ChoiceButton", CREAM)
 	result.set_color("font_pressed_color", "ChoiceButton", INK)
 	result.set_color("font_hover_pressed_color", "ChoiceButton", INK)
 	# 켜기/끄기 스위치: 글자색을 판 위에서 읽히게 크림으로.
-	result.set_stylebox("normal", "CheckButton", card(PANEL_HI, Color("4a3c4f"), Vector2(0, 3)))
+	result.set_stylebox("normal", "CheckButton", card(PANEL_HI, Color("695542"), Vector2(0, 3)))
 	result.set_stylebox("hover", "CheckButton", card(PANEL_HI.lightened(0.1), CREAM.darkened(0.2), Vector2(0, 4)))
-	result.set_stylebox("pressed", "CheckButton", card(PANEL_HI, Color("4a3c4f"), Vector2(0, 3)))
+	result.set_stylebox("pressed", "CheckButton", card(PANEL_HI, Color("695542"), Vector2(0, 3)))
 	result.set_stylebox("hover_pressed", "CheckButton", card(PANEL_HI.lightened(0.1), CREAM.darkened(0.2), Vector2(0, 4)))
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		result.set_color(state, "CheckButton", CREAM)
@@ -126,15 +120,15 @@ static func theme() -> Theme:
 	result.set_font_size("font_size", "PopupMenu", 19)
 	result.set_constant("v_separation", "PopupMenu", 10)
 	# 입력칸: 잉크 홈에 크림 글자. 포커스면 청록 테두리.
-	result.set_stylebox("normal", "LineEdit", flat(INK, Color("4a3c4f"), 2, 10, 12))
+	result.set_stylebox("normal", "LineEdit", flat(INK, Color("695542"), 2, 10, 12))
 	result.set_stylebox("focus", "LineEdit", flat(INK, MINT, 3, 10, 12))
-	result.set_stylebox("read_only", "LineEdit", flat(Color("1d151d"), Color("3a2e3d"), 2, 10, 12))
+	result.set_stylebox("read_only", "LineEdit", flat(Color("211a14"), Color("514332"), 2, 10, 12))
 	result.set_color("font_color", "LineEdit", CREAM)
 	result.set_color("font_placeholder_color", "LineEdit", Color(MUTED, 0.7))
 	result.set_color("caret_color", "LineEdit", GOLD)
 	result.set_color("selection_color", "LineEdit", Color(MINT, 0.35))
 	# 슬라이더·스크롤바.
-	result.set_stylebox("slider", "HSlider", flat(INK, Color("4a3c4f"), 2, 8, 0, 4))
+	result.set_stylebox("slider", "HSlider", flat(INK, Color("695542"), 2, 8, 0, 4))
 	result.set_stylebox("grabber_area", "HSlider", flat(MINT, MINT, 0, 8, 0, 4))
 	result.set_stylebox("grabber_area_highlight", "HSlider", flat(GOLD, GOLD, 0, 8, 0, 4))
 	result.set_icon("grabber", "HSlider", _knob_icon(CREAM))
@@ -143,8 +137,8 @@ static func theme() -> Theme:
 	result.set_stylebox("grabber", "VScrollBar", flat(Color(CREAM, 0.35), Color.TRANSPARENT, 0, 6, 0, 3))
 	result.set_stylebox("grabber_highlight", "VScrollBar", flat(GOLD, Color.TRANSPARENT, 0, 6, 0, 3))
 	result.set_stylebox("grabber_pressed", "VScrollBar", flat(GOLD, Color.TRANSPARENT, 0, 6, 0, 3))
-	# 큰 판: 자두빛 판 + 굵은 잉크 테두리 + 깊은 그림자.
-	result.set_stylebox("panel", "PanelContainer", card(PANEL, INK, Vector2(0, 12), 4, 26, 30))
+	# 큰 판: 월넛 판 + 황동 테두리 + 깊은 그림자.
+	result.set_stylebox("panel", "PanelContainer", card(PANEL, Color("6b5540"), Vector2(0, 10), 2, 20, 30))
 	result.set_type_variation("SoftPanel", "PanelContainer")
 	result.set_stylebox("panel", "SoftPanel", flat(Color(INK, 0.55), Color(CREAM, 0.12), 2, 16, 16))
 	_theme = result
@@ -153,7 +147,7 @@ static func theme() -> Theme:
 
 ## 굵은 테두리 + 단단한 그림자 카드 모양. 버튼·판넬 공용.
 static func card(fill: Color, edge: Color = INK, shadow: Vector2 = SHADOW, border: int = 3,
-		radius: int = 14, margin: int = 16) -> StyleBoxFlat:
+		radius: int = 11, margin: int = 16) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = fill
 	style.border_color = edge
@@ -163,10 +157,13 @@ static func card(fill: Color, edge: Color = INK, shadow: Vector2 = SHADOW, borde
 	style.content_margin_right = margin + 4
 	style.content_margin_top = margin * 0.55
 	style.content_margin_bottom = margin * 0.55
-	style.skew = Vector2(SKEW, 0) if radius <= 16 else Vector2.ZERO
 	if shadow != Vector2.ZERO:
-		style.shadow_color = Color(INK, 0.92)
-		style.shadow_size = 1
+		style.border_width_top = 1
+		style.border_width_left = 1
+		style.border_width_right = 1
+		style.border_width_bottom = border + 2
+		style.shadow_color = Color(INK, 0.70)
+		style.shadow_size = 3
 		style.shadow_offset = shadow
 	style.anti_aliasing = true
 	return style
@@ -267,11 +264,19 @@ static func section(parent: Node, text: String, color: Color = PINK) -> void:
 	parent.add_child(line)
 	var bar := ColorRect.new()
 	bar.color = color
-	bar.custom_minimum_size = Vector2(8, 26)
+	bar.custom_minimum_size = Vector2(4, 22)
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	line.add_child(bar)
 	var caption := label(line, text, 22, color)
 	caption.add_theme_font_override("font", font("heading"))
+	var rule := ColorRect.new()
+	rule.color = Color(GOLD, 0.23)
+	rule.custom_minimum_size.y = 1
+	rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(rule)
 
 
 static func select(items: Array[String], value: int, action: Callable) -> OptionButton:
@@ -309,7 +314,7 @@ static func _switch_icon(on: bool) -> ImageTexture:
 	var width := 60
 	var height := 32
 	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var track: Color = MINT if on else Color("4a3c4f")
+	var track: Color = MINT if on else Color("695542")
 	var knob_x: float = width - height / 2.0 if on else height / 2.0
 	for y in range(height):
 		for x in range(width):

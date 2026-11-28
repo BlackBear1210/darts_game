@@ -22,6 +22,7 @@ extends CanvasLayer
 signal closed(look: Dictionary)
 
 const Style = preload("res://ui/lounge_style.gd")
+const Preferences = preload("res://ui/player_preferences.gd")
 const PlayerOutfit = preload("res://art/characters/player_outfit.gd")
 const PlayerWallet = preload("res://app/player_wallet.gd")
 const NpcOutfit = preload("res://art/pub/npc_outfit.gd")
@@ -129,7 +130,7 @@ func _build_view() -> void:
 	add_child(container)
 	_viewport = SubViewport.new()
 	_viewport.own_world_3d = true
-	_viewport.msaa_3d = Viewport.MSAA_4X
+	Preferences.apply_3d_quality(_viewport, Viewport.MSAA_4X)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	container.add_child(_viewport)
 	_world = Node3D.new()
@@ -196,6 +197,11 @@ func _build_room() -> void:
 	MeshKit.rounded_box(_world, "Wainscot", Vector3(9.0, 1.0, 0.08), Vector3(0, 0.5, -1.58), RoundKit.clay("wardrobe_wainscot", "3a2219", 0.7), 0.02)
 	MeshKit.rounded_box(_world, "WainscotRail", Vector3(9.0, 0.06, 0.12), Vector3(0, 1.02, -1.55), RoundKit.clay("wardrobe_rail", "c9a24f", 0.35, 0.8), 0.02)
 	MeshKit.rounded_box(_world, "SideWall", Vector3(0.2, 4.0, 6.0), Vector3(-3.0, 2.0, 0.4), RoundKit.clay("wardrobe_wallpaper", "4a2a44", 0.9), 0.02)
+	# 외부 옷장과 같은 목공 마감이 안쪽 모서리에서도 꺾여 이어진다.
+	MeshKit.rounded_box(_world, "SideWainscot", Vector3(0.08, 1.0, 4.95), Vector3(-2.865, 0.5, 0.875),
+		RoundKit.clay("wardrobe_wainscot", "3a2219", 0.7), 0.014)
+	MeshKit.rounded_box(_world, "SideRail", Vector3(0.12, 0.06, 4.95), Vector3(-2.85, 1.02, 0.875),
+		RoundKit.clay("wardrobe_rail", "c9a24f", 0.35, 0.8), 0.012)
 	_mirror(Vector3(-1.75, 0, -1.48))
 	_rack(Vector3(2.15, 0, -0.85))
 	_hat_shelf(Vector3(0.7, 1.95, -1.5))

@@ -43,6 +43,8 @@ const MAX_DARTS: int = 3
 ## 계정 화면처럼 잠깐 가려질 때 짓고 놓기를 반복하지 않도록 둔 여유(초)다.
 const RELEASE_AFTER: float = 1.0
 
+const Preferences = preload("res://ui/player_preferences.gd")
+var _last_quality := -1
 var _viewport: SubViewport
 var _camera: Camera3D
 var _table: TableView
@@ -85,7 +87,8 @@ func _make_viewport() -> SubViewport:
 	var viewport := SubViewport.new()
 	viewport.own_world_3d = true
 	viewport.gui_disable_input = true
-	viewport.msaa_3d = Viewport.MSAA_2X
+	Preferences.apply_3d_quality(viewport)
+	_last_quality = Preferences.quality
 	add_child(viewport)
 	return viewport
 
@@ -183,6 +186,9 @@ func _process(delta: float) -> void:
 			_build(_packed)
 		elif not _try_build():
 			return
+	if _last_quality != Preferences.quality:
+		Preferences.apply_3d_quality(_viewport)
+		_last_quality = Preferences.quality
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_time += delta
 	# 손으로 든 카메라처럼 아주 천천히 흔들린다.

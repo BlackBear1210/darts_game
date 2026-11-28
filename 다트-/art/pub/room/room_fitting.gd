@@ -32,6 +32,16 @@ static func build_fitting_room(pub_only: Node3D) -> void:
 	var faces: Array = [{"from": Vector2(x0, z0), "along": Vector2(1, 0), "inward": Vector2(0, -1), "length": x1 - x0},
 		{"from": Vector2(x0, z0), "along": Vector2(0, 1), "inward": Vector2(-1, 0), "length": depth},
 		{"from": Vector2(x1, z0), "along": Vector2(0, 1), "inward": Vector2(1, 0), "length": depth}]
+	# 직각으로 만나는 몰딩의 열린 단면을 모서리 기둥과 받침·머리 장식으로 감싼다.
+	for x: float in [x0, x1]:
+		MeshKit.rounded_box(root, "CornerStile", Vector3(0.115, height, 0.115),
+			Vector3(x, height * 0.5, z0), _walnut(), 0.012, 2)
+		MeshKit.rounded_box(root, "CornerPlinth", Vector3(0.16, BASE_TOP + 0.025, 0.16),
+			Vector3(x, (BASE_TOP + 0.025) * 0.5, z0), _walnut_dark(), 0.009, 2)
+		MeshKit.rounded_box(root, "CornerRailCap", Vector3(0.19, RAIL_TOP - WAINSCOT_TOP + 0.023, 0.19),
+			Vector3(x, (RAIL_TOP + WAINSCOT_TOP) * 0.5, z0), _walnut(), 0.018, 2)
+		MeshKit.rounded_box(root, "CornerCapital", Vector3(0.295, 0.135, 0.295),
+			Vector3(x, height - 0.065, z0), _walnut(), 0.017, 2)
 	var door_half := 0.56
 	var stripe_bar := BoxMesh.new()
 	stripe_bar.size = Vector3(0.035, height - 0.12 - RAIL_TOP, 0.006)

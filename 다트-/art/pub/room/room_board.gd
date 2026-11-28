@@ -35,7 +35,16 @@ static func build_board_wall(p: Node3D) -> void:
 			MeshKit.mesh_node(p, "ChalkPin", RoundKit.sphere_mesh(0.025, 12), Vector3(x, center.y - 0.1 + y * (board_size.y / 2.0 + 0.03), face + 0.115), _brass())
 	var scores := MeshKit.label(p, "ChalkScores", "점 수\n\n―", Vector3(center.x - 2.05, center.y - 0.05, face + 0.12), 28, chalk, 0.0036)
 	scores.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	MeshKit.label(p, "ChalkRules", "하 우 스  룰\n\n한 차례 3발\n꾹 = 충전\n오른쪽 = 취소\n늦으면 슬로우!", Vector3(center.x + 2.05, center.y - 0.05, face + 0.12), 30, chalk, 0.0036)
+	var guide := Node3D.new()
+	guide.name = "ThrowGuide"
+	p.add_child(guide)
+	guide.position = Vector3(center.x + 2.05, center.y - 0.10, face + 0.128)
+	MeshKit.label(guide, "ChalkRules", "투 척 안 내", Vector3(0, 0.54, 0), 44, Color("ead39a"), 0.0035)
+	MeshKit.box(guide, "RuleLine", Vector3(0.76, 0.012, 0.006), Vector3(0, 0.37, 0), _brass())
+	for i in 2:
+		var y := 0.12 - i * 0.55
+		MeshKit.label(guide, "Action", ["좌클릭", "우클릭"][i], Vector3(0, y + 0.055, 0), 41, chalk, 0.0034)
+		MeshKit.label(guide, "Gesture", ["꾹 눌러 던지기", "충전 취소"][i], Vector3(0, y - 0.14, 0), 30, Color("c2d1bf"), 0.0033)
 
 
 ## 레인: 벨벳 매트와 놋쇠 투척선. 중앙 펜스·출입 금지판은 사용자 요청으로 제거(2026-11-12).

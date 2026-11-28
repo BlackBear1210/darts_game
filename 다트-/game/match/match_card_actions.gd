@@ -16,15 +16,15 @@ const MINE_LIMIT: int = 5
 const TIMER_RATIO: float = 0.5
 const TIMER_FLOOR: float = 3.0
 
-## MatchCards(순환 preload 를 피하려고 타입 없이 둔다).
-var cards
+## 소유자 MatchCards가 방을 나가거나 새 판을 시작하면 이전 손패까지 함께 해제되어야 한다.
+var _owner: WeakRef
 ## 다음 차례를 건너뛸 사람(peer ID). 점프 카드가 넣고 MatchController._begin_turn 이 take_skip 으로 꺼낸다.
 var skips: Array[int] = []
 var _random := RandomNumberGenerator.new()
 
 
 func _init(owner) -> void:
-	cards = owner
+	_owner = weakref(owner)
 	_random.randomize()
 
 
@@ -81,6 +81,8 @@ static func next_player(state: MatchState) -> MatchPlayer:
 
 ## [방장] 쓰는 순간 끝나는 카드를 처리한다. effect = RoundRules.Effect. 킬로그 뒤에 붙일 짧은 글을 돌려준다.
 func apply(effect, caster: int, target: int) -> String:
+	var cards = _owner.get_ref()
+	if cards == null: return ""
 	var controller: MatchController = cards.controller
 	var state: MatchState = controller.state
 	match str(effect.kind):
@@ -95,7 +97,7 @@ func apply(effect, caster: int, target: int) -> String:
 			effect.result = "지뢰 %d개째" % cards.mines.size()
 			return "보이지 않는 지뢰를 심음" if stacked == 1 else "같은 칸에 지뢰 %d겹" % stacked
 		"swap_turn":
-			return _swap_turn(caster)
+			return _swap_turn(caster, cards)
 		"skip_turn":
 			var next: MatchPlayer = next_player(state)
 			if next == null:
@@ -134,7 +136,7 @@ func take_skip(peer_id: int) -> bool:
 ## 차례 바꾸기: 아직 안 던진 사람이 지금 던지는 사람과 자리를 바꾼다(지금 던지는 사람이 쓰면 다음 사람과).
 ## 차례를 넘겨준 사람의 "차례 동안" 효과는 대기로 돌리고, 같은 차례 번호(turn_index)에서 새 사람으로 다시 시작한다.
 ## 라운드가 끝나면 MatchController 가 자리 순서로 되돌린다.
-func _swap_turn(caster: int) -> String:
+func _swap_turn(caster: int, cards) -> String:
 	var controller: MatchController = cards.controller
 	var state: MatchState = controller.state
 	var me: MatchPlayer = state.find_player(caster)
