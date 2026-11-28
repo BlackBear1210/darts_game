@@ -1,0 +1,5 @@
+# run.sh 가 만드는 Godot 설정 폴더와 중간 자료(머리 정점 mesh.json 9MB · geo.json)는 올리지 않는다.
+.appdata/
+work/
+*.json
+__pycache__/

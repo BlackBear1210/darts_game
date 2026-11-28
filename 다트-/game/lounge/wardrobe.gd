@@ -55,7 +55,16 @@ const ICON_SHOTS: Dictionary = {
 	"watch": ["forearm.L", Vector3.ZERO, Vector3(-1.0, 0.2, -0.45), 0.42],
 	"shirt": ["", Vector3(-0.02, 1.0, 0.0), Vector3(0.3, 0.1, -1.0), 1.6],
 	"pants": ["", Vector3(0.0, 0.45, 0.0), Vector3(0.15, 0.07, -1.0), 1.56],
+	# 캐릭터 3안(2026-11-27): 머리~가슴(얼굴·머리 모양·옷 색 나눔이 한 그림에 보이게).
+	"character": ["", Vector3(0.0, 1.38, 0.0), Vector3(0.3, 0.08, -1.0), 1.35],
+	# 헤어(2026-11-28): 머리만, 왼쪽 옆 비스듬히 조금 위에서 — 앞머리 옆선과 뒤쪽(포니테일 꼬리 · 왼쪽 뒤 올림머리 번)이 한 그림에 보이게.
+	# 기본 캐릭터 인형에 그 헤어를 얹어 찍는다(앞 오른쪽에서 찍으면 번·꼬리가 머리 뒤에 숨었다).
+	"hair": ["head", Vector3(-0.01, 1.63, 0.0), Vector3(-1.0, 0.3, -0.6), 1.0],
 }
+
+## 패널 맨 위에 둘 칸(2026-11-28 밤 사용자 "옷장에서 캐릭터 선택과 헤어 선택도 넣어 줘"):
+## 캐릭터·헤어 칸이 SLOTS 맨 끝이라 목록을 한참 굴려야 보였다 → 보이는 차례만 앞으로(저장 번호·칸 이름은 SLOTS 그대로).
+const PANEL_FIRST: Array[String] = ["character", "hair"]
 
 ## 찍은 카드 그림(칸:번호 → 그림). 게임이 꺼질 때까지 남아 다음에 방을 열면 바로 보인다.
 static var _icon_cache: Dictionary = {}
@@ -281,7 +290,7 @@ func _build_panel() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", 6)
 	scroll.add_child(list)
-	for slot: Array in PlayerOutfit.SLOTS:
+	for slot: Array in _panel_slots():
 		var key: String = slot[0]
 		var header := HBoxContainer.new()
 		list.add_child(header)
@@ -321,6 +330,20 @@ func _build_panel() -> void:
 	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	Style.label(column, "캐릭터를 끌어서 돌려 보기 · 두 번 누르면 앞모습 · Esc = 입고 나가기", 14, Style.MUTED)
 	_refresh_values()
+
+
+## 패널에 늘어놓는 칸 차례: PANEL_FIRST(캐릭터 · 헤어) 먼저, 나머지는 SLOTS 차례. 그림 카드도 이 차례로 찍는다(위 칸부터 그림이 찬다).
+static func _panel_slots() -> Array:
+	var first: Array = []
+	for key: String in PANEL_FIRST:
+		for slot: Array in PlayerOutfit.SLOTS:
+			if slot[0] == key:
+				first.append(slot)
+	var rest: Array = []
+	for slot: Array in PlayerOutfit.SLOTS:
+		if not PANEL_FIRST.has(slot[0]):
+			rest.append(slot)
+	return first + rest
 
 
 ## 그림 카드 하나: 위 = 물건 그림(찍기 전에는 옷 색·빈 칸), 아래 = 이름. 누르면 그 칸을 이것으로 고른다.
@@ -525,7 +548,7 @@ static func _icon_key(key: String, index: int) -> String:
 func _start_icons() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	for slot: Array in PlayerOutfit.SLOTS:
+	for slot: Array in _panel_slots():
 		for index in range((slot[2] as Array).size()):
 			if not _icon_cache.has(_icon_key(slot[0], index)):
 				_shoot_queue.append([slot[0], index])

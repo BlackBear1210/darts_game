@@ -178,7 +178,8 @@ func _run() -> void:
 	root.push_input(press, true)
 	await create_timer(0.85).timeout
 	assert(_game.throw_input.charging and _game.throw_input.timing == 1)
-	assert(_game._dart_hand.is_visible_in_tree() and _game._dart_hand.texture == _game._dart_hand.HOLD)
+	assert(_game._hand.is_visible_in_tree() and _game._hand.held.visible)
+	assert(not _game._dart_hand.is_visible_in_tree())
 	assert(_hud._cross.get_global_rect().get_center().distance_to(root.get_visible_rect().size * 0.5) < 1.0)
 	await _capture("08_standing_charged")
 	var release := press.duplicate() as InputEventMouseButton
@@ -188,7 +189,9 @@ func _run() -> void:
 	await create_timer(0.06).timeout
 	assert(_game.controller.state.phase == MatchState.Phase.FLIGHT)
 	# 2026-10-30: 놓은 직후 빈손이 앞으로 휘두르는 동작(팔로스루)을 보인다(2026-11-17 곡선 = art/characters/first_person_throw.gd). 손에 든 다트는 바로 사라져야 한다.
-	assert(_game._dart_hand.texture == _game._dart_hand.RELEASE)
+	assert(_game._hand.is_visible_in_tree() and not _game._hand.held.visible)
+	var body := _game._hand.arm.get_node("Model").find_child("Body", true, false) as MeshInstance3D
+	assert(body.get_blend_shape_value(body.find_blend_shape_by_name(&"RightOpen")) > 0.0)
 	var dart: DartView = _game.get_node("Darts").get_child(0) as DartView
 	dart.set_physics_process(false)
 	_game.controller.set_process(false)

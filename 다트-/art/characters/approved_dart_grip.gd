@@ -20,6 +20,10 @@ const JOINTS: Array[Vector3] = [
 const FLEXION: Array[Vector3] = [
 	Vector3(66, 62, 21), Vector3(58, 57, 18), Vector3(42, 35, 13), Vector3(43, 40, 16),
 ]
+## 승인 손등 쪽으로 편 자세. 검지부터 새끼 순서로 밑·가운데·끝마디 각도다.
+const OPEN_FLEX: Array[Vector3] = [Vector3(-16, -12, -4), Vector3(-14, -10, -4), Vector3(-10, -6, -2), Vector3(-6, -4, 0)]
+const OPEN_SPREAD := Vector4(-6, -2, 3, 8)
+const OPEN_THUMB := Vector3(-12, -18, -6)
 const FINGER_COLUMNS := Vector4(-0.042, -0.013, 0.013, 0.042)
 const SPREAD := Vector4(-8.0, -4.0, 2.0, 9.0)
 const DEPTH := Vector3(0.002, 0.011, 0.022)
@@ -67,7 +71,7 @@ static func bind_thumb(arrays: Array, skin: Skin, hand_rest: Transform3D) -> voi
 	arrays[Mesh.ARRAY_WEIGHTS] = weights
 
 
-static func surface_pose(arrays: Array, skin: Skin, hand_rest: Transform3D, large: bool, side: StringName = &"hand.R", palm: Basis = PALM) -> Array:
+static func surface_pose(arrays: Array, skin: Skin, hand_rest: Transform3D, large: bool, side: StringName = &"hand.R", palm: Basis = PALM, opened: bool = false) -> Array:
 	var shape: Array = []
 	shape.resize(Mesh.ARRAY_MAX)
 	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX].duplicate()
@@ -78,7 +82,7 @@ static func surface_pose(arrays: Array, skin: Skin, hand_rest: Transform3D, larg
 	if hand_bind >= 0:
 		var from_palm := hand_rest * Transform3D(palm, Vector3.ZERO)
 		var to_palm := from_palm.affine_inverse()
-		var joints: Array[Transform3D] = _joint_transforms()
+		var joints: Array[Transform3D] = _joint_transforms(OPEN_FLEX, OPEN_SPREAD, OPEN_THUMB) if opened else _joint_transforms()
 		var socket := Transform3D(PALM.inverse(), Vector3.ZERO) * barrel(large)
 		var contacts: Array[Vector3] = []
 		for digit in range(3):
@@ -98,7 +102,8 @@ static func surface_pose(arrays: Array, skin: Skin, hand_rest: Transform3D, larg
 				continue
 			var normal: Vector3 = to_palm.basis * normals[index]
 			var bent: PackedVector3Array = _bend(point, normal, joints)
-			_seat_pads(point, bent, socket, contacts, large)
+			if not opened:
+				_seat_pads(point, bent, socket, contacts, large)
 			if side == &"hand.L":
 				var thumb := smoothstep(0.053,0.066,point.x)*smoothstep(0.067,0.099,point.y)*(1.0-smoothstep(0.119,0.132,point.y))
 				var fingers := _middle_weight(point)*smoothstep(0.147,0.176,point.y)*(1.0-thumb)
@@ -158,17 +163,17 @@ static func _middle_weight(p: Vector3) -> float:
 	return smoothstep(-width, width, p.x - 0.25 * p.z - 0.08 * p.y + 0.01556)
 
 
-static func _joint_transforms() -> Array[Transform3D]:
+static func _joint_transforms(flex: Array[Vector3] = FLEXION, spread: Vector4 = SPREAD, thumb: Vector3 = THUMB_FLEXION) -> Array[Transform3D]:
 	var transforms: Array[Transform3D] = []
 	for finger in range(JOINTS.size()):
 		for joint in range(3):
 			var center := Vector3(FINGER_COLUMNS[finger], JOINTS[finger][joint], DEPTH[joint])
-			var turn := Basis(Vector3.RIGHT, deg_to_rad(FLEXION[finger][joint]))
+			var turn := Basis(Vector3.RIGHT, deg_to_rad(flex[finger][joint]))
 			if joint == 0:
-				turn = Basis(Vector3.BACK, deg_to_rad(-SPREAD[finger])) * turn
+				turn = Basis(Vector3.BACK, deg_to_rad(-spread[finger])) * turn
 			transforms.append(Transform3D(turn, center - turn * center))
-	var opposition := Basis(Vector3.BACK, deg_to_rad(THUMB_FLEXION.y)) * Basis(Vector3.RIGHT, deg_to_rad(THUMB_FLEXION.x))
-	var tip := Basis(Vector3(1, 0, 1).normalized(), deg_to_rad(THUMB_FLEXION.z))
+	var opposition := Basis(Vector3.BACK, deg_to_rad(thumb.y)) * Basis(Vector3.RIGHT, deg_to_rad(thumb.x))
+	var tip := Basis(Vector3(1, 0, 1).normalized(), deg_to_rad(thumb.z))
 	transforms.append(Transform3D(opposition, THUMB_ROOT - opposition * THUMB_ROOT))
 	transforms.append(Transform3D(tip, THUMB_JOINT - tip * THUMB_JOINT))
 	return transforms

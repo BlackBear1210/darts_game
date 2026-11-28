@@ -10,6 +10,8 @@
 [ext_resource type="Script" path="res://art/characters/dart_hand/dart_hand.gd" id="7_hand"]
 [ext_resource type="Shader" path="res://art/characters/dart_hand/flight_color.gdshader" id="8_ink"]
 
+[ext_resource type="Script" uid="uid://fhrim7ygv11p" path="res://art/characters/first_person_hand_view.gd" id="9_hand_view"]
+
 [sub_resource type="ShaderMaterial" id="HandInk"]
 resource_local_to_scene = true
 shader = ExtResource("8_ink")
@@ -31,6 +33,7 @@ fov = 65.0
 [node name="Hand" type="Node3D" parent="Camera" unique_id=405943354]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, -0.14, -0.55)
 visible = false
+script = ExtResource("9_hand_view")
 
 [node name="HeldDart" parent="Camera/Hand" unique_id=660269510 instance=ExtResource("5_dart")]
 transform = Transform3D(0.93969262, 0.047600004, 0.33869163, 0, 0.99026807, -0.1391731, -0.34202014, 0.13077994, 0.9305476, 0, 0, 0)

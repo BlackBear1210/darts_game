@@ -30,6 +30,8 @@ const CHAOS_SETTLE_RATE: float = 4.0
 const PLAYER_SCENE: PackedScene = preload("res://game/player/player.tscn")
 const DART_SCENE: PackedScene = preload("res://game/dart/dart.tscn")
 const CardCatalog = preload("res://game/card_round/rules/card_catalog.gd")
+const FIRST_PERSON_HAND_3D: bool = true
+const HandView = preload("res://art/characters/first_person_hand_view.gd")
 const DartHand = preload("res://art/characters/dart_hand/dart_hand.gd")
 ## 1인칭 당기기·던지기·팔로 스루 곡선(미리보기 tests/render_fp_arm.gd 도 같은 함수를 쓴다).
 const FirstPersonThrow = preload("res://art/characters/first_person_throw.gd")
@@ -128,6 +130,10 @@ var _prop_charge_from: float = -1.0
 const PROP_CHARGE_TIME: float = 1.0
 var _shown_hand: Array[int] = []
 ## 손맛 연출(보이기만): 1인칭 손 기본 자세, 내가 던진 직후 1→0 으로 줄어드는 반동, 과녁 흔들림.
+@onready var _hand: HandView = $Camera/Hand
+## 로컬 입력과 방장의 투척 통지가 같은 프레임에 오지 않을 수 있다.
+var _score_starts: Array[Vector3] = []
+var _stray_starts: Array[Vector3] = []
 @onready var _dart_hand: DartHand = $DartHand
 var _throw_kick: float = 0.0
 ## 손에 보이는 당긴 정도. 충전 중엔 충전값, 그 밖엔 천천히 0 으로 돌아간다
@@ -164,7 +170,7 @@ func _ready() -> void:
 	throw_input.camera = camera
 	throw_input.board = table.board
 	$TrajectoryPreview.hide()
-	$Camera/Hand.hide()
+	_hand.hide()
 	_prepare_hand_fan()
 
 
@@ -208,7 +214,10 @@ func configure(room: RoomState, local_peer_id: int, connection: NetworkSession =
 		actors[player.peer_id] = view
 		if player.peer_id == local_peer_id:
 			camera.cull_mask = 0xfffff & ~(1 << (player.seat + 1))
-			_dart_hand.set_seat(player.seat)
+			if FIRST_PERSON_HAND_3D and DisplayServer.get_name() != "headless":
+				_hand.equip(player.seat, int(view.look.shirt), int(view.look.character))
+			else:
+				_dart_hand.set_seat(player.seat)
 	if room.settings.social_lobby:
 		lounge = LoungeWorld.new()
 		lounge.name = "LoungeWorld"
@@ -256,6 +265,8 @@ func begin_match(room: RoomState) -> void:
 	# 방장 화면을 새로 만든 경우(전용 서버)에도 1번부터 다시 받는다.
 	_last_motion_sequence = -1
 	_throw_kick = 0.0
+	_score_starts.clear()
+	_stray_starts.clear()
 	_held_pull = 0.0
 	_released_pull = 0.0
 	_board_shake = 0.0
@@ -697,6 +708,8 @@ func _on_wardrobe_closed(look: Dictionary) -> void:
 	var local := actors.get(controller.local_peer_id) as PlayerView
 	if local != null:
 		local.wear(clean)
+		# 1인칭 팔도 같은 차림(옷 색 소매 · 캐릭터 피부).
+		_hand.set_look(int(clean.shirt), int(clean.character))
 	_send_look(clean, false)
 	if is_inside_tree() and DisplayServer.get_name() != "headless" and controller.state.phase != MatchState.Phase.FINISHED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -742,6 +755,8 @@ func _apply_looks(data: Dictionary) -> void:
 			continue
 		var clean: Dictionary = PlayerOutfit.sanitize(looks[key])
 		actor.wear(clean)
+		if id == controller.local_peer_id:
+			_hand.set_look(int(clean.shirt), int(clean.character))
 		var room_player: RoomPlayer = session.room.find_player(id) if session != null else null
 		if room_player != null:
 			room_player.look = clean
@@ -821,6 +836,10 @@ func can_throw_from(id: int) -> bool:
 ## 과녁도 다트가 꽂히면 잠깐 움찔한다. 둘 다 내 화면 연출이고 판정 좌표는 그대로다.
 func _animate_hand(delta: float) -> void:
 	_throw_kick = maxf(0.0, _throw_kick - delta / FirstPersonThrow.KICK_SECONDS)
+	# 거절되거나 경기 전환 중 사라진 발의 촉을 다음 투척에 쓰지 않는다.
+	if _throw_kick <= 0.0:
+		_score_starts.clear()
+		_stray_starts.clear()
 	_board_shake = maxf(0.0, _board_shake - delta * 4.0)
 	var reload: bool = throw_input.enabled
 	if throw_input.charging:
@@ -834,13 +853,21 @@ func _animate_hand(delta: float) -> void:
 	var me: MatchPlayer = controller.state.find_player(controller.local_peer_id)
 	var large: bool = me != null and bool(me.card_effects.get("large", false))
 	var first_person: bool = me != null and camera.is_current() and not camera.get_cull_mask_value(me.seat + 2)
-	_dart_hand.visible = is_visible_in_tree() and first_person and (reload or _throw_kick > 0.0)
+	var show_hand: bool = is_visible_in_tree() and first_person and (reload or _throw_kick > 0.0)
+	_hand.visible = FIRST_PERSON_HAND_3D and _hand.arm != null and show_hand
+	_dart_hand.visible = not FIRST_PERSON_HAND_3D and show_hand
 	var now: float = Time.get_ticks_msec() / 1000.0
-	if _dart_hand.visible:
-		var shown_pull: float = _held_pull if _throw_kick <= 0.0 else pull
+	var tremble := Vector2.ZERO
+	if throw_input.charging and not Preferences.reduced_motion:
+		tremble = Vector2(sin(now * 36.0), cos(now * 41.0)) * pull * pull
+	var shown_pull: float = _held_pull if _throw_kick <= 0.0 else pull
+	if _hand.visible:
+		# 비행 중에는 입력이 잠겨도 여분이 있으면 0.52초부터 다음 다트를 들어 올린다.
+		var next_dart: bool = me.darts > 0 if _throw_kick > 0.0 else reload
+		_hand.animate(delta, shown_pull, _throw_kick, _released_pull, next_dart, large, motion, tremble)
+	elif _dart_hand.visible:
 		_dart_hand.pose(shown_pull, _throw_kick, _released_pull, reload, large, motion)
-		if throw_input.charging and not Preferences.reduced_motion:
-			_dart_hand.position += Vector2(sin(now * 36.0), cos(now * 41.0)) * pull * pull * _dart_hand.scale.x * 3.0
+		_dart_hand.position += tremble * _dart_hand.scale.x * 3.0
 	camera.rotation.x += FirstPersonThrow.recoil(_throw_kick) * 0.02 * motion
 	table.board.position = Vector3.UP * TableView.BOARD_CENTER.y + Vector3.FORWARD * 0.003 * _board_shake
 
@@ -1238,11 +1265,24 @@ func _on_throw_requested(aim: Vector2, timing: float) -> void:
 	var state := controller.state
 	var active := state.active_player()
 	var own: bool = active != null and active.peer_id == id and state.phase == MatchState.Phase.AIMING
-	if own and aim.is_finite() and can_throw_from(id):
+	var scoring: bool = own and aim.is_finite() and can_throw_from(id)
+	var me: MatchPlayer = state.find_player(id)
+	if _hand.visible and me != null and not bool(me.card_effects.get("card_throw", false)):
+		var starts: Array[Vector3] = _score_starts if scoring else _stray_starts
+		# 점수 투척은 한 발씩, 연속 자유 투척은 보유한 발수까지 입력 순서로 대응한다.
+		var available: int = 1 if scoring else me.darts
+		if starts.size() < available:
+			starts.append(_hand.release_start(camera))
+			_start_throw_kick()
+	if scoring:
 		controller.submit_throw(aim, timing)
 	else:
 		controller.submit_stray(timing)
 		_warn_not_your_turn(state, active, id)
+	# 방장은 같은 호출에서 승인 통지를 받는다. 남아 있으면 거절된 요청이다.
+	if multiplayer.is_server():
+		_score_starts.clear()
+		_stray_starts.clear()
 
 
 ## 경기 중(다트 단계)에 남의 차례인데 던졌으면 내 화면에 "내 차례가 아니에요!"를 띄운다(다트는 그냥 던진 다트로 날아간다 — 점수 없음).
@@ -1302,17 +1342,16 @@ func throw_stray(peer_id: int, charge: float) -> bool:
 ## 사람에게 꽂힌 다트는 "툭" 소리와 함께 사라진다(움직이는 몸에 붙여 두지 않는다).
 func _show_stray(data: Dictionary) -> void:
 	var thrower := actors.get(int(data.get("peer_id", 0))) as PlayerView
+	var visual_start: Vector3 = _local_throw_start(thrower, _stray_starts)
 	if thrower != null:
 		thrower.play_throw()
-		if thrower.identity.peer_id == controller.local_peer_id:
-			_start_throw_kick()
 	if DisplayServer.get_name() == "headless":
 		return
 	var dart := DART_SCENE.instantiate() as DartView
 	_darts.add_child(dart)
 	dart.fly(data.start, data.target, float(data.duration))
-	if thrower != null and thrower.identity.peer_id == controller.local_peer_id and _dart_hand.visible:
-		dart.set_visual_start(camera.project_position(_dart_hand.tip_on_screen(), 0.55))
+	if visual_start.is_finite():
+		dart.set_visual_start(visual_start)
 	if thrower != null:
 		dart.paint(thrower.color)
 	dart.landed.connect(_on_stray_landed.bind(dart, int(data.get("victim", 0))))
@@ -1379,11 +1418,23 @@ func _show_body_hit(victim_id: int, at: Vector3) -> void:
 	Sfx.play_at(self, "thunk", at, -2.0, 0.82)
 
 
+func _local_throw_start(actor: PlayerView, starts: Array[Vector3]) -> Vector3:
+	if actor == null or actor.identity.peer_id != controller.local_peer_id:
+		return Vector3.INF
+	if not starts.is_empty():
+		return starts.pop_front()
+	_start_throw_kick()
+	if _hand.visible: return _hand.release_start(camera)
+	if _dart_hand.visible: return camera.project_position(_dart_hand.tip_on_screen(), HandView.RELEASE_DEPTH)
+	return Vector3.INF
+
+
 func _show_throw(data: Dictionary) -> void:
 	_flying_darts.clear()
 	var color: Color = PlayerLook.COLORS[0]
 	var actor := actors.get(int(data.get("peer_id", 0))) as PlayerView
 	if actor != null: color = actor.color
+	var visual_start: Vector3 = _local_throw_start(actor, _score_starts)
 	for flight: Dictionary in data.get("flights", [data]):
 		var dart := DART_SCENE.instantiate() as DartView
 		_darts.add_child(dart)
@@ -1399,8 +1450,8 @@ func _show_throw(data: Dictionary) -> void:
 			dart.queue_hops(flight.hops)
 		else:
 			dart.fly(flight.start, flight.target, flight.duration, true, $Camera/Hand.position)
-		if actor != null and actor.identity.peer_id == controller.local_peer_id and _dart_hand.visible:
-			dart.set_visual_start(camera.project_position(_dart_hand.tip_on_screen(), 0.55))
+		if visual_start.is_finite():
+			dart.set_visual_start(visual_start)
 		dart.paint(color)
 		dart.landed.connect(_on_dart_landed.bind(dart))
 		_flying_darts.append(dart)
@@ -1410,8 +1461,6 @@ func _show_throw(data: Dictionary) -> void:
 	var thrower := actors.get(int(data.get("peer_id", 0))) as PlayerView
 	if thrower != null:
 		thrower.play_throw()
-		if thrower.identity.peer_id == controller.local_peer_id:
-			_start_throw_kick()
 	# 힘 증가면 바람 소리도 더 크고 높게(빠르게 가르는 느낌).
 	if bool(data.get("power", false)):
 		Sfx.play_at(self, "whoosh", data.start, -2.0, 1.35)
